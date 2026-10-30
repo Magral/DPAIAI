@@ -1,0 +1,31 @@
+name: Maintain mobile and TV release channels
+on:
+  push:
+    branches: [main]
+    paths: [.github/workflows/release-channels.yml]
+  workflow_run:
+    workflows: [Signed Android TV release]
+    types: [completed]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  catalog:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const {owner,repo} = context.repo;
+            const releases = await github.paginate(github.rest.repos.listReleases,{owner,repo,per_page:100});
+            const published = releases.filter(r => !r.draft && !r.prerelease);
+            const mobile = published.filter(r => /^v[0-9]+\.[0-9]+\.[0-9]+$/.test(r.tag_name))
+              .sort((a,b) => new Date(b.published_at)-new Date(a.published_at))[0];
+            if (!mobile) throw new Error('No published mobile release');
+            for (const tv of published.filter(r => /^tv-v[0-9]+\.[0-9]+\.[0-9]+$/.test(r.tag_name))) {
+              await github.rest.repos.updateRelease({owner,repo,release_id:tv.id,make_latest:'false'});
+            }
+            await github.rest.repos.updateRelease({owner,repo,release_id:mobile.id,make_latest:'true'});
+            core.notice('Mobile latest: '+mobile.tag_name+'; TV releases remain available by separate tags');

@@ -28,7 +28,7 @@
 
 `bash gradlew :tv:assembleRelease :tv:testReleaseUnitTest`
 
-Ключ тот же постоянный ключ проекта. Условия выпуска — docs/SIGNING.md. CI сверяет сертификат, запускает тесты порядка fallback, ограничений health checks и отдельный нативный тест выборочного запрета QUIC. Телефонный APK не заменяется. TV-релизы имеют теги tv-vX.Y.Z и не меняют latest телефонного приложения.
+Ключ тот же постоянный ключ проекта. Условия выпуска — docs/SIGNING.md. CI сверяет сертификат, запускает тесты порядка fallback, ограничений health checks и отдельный нативный тест выборочного запрета QUIC. Телефонный APK не заменяется. TV-релизы имеют теги tv-vX.Y.Z и не меняют latest телефонного приложения. Выпуск запускается вручную через Signed Android TV release либо изменением tv/release-request.txt вместе с увеличением версии.
 
 Документация Android: https://developer.android.com/develop/connectivity/vpn
 https://developer.android.com/develop/background-work/services/fgs/restrictions-bg-start

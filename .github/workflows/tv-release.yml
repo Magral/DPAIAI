@@ -3,7 +3,7 @@ name: Signed Android TV release
 on:
   push:
     branches: [main]
-    paths: [.github/workflows/tv-release.yml]
+    paths: [tv/release-request.txt]
   workflow_dispatch:
 permissions:
   contents: write
@@ -102,6 +102,6 @@ jobs:
               await github.rest.repos.uploadReleaseAsset({owner,repo,release_id:release.id,name,data,
                 headers:{'content-type':'application/vnd.android.package-archive','content-length':data.length}});
             }
-            if (release.draft) await github.rest.repos.updateRelease({owner,repo,release_id:release.id,draft:false});
+            if (release.draft) await github.rest.repos.updateRelease({owner,repo,release_id:release.id,draft:false,make_latest:'false'});
             core.notice(release.html_url);
 
