@@ -228,6 +228,7 @@ class TvVpnService : VpnService() {
                 var current = healthy()
                 if (!current.ok) { delay(2000); current = healthy() }
                 if (current.ok) {
+                    traffic.reset() // Discard the pre-sleep sampling window after a fresh health check.
                     failures = 0
                     TvState.update(this,"YouTube: соединение проверено. Стратегия ${activeIndex!!+1}/${TvPolicy.strategies.size}. Следующая проверка через 5 минут")
                     waitForCheck(300000); continue

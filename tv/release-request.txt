@@ -1,1 +1,1 @@
-DPI Pilot TV 0.2.0 — unattended recovery; watchdog uses awake time
+DPI Pilot TV 0.2.0 — recovery and traffic samples distinguish sleep from stalls
