@@ -10,6 +10,7 @@ import java.util.concurrent.*
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
+import java.util.concurrent.atomic.AtomicLong
 
 internal class TelegramWsBridge(
     private val secret: ByteArray,
@@ -18,12 +19,27 @@ internal class TelegramWsBridge(
     private val endpoints: (Int,Boolean) -> List<String> = ::officialEndpoints,
 ) : AutoCloseable {
     private val stopped = AtomicBoolean(false)
+    private val sequence = AtomicInteger(0)
+    private val preferred = ConcurrentHashMap<String,String>()
+    private val cooldown = ConcurrentHashMap<String,Long>()
+    private class Session(val id: Int) {
+        val closing = AtomicBoolean(false)
+        val tx = AtomicLong(0)
+        val rx = AtomicLong(0)
+        val started = System.nanoTime()
+        @Volatile var label = "C$id"
+        @Volatile var phase = "local header"
+        @Volatile var endpoint = ""
+        @Volatile var routeKey = ""
+        @Volatile var reason = "client EOF"
+        @Volatile var reasonFixed = false
+    }
     private val sockets = ConcurrentHashMap.newKeySet<Socket>()
     private val websockets = ConcurrentHashMap.newKeySet<WebSocket>()
     private val workers = ThreadPoolExecutor(0,24,30,TimeUnit.SECONDS,SynchronousQueue<Runnable>(),
         { task -> Thread(task,"telegram-ws-client").apply { isDaemon = true } },ThreadPoolExecutor.AbortPolicy())
     private val client = OkHttpClient.Builder().proxy(Proxy.NO_PROXY).connectTimeout(8,TimeUnit.SECONDS)
-        .readTimeout(0,TimeUnit.SECONDS).writeTimeout(10,TimeUnit.SECONDS).pingInterval(25,TimeUnit.SECONDS)
+        .readTimeout(0,TimeUnit.SECONDS).writeTimeout(30,TimeUnit.SECONDS).pingInterval(0,TimeUnit.SECONDS)
         .followRedirects(false).followSslRedirects(false).build()
     private var server: ServerSocket? = null
     val port: Int get() = server?.localPort ?: 0
@@ -37,7 +53,7 @@ internal class TelegramWsBridge(
                     val socket = server!!.accept()
                     sockets.add(socket)
                     try { workers.execute { handle(socket) } }
-                    catch (_: RejectedExecutionException) { sockets.remove(socket); socket.close() }
+                    catch (_: RejectedExecutionException) { log("Лимит локальных соединений (24)"); sockets.remove(socket); socket.close() }
                 } catch (_: IOException) { if (!stopped.get()) log("Local listener error"); break }
             }
         },"telegram-ws-listener").apply { isDaemon = true; start() }
@@ -45,45 +61,65 @@ internal class TelegramWsBridge(
     }
     private fun handle(socket: Socket) {
         connections.incrementAndGet()
+        val session = Session(sequence.incrementAndGet())
         var ws: WebSocket? = null
         try {
-            socket.tcpNoDelay = true; socket.soTimeout = 8000
+            socket.tcpNoDelay = true; socket.keepAlive = true; socket.soTimeout = 8000
             val input = DataInputStream(socket.getInputStream())
             val header = ByteArray(64).also { input.readFully(it) }
             val crypto = MtProxyCrypto(header,secret)
+            session.label += " DC${crypto.dc}${if (crypto.media) " media" else ""}"
+            session.routeKey = "${crypto.dc}:${crypto.media}"
+            session.phase = "WSS connect"
             var lastError: Exception? = null
-            for (endpoint in endpoints(crypto.dc,crypto.media)) {
+            val routes = endpoints(crypto.dc,crypto.media).sortedWith(compareBy<String> {
+                if ((cooldown[it] ?: 0) > System.nanoTime()) 1 else 0
+            }.thenBy { if (preferred[session.routeKey] == it) 0 else 1 })
+            for (endpoint in routes) {
                 if (stopped.get() || socket.isClosed) break
-                try { ws = connect(endpoint,socket,crypto); break }
-                catch (e: Exception) { lastError = e }
+                try { ws = connect(endpoint,socket,crypto,session); break }
+                catch (e: Exception) { lastError = e; log("${session.label}: ${e.message?.take(160)}") }
             }
             val remote = ws ?: throw (lastError ?: IOException("WSS unavailable"))
-            log("DC${crypto.dc}${if (crypto.media) " media" else ""}: WSS подключён")
-            socket.soTimeout = 300000
+            log("${session.label}: WSS открыт (${URI(session.endpoint).host})")
+            // MTProto already has its own heartbeat. Do not expire idle media sockets or send RFC pings.
+            socket.soTimeout = 0
+            session.phase = "MTProto relay"
+            val packets = MtTransportPackets(crypto.protocolTag)
             val buffer = ByteArray(65536)
             while (!stopped.get() && !socket.isClosed) {
                 val count = input.read(buffer)
                 if (count < 0) break
-                val deadline = System.nanoTime()+TimeUnit.SECONDS.toNanos(5)
-                while (remote.queueSize() > 1024*1024 && !socket.isClosed) {
-                    if (System.nanoTime() > deadline) throw IOException("WSS send queue stalled")
-                    Thread.sleep(10)
+                val plain = crypto.decodeUpstream(buffer.copyOf(count))
+                for (packet in packets.feed(plain)) {
+                    while (remote.queueSize() > 1024*1024 && !socket.isClosed && !stopped.get()) {
+                        // Bound queued memory through TCP backpressure; a slow upload is not a failure.
+                        Thread.sleep(10)
+                    }
+                    if (!remote.send(crypto.encodeUpstream(packet).toByteString())) throw IOException("WSS closed")
+                    session.tx.addAndGet(packet.size.toLong())
                 }
-                if (!remote.send(crypto.upstream(buffer.copyOf(count)).toByteString())) throw IOException("WSS closed")
             }
+            if (packets.hasPending) session.reason = "client EOF with partial packet"
         } catch (e: Exception) {
-            // Do not include handshake bytes, secrets, payload or account identifiers.
-            if (!stopped.get()) log("Соединение: ${e.javaClass.simpleName}: ${e.message?.take(160) ?: "no detail"}")
+            if (!session.reasonFixed) session.reason = "${session.phase}: ${e.javaClass.simpleName}: ${e.message?.take(140) ?: "no detail"}"
         } finally {
+            // Mark a local close BEFORE cancel(): OkHttp reports cancel via onFailure as well.
+            session.closing.set(true)
             ws?.let { websockets.remove(it); it.cancel() }
             sockets.remove(socket); try { socket.close() } catch (_: IOException) {}
             connections.decrementAndGet()
+            if (!stopped.get()) {
+                val seconds = (System.nanoTime()-session.started)/1_000_000_000
+                log("${session.label}: закрыто; ${session.reason}; tx=${session.tx.get()} rx=${session.rx.get()}; ${seconds}s")
+            }
         }
     }
-    private fun connect(endpoint: String,socket: Socket,crypto: MtProxyCrypto): WebSocket {
+    private fun connect(endpoint: String,socket: Socket,crypto: MtProxyCrypto,session: Session): WebSocket {
         val ready = CountDownLatch(1)
         val error = AtomicReference<Exception?>()
         val opened = AtomicBoolean(false)
+        val attemptClosed = AtomicBoolean(false)
         val ws = client.newWebSocket(Request.Builder().url(endpoint).header("Sec-WebSocket-Protocol","binary").build(),object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket,response: Response) {
                 val protocol = response.header("Sec-WebSocket-Protocol")
@@ -91,33 +127,54 @@ internal class TelegramWsBridge(
                     error.set(IOException("Unexpected WSS subprotocol")); webSocket.cancel()
                 } else if (!webSocket.send(crypto.relayHeader.toByteString())) {
                     error.set(IOException("Cannot send WSS header")); webSocket.cancel()
-                } else opened.set(true)
+                } else { session.endpoint = endpoint; opened.set(true) }
                 ready.countDown()
             }
             override fun onMessage(webSocket: WebSocket,bytes: ByteString) {
+                if (session.closing.get() || attemptClosed.get()) return
                 try {
-                    if (bytes.size > 2*1024*1024) throw IOException("Oversized WSS message")
+                    if (bytes.size > MtTransportPackets.MAX_BODY+1024) throw IOException("Oversized WSS message")
+                    val decoded = crypto.downstream(bytes.toByteArray())
                     val output = socket.getOutputStream()
-                    output.write(crypto.downstream(bytes.toByteArray())); output.flush()
-                } catch (_: Exception) { webSocket.cancel(); try { socket.close() } catch (_: IOException) {} }
+                    output.write(decoded); output.flush()
+                    if (session.rx.getAndAdd(decoded.size.toLong()) == 0L) log("${session.label}: первые данные MTProto, ${decoded.size} байт")
+                    preferred[session.routeKey] = endpoint
+                    cooldown.remove(endpoint)
+                } catch (e: Exception) {
+                    session.reason = "local delivery: ${e.javaClass.simpleName}: ${e.message?.take(100)}"
+                    session.reasonFixed = true
+                    attemptClosed.set(true); webSocket.cancel(); try { socket.close() } catch (_: IOException) {}
+                }
             }
             override fun onMessage(webSocket: WebSocket,text: String) {
-                webSocket.cancel(); if (opened.get()) try { socket.close() } catch (_: IOException) {}
+                session.reason = "unexpected WSS text message"; session.reasonFixed = true
+                attemptClosed.set(true); webSocket.cancel()
+                if (opened.get()) try { socket.close() } catch (_: IOException) {}
             }
             override fun onClosing(webSocket: WebSocket,code: Int,reason: String) {
                 webSocket.close(code,reason)
-                if (opened.get()) { log("WSS закрыт, код $code; транспорт: ${reason.take(32)}"); try { socket.close() } catch (_: IOException) {} }
+                if (session.closing.get() || attemptClosed.get()) return
+                attemptClosed.set(true)
+                session.reasonFixed = true
+                session.reason = "remote close $code; MTProto=${reason.take(32)}"
+                if (session.rx.get() == 0L) cooldown[endpoint] = System.nanoTime()+TimeUnit.SECONDS.toNanos(30)
+                if (opened.get()) try { socket.close() } catch (_: IOException) {}
             }
             override fun onFailure(webSocket: WebSocket,t: Throwable,response: Response?) {
+                if (session.closing.get() || attemptClosed.get()) return
                 val status = response?.code?.let { "; HTTP $it" } ?: ""
-                error.set(IOException("${URI(endpoint).host}: ${t.javaClass.simpleName}$status"))
-                ready.countDown()
-                if (opened.get()) { log("WSS потерян$status"); try { socket.close() } catch (_: IOException) {} }
+                val message = "${URI(endpoint).host}: ${t.javaClass.simpleName}: ${t.message?.take(160) ?: "no detail"}$status"
+                error.set(IOException(message)); ready.countDown()
+                if (opened.get()) {
+                    session.reasonFixed = true; session.reason = message
+                    if (session.rx.get() == 0L) cooldown[endpoint] = System.nanoTime()+TimeUnit.SECONDS.toNanos(30)
+                    try { socket.close() } catch (_: IOException) {}
+                }
             }
         })
         websockets.add(ws)
         if (!ready.await(12,TimeUnit.SECONDS) || !opened.get()) {
-            websockets.remove(ws); ws.cancel()
+            attemptClosed.set(true); websockets.remove(ws); ws.cancel()
             throw (error.get() ?: IOException("WSS timeout"))
         }
         return ws

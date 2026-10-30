@@ -12,6 +12,7 @@ import javax.crypto.spec.SecretKeySpec
 internal class MtProxyCrypto(clientHeader: ByteArray, secret: ByteArray) {
     val dc: Int
     val media: Boolean
+    val protocolTag: Int
     val relayHeader: ByteArray
     private val clientIn: Cipher
     private val clientOut: Cipher
@@ -24,6 +25,7 @@ internal class MtProxyCrypto(clientHeader: ByteArray, secret: ByteArray) {
         val decoded = clientIn.update(clientHeader)
         val b = ByteBuffer.wrap(decoded).order(ByteOrder.LITTLE_ENDIAN)
         val tag = b.getInt(56)
+        protocolTag = tag
         require(tag in setOf(0xefefefef.toInt(),0xeeeeeeee.toInt(),0xdddddddd.toInt())) { "Invalid local proxy authentication" }
         val signedDc = b.getShort(60).toInt()
         dc = kotlin.math.abs(signedDc)
@@ -36,7 +38,9 @@ internal class MtProxyCrypto(clientHeader: ByteArray, secret: ByteArray) {
         val encrypted = relayOut.update(nonce)
         relayHeader = nonce.apply { encrypted.copyInto(this,56,56,64) }
     }
-    fun upstream(bytes: ByteArray): ByteArray = relayOut.update(clientIn.update(bytes))
+    fun decodeUpstream(bytes: ByteArray): ByteArray = clientIn.update(bytes)
+    fun encodeUpstream(bytes: ByteArray): ByteArray = relayOut.update(bytes)
+    fun upstream(bytes: ByteArray): ByteArray = encodeUpstream(decodeUpstream(bytes))
     fun downstream(bytes: ByteArray): ByteArray = clientOut.update(relayIn.update(bytes))
     companion object {
         internal fun cipher(header: ByteArray,secret: ByteArray?): Cipher {
