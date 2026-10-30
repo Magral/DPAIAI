@@ -15,6 +15,49 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class TelegramBridgeTest {
+    private fun localHeader(secret: ByteArray): ByteArray {
+        val seed = ByteArray(64) { (it+3).toByte() }
+        ByteBuffer.wrap(seed).order(ByteOrder.LITTLE_ENDIAN).putInt(56,0xdddddddd.toInt()).putShort(60,2)
+        val encrypted = MtProxyCrypto.cipher(seed,secret).update(seed)
+        return seed.copyOf().apply { encrypted.copyInto(this,56,56,64) }
+    }
+    @Test fun rejectedLocalHeadersDoNotFloodExternalDiagnostics() {
+        val logs = ConcurrentLinkedQueue<String>()
+        val bridge = TelegramWsBridge(ByteArray(16) { 4 },0,log = { logs.add(it) },endpoints = { _,_ -> error("Unauthenticated connection reached routing") })
+        try {
+            bridge.start()
+            repeat(20) { Socket("127.0.0.1",bridge.port).use { it.getOutputStream().write(ByteArray(64)) } }
+            val deadline = System.nanoTime()+TimeUnit.SECONDS.toNanos(3)
+            while (bridge.rejectedAuthentication.get() < 20 && System.nanoTime() < deadline) Thread.sleep(10)
+            assertEquals(20L,bridge.rejectedAuthentication.get())
+            assertFalse(logs.joinToString("\n"),logs.any { it.contains("Invalid local proxy authentication") })
+            assertTrue(bridge.diagnosticSummary,bridge.diagnosticSummary.contains("локальных заголовков: 20"))
+        } finally { bridge.close() }
+    }
+    @Test fun networkChangeDisconnectsOldStreamAndPreservesListener() {
+        val server = MockWebServer()
+        repeat(2) { server.enqueue(MockResponse().withWebSocketUpgrade(object : WebSocketListener() {})) }
+        server.start()
+        val opened = java.util.concurrent.LinkedBlockingQueue<String>()
+        val secret = ByteArray(16) { 7 }
+        val bridge = TelegramWsBridge(secret,0,log = { if (it.contains("WSS открыт")) opened.offer(it) },endpoints = { _,_ ->
+            listOf(server.url("/apiws").toString().replace("http://","ws://"))
+        })
+        try {
+            bridge.start()
+            Socket("127.0.0.1",bridge.port).use { first ->
+                first.soTimeout = 3000
+                first.getOutputStream().write(localHeader(secret))
+                assertNotNull(opened.poll(4,TimeUnit.SECONDS))
+                bridge.networkChanged()
+                assertEquals(-1,first.getInputStream().read())
+            }
+            Socket("127.0.0.1",bridge.port).use { second ->
+                second.getOutputStream().write(localHeader(secret))
+                assertNotNull(opened.poll(4,TimeUnit.SECONDS))
+            }
+        } finally { bridge.close(); server.shutdown() }
+    }
     @Test fun authenticatedLocalProxyRelaysOpaqueBytesBothWaysToCorrectDc() {
         val secret = ByteArray(16) { (it+9).toByte() }
         val first = ByteBuffer.allocate(84).order(ByteOrder.LITTLE_ENDIAN).putInt(80).put(ByteArray(80) { (it*7).toByte() }).array()
@@ -94,6 +137,8 @@ class TelegramBridgeTest {
         try { MtProxyCrypto(header(10002),secret); fail("Test DC accepted") } catch (_: IllegalArgumentException) {}
         val media = MtProxyCrypto(header(-4),secret)
         assertEquals(4,media.dc); assertTrue(media.media)
-        assertTrue(TelegramWsBridge.officialEndpoints(4,true).first().startsWith("wss://vesta-1.web.telegram.org/"))
+        assertTrue(TelegramWsBridge.officialEndpoints(4,true).first().startsWith("wss://kws4-1.web.telegram.org/"))
+        assertEquals(4,TelegramWsBridge.officialEndpoints(4,false).distinct().size)
+        assertTrue(TelegramWsBridge.officialEndpoints(4,false).contains("wss://vesta.web.telegram.org/apiws"))
     }
 }

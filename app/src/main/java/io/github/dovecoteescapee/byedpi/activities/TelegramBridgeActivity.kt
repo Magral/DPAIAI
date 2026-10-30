@@ -13,6 +13,7 @@ import kotlinx.coroutines.*
 
 class TelegramBridgeActivity : AppCompatActivity() {
     private lateinit var status: TextView
+    private lateinit var probe: Button
     private var updater: Job? = null
     override fun onCreate(state: Bundle?) {
         super.onCreate(state)
@@ -48,6 +49,18 @@ class TelegramBridgeActivity : AppCompatActivity() {
             text = "Остановить"; box.addView(this)
             setOnClickListener { stopService(Intent(this@TelegramBridgeActivity,TelegramBridgeService::class.java)) }
         }
+        probe = Button(this).apply {
+            text = "Проверить Telegram в этой сети"; box.addView(this)
+            setOnClickListener {
+                if (TelegramBridgeService.running) ContextCompat.startForegroundService(this@TelegramBridgeActivity,
+                    Intent(this@TelegramBridgeActivity,TelegramBridgeService::class.java).setAction("probe"))
+                else Toast.makeText(this@TelegramBridgeActivity,"Сначала запустите режим Telegram",Toast.LENGTH_SHORT).show()
+            }
+        }
+        TextView(this).apply {
+            text = "Если соединение не работает, запустите проверку в текущей сети и скопируйте диагностику. Она проверяет ответ MTProto отдельно от локального прокси. При смене сети переподключение выполняется автоматически."
+            box.addView(this)
+        }
         status = TextView(this).apply { setTextIsSelectable(true); setPadding(0,20,0,20); box.addView(this) }
         Button(this).apply {
             text = "Скопировать диагностику Telegram"; box.addView(this)
@@ -59,7 +72,11 @@ class TelegramBridgeActivity : AppCompatActivity() {
     }
     override fun onStart() {
         super.onStart()
-        updater = lifecycleScope.launch { while (isActive) { status.text = TelegramBridgeService.diagnostics; delay(700) } }
+        updater = lifecycleScope.launch { while (isActive) {
+            status.text = TelegramBridgeService.diagnostics
+            probe.isEnabled = TelegramBridgeService.running && !TelegramBridgeService.probing
+            delay(700)
+        } }
     }
     override fun onStop() { updater?.cancel(); super.onStop() }
 }
