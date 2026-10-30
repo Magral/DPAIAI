@@ -73,9 +73,17 @@ class ServiceTuningActivity : AppCompatActivity() {
             if (appStatus.first != AppStatus.Halted) output.text = "Сначала выключите обработку"
             else if (args == null) output.text = "Сначала выполните подбор для ${target.name}"
             else {
-                prefs.edit().putBoolean("byedpi_enable_cmd_settings",true).putString("byedpi_cmd_args",args)
+                val knownPackages = when (target.id) {
+                    "youtube" -> setOf("com.google.android.youtube", "com.google.android.youtube.tv")
+                    "instagram" -> setOf("com.instagram.android", "com.instagram.lite")
+                    else -> setOf("org.telegram.messenger", "org.telegram.messenger.web")
+                }
+                val selectedApps = TargetApps.installed(this).map { it.packageName }.filter { it in knownPackages }.toSet()
+                prefs.edit().putStringSet(TargetApps.KEY,selectedApps)
+                    .putBoolean("byedpi_enable_cmd_settings",true).putString("byedpi_cmd_args",args)
                     .putString("byedpi_proxy_ip","127.0.0.1").putString("byedpi_proxy_port","1080").putString("byedpi_mode","vpn").apply()
-                output.text = "Применён результат для ${target.name}. Вернитесь на главный экран, выберите приложение и включите обработку. Одновременно действует одна стратегия."
+                output.text = if (selectedApps.isNotEmpty()) "Применён результат для ${target.name}; установленное приложение уже выбрано. Вернитесь на главный экран и включите обработку. Одновременно действует одна стратегия."
+                    else "Стратегия сохранена, но стандартный клиент ${target.name} не установлен. Выберите нужный клиент на главном экране перед включением."
             }
         }
     }
