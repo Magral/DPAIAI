@@ -68,7 +68,7 @@ class ServiceTuningActivity : AppCompatActivity() {
                 return@setOnClickListener
             }
             val target = ServiceTargets.targets[choice.selectedItemPosition]
-            report.clear(); report.append("DPI Pilot 0.3.0; target=${target.id}; native probe matrix v2\n")
+            report.clear(); report.append("DPI Pilot ${io.github.dovecoteescapee.byedpi.BuildConfig.VERSION_NAME}; target=${target.id}; native probe matrix v3\n")
             job = lifecycleScope.launch {
                 choice.isEnabled = false; run.isEnabled = false; apply.isEnabled = false; cancel.isEnabled = true
                 output.text = "${target.name}: проверяем контрольный режим и ${target.strategies.size-1} стратегий…\n"
