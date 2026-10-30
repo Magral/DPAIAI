@@ -55,10 +55,5 @@
         android:layout_below="@id/target_apps_button"
         android:layout_marginHorizontal="20dp"
         android:textAllCaps="false"
-        android:text="Подобрать для YouTube / Instagram / Telegram" />
-    <com.google.android.material.button.MaterialButton
-        android:id="@+id/telegram_bridge_button"
-        android:layout_width="match_parent" android:layout_height="wrap_content"
-        android:layout_below="@id/service_tuning_button" android:layout_marginHorizontal="20dp"
-        android:textAllCaps="false" android:text="Подключить Telegram через WebSocket" />
+        android:text="Подобрать для YouTube / Instagram" />
 </RelativeLayout>

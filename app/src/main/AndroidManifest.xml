@@ -22,8 +22,6 @@
         <package android:name="com.google.android.youtube.tv" />
         <package android:name="com.instagram.android" />
         <package android:name="com.instagram.lite" />
-        <package android:name="org.telegram.messenger" />
-        <package android:name="org.telegram.messenger.web" />
     </queries>
     <application
         android:allowBackup="true"
@@ -37,10 +35,6 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.ByeDPI"
         tools:targetApi="34">
-        <activity android:name=".activities.TelegramBridgeActivity" android:exported="false" android:label="Подключить Telegram" />
-        <service android:name=".services.TelegramBridgeService" android:exported="false" android:foregroundServiceType="specialUse">
-            <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="Local Telegram MTProxy to official WSS transport" />
-        </service>
         <service android:name=".services.TuningWorkerService" android:exported="false" android:process=":tuner" />
         <activity android:name=".activities.ServiceTuningActivity" android:exported="false" android:label="Подбор для сервиса" />
         <activity

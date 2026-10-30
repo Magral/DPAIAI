@@ -17,8 +17,8 @@ android {
         applicationId = "io.github.magral.dpipilot"
         minSdk = 21
         targetSdk = 34
-        versionCode = 7
-        versionName = "0.4.3"
+        versionCode = 8
+        versionName = "0.5.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -87,8 +87,6 @@ android {
 }
 
 dependencies {
-    implementation("com.squareup.okhttp3:okhttp:4.12.0")
-    testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
     implementation("androidx.fragment:fragment-ktx:1.8.2")
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("androidx.appcompat:appcompat:1.7.0")

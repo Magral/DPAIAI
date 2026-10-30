@@ -9,10 +9,6 @@ object ServiceTargets {
             "Проверяются сайт, API и изображения. Видеопоток googlevideo и QUIC требуют проверки воспроизведением в YouTube."),
         Target("instagram", "Instagram", listOf("www.instagram.com", "i.instagram.com", "static.cdninstagram.com"),
             listOf("", "--split 1", "--tlsrec 1+s", "--disorder 1 --tlsrec 1+s", "--disorder 1"),
-            "Проверяются сайт, API и CDN. Вход в аккаунт, лента, Reels и загрузка файлов здесь не проверяются."),
-        Target("telegram", "Telegram", listOf("web.telegram.org", "telegram.org"),
-            listOf("", "--split 1", "--split 1 --split 16 --split 32", "--disorder 1",
-                "--split 1 --disorder 64", "--oob 1", "--fake -1 --ttl 8", "--fake -1 --ttl 5"),
-            "Проверяются пять дата-центров Telegram: обфусцированный MTProto и резервный обычный транспорт. Подбор может занять несколько минут. После применения проверьте сообщения и файлы в Telegram. Если локальный обход не сработает, можно подключить свой MTProxy.")
+            "Проверяются сайт, API и CDN. Вход в аккаунт, лента, Reels и загрузка файлов здесь не проверяются.")
     )
 }

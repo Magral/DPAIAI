@@ -1,4 +1,4 @@
-# Network-specific diagnostics reset on handoff; deliberate reconnects do not penalize tested routes.
+# Releases focus on YouTube and Instagram.
 name: Signed APK release
 on:
   push:
@@ -87,7 +87,7 @@ jobs:
               release = (await github.rest.repos.createRelease({
                 owner,repo,tag_name:tag,target_commitish:context.sha,name:'DPI Pilot '+version,
                 draft:true,prerelease:false,
-                body:'APK подписан постоянным ключом DPI Pilot. Скачайте '+name+' в Assets, без ZIP.\n\nПервый переход с прежней отладочной подписи требует удаления старой версии. Следующие релизы с этим ключом обновляются поверх с сохранением данных. После удаления добавьте локальный прокси в Telegram заново.\n\nИзменения 0.4.3: добавлены актуальные серверы Telegram Web K (kwsN и kwsN-1) с резервными адресами; сброс старых соединений при смене сети; проверка MTProto resPQ с nonce для выбора доступных серверов; агрегирование локальных отказов авторизации и точные этапы DNS/TCP/TLS/WSS. На Tele2 требуется проверка на телефоне: сборочная среда не находится в этой сети.\n\nПосле запуска режима нажмите «Проверить Telegram в этой сети». Проверка выбирает серверы с ответом MTProto и переподключает локальные соединения. Если проблема остаётся, скопируйте диагностику после завершения проверки. Она не содержит секрет прокси или содержимое сообщений.\n\nSource: '+context.sha+'\nSHA-256 APK: '+digest.slice(7)
+                body:'APK подписан постоянным ключом DPI Pilot. Скачайте '+name+' в Assets, без ZIP.\n\nВерсия 0.5.0: приложение сосредоточено на YouTube и Instagram. Удалены Telegram, локальный MTProxy, WebSocket, native probes и импорт внешних прокси. Удалены их зависимости. Сохранён подбор стратегий по сайту/API/CDN для YouTube и Instagram с раздельными сохранёнными результатами. Ошибки HTTPS/SOCKS теперь содержат подробности.\n\nОбновление поверх 0.4.2/0.4.3 сохраняет настройки двух оставшихся сервисов; выбор и настройки Telegram очищаются. Если в самом Telegram остался прокси 127.0.0.1:1443, отключите его вручную.\n\nВидеопоток YouTube, QUIC, вход в Instagram и Reels требуют проверки на телефоне: успешные HTTPS probes не гарантируют воспроизведение контента.\n\nSource: '+context.sha+'\nSHA-256 APK: '+digest.slice(7)
               })).data;
             }
             const assets = (await github.rest.repos.listReleaseAssets({owner,repo,release_id:release.id})).data;

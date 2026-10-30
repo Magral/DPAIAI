@@ -24,7 +24,7 @@ class TuningWorkerService : Service() {
             val index = message.data.getInt("candidate")
             executor.execute {
                 val result = try { runCandidate(id,index) } catch (_: Exception) {
-                    JSONObject().put("success",0).put("total",0).put("native",false).put("rows",JSONArray()).put("error",true)
+                    JSONObject().put("success",0).put("total",0).put("rows",JSONArray()).put("error",true)
                 }
                 try { reply.send(Message.obtain().apply { data = Bundle().apply { putString("result",result.toString()) } }) }
                 catch (_: RemoteException) { stopSelf() }
@@ -61,38 +61,16 @@ class TuningWorkerService : Service() {
         check(ready)
         val rows = JSONArray()
         var success = 0
-        var nativeSuccess = 0
         val start = System.nanoTime()
         repeat(2) { round ->
             target.hosts.forEach { host ->
                 var detail = "HTTP response"
-                val ok = try { TargetProbe.https(host) } catch (e: Exception) { detail = e.javaClass.simpleName; false }
+                val ok = try { TargetProbe.https(host) } catch (e: Exception) { detail = "${e.javaClass.simpleName}: ${e.message?.take(240)}"; false }
                 if (ok) success++
                 rows.put(JSONObject().put("host",host).put("ok",ok).put("detail",detail).put("round",round+1))
             }
         }
-        val webSuccess = success
-        if (id == "telegram") {
-            val pool = Executors.newFixedThreadPool(3)
-            try {
-                // DCs are independent; bound concurrency also bounds total candidate time.
-                val tasks = TargetProbe.telegramDcs.map { dc -> pool.submit<List<JSONObject>> {
-                    (1..2).map { round ->
-                        val result = TargetProbe.telegram(dc)
-                        JSONObject().put("host","DC${dc.id} ${dc.ip}:443").put("ok",result.ok)
-                            .put("detail",result.detail).put("round",round)
-                    }
-                } }
-                tasks.forEach { task -> task.get().forEach { row ->
-                    if (row.getBoolean("ok")) { success++; nativeSuccess++ }
-                    rows.put(row)
-                } }
-            } finally { pool.shutdownNow() }
-        }
         return JSONObject().put("success",success).put("total",rows.length())
-            .put("native",id != "telegram" || nativeSuccess == TargetProbe.telegramDcs.size*2)
-            .put("nativeSuccess",nativeSuccess).put("nativeTotal",if (id == "telegram") TargetProbe.telegramDcs.size*2 else 0)
-            .put("webSuccess",webSuccess).put("webTotal",target.hosts.size*2)
             .put("elapsed",(System.nanoTime()-start)/1000000).put("rows",rows)
     }
 }

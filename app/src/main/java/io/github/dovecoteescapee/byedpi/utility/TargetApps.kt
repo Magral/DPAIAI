@@ -8,18 +8,26 @@ object TargetApps {
     const val KEY = "pilot_target_apps"
     data class App(val packageName: String, val label: String)
     private val popular = listOf(
-        "com.google.android.youtube", "com.instagram.android", "org.telegram.messenger",
-        "org.telegram.messenger.web", "com.instagram.lite", "com.google.android.youtube.tv"
+        "com.google.android.youtube", "com.instagram.android",
+        "com.instagram.lite", "com.google.android.youtube.tv"
     )
+    // Exclude obsolete targets from saved selections and from the generic launcher list.
+    private val removedPackages = setOf("org.telegram.messenger", "org.telegram.messenger.web", "org.thunderdog.challegram")
+    fun removeLegacyTarget(context: Context) {
+        val prefs = context.getPreferences()
+        val apps = prefs.getStringSet(KEY,emptySet())!!.toSet()
+        prefs.edit().remove("tuned_telegram").putStringSet(KEY,apps-removedPackages).apply()
+        context.getSharedPreferences("telegram_bridge",Context.MODE_PRIVATE).edit().clear().apply()
+    }
     fun selected(context: Context): Set<String> =
-        context.getPreferences().getStringSet(KEY, emptySet())!!.toSet() - context.packageName
+        context.getPreferences().getStringSet(KEY, emptySet())!!.toSet() - context.packageName - removedPackages
 
     @Suppress("DEPRECATION")
     fun installed(context: Context): List<App> {
         val pm = context.packageManager
         val launcher = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
         val discovered = pm.queryIntentActivities(launcher, 0).map { it.activityInfo.packageName }
-        return (popular + discovered).distinct().filter { it != context.packageName }.mapNotNull { pkg ->
+        return (popular + discovered).distinct().filter { it != context.packageName && it !in removedPackages }.mapNotNull { pkg ->
             try {
                 val info = pm.getApplicationInfo(pkg, 0)
                 if (!info.enabled) null else App(pkg, pm.getApplicationLabel(info).toString())

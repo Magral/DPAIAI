@@ -37,15 +37,6 @@ class ServiceTuningActivity : AppCompatActivity() {
                 Toast.makeText(this@ServiceTuningActivity,"Диагностика скопирована",Toast.LENGTH_SHORT).show()
             }
         }
-        Button(this).apply {
-            text = "Другой способ: Telegram через WebSocket"; box.addView(this)
-            setOnClickListener { startActivity(Intent(this@ServiceTuningActivity,TelegramBridgeActivity::class.java)) }
-        }
-        Button(this).apply {
-            text = "Подключить свой MTProxy для Telegram"
-            box.addView(this)
-            setOnClickListener { openTelegramProxy() }
-        }
         fun showNote() {
             val target = ServiceTargets.targets[choice.selectedItemPosition]
             note.text = target.note + "\nПодбор отправляет тестовые запросы только к выбранному сервису, без аккаунта. Проверка HTTPS учитывает даже ответы 403/429 как достижимость сервера, а не доступ к контенту."
@@ -68,7 +59,7 @@ class ServiceTuningActivity : AppCompatActivity() {
                 return@setOnClickListener
             }
             val target = ServiceTargets.targets[choice.selectedItemPosition]
-            report.clear(); report.append("DPI Pilot ${io.github.dovecoteescapee.byedpi.BuildConfig.VERSION_NAME}; target=${target.id}; native probe matrix v3\n")
+            report.clear(); report.append("DPI Pilot ${io.github.dovecoteescapee.byedpi.BuildConfig.VERSION_NAME}; target=${target.id}; HTTPS probe matrix v1\n")
             job = lifecycleScope.launch {
                 choice.isEnabled = false; run.isEnabled = false; apply.isEnabled = false; cancel.isEnabled = true
                 output.text = "${target.name}: проверяем контрольный режим и ${target.strategies.size-1} стратегий…\n"
@@ -79,17 +70,14 @@ class ServiceTuningActivity : AppCompatActivity() {
                         val result = try { candidate(target.id,index) }
                             catch (_: TimeoutCancellationException) { JSONObject().put("error","candidate_timeout") }
                         results.add(index to result)
-                        if (target.id == "telegram") {
-                            output.append(" MTProto: ${result.optInt("nativeSuccess")}/${result.optInt("nativeTotal")}; веб: ${result.optInt("webSuccess")}/${result.optInt("webTotal")}")
-                        } else output.append(" ${result.optInt("success")}/${result.optInt("total")} проверок")
+                        output.append(" ${result.optInt("success")}/${result.optInt("total")} проверок")
                         report.append("\nStrategy: ${target.strategies[index].ifEmpty { "control" }}\n$result\n")
                     }
-                    // Only fully repeatable results can be saved; never recommend Telegram based on web alone.
-                    val eligible = results.filter { (_,r) -> TuningScore.eligible(target.id,r.optInt("success"),r.optInt("total"),r.optInt("nativeSuccess"),r.optInt("nativeTotal")) }
+                    // A candidate must pass every endpoint in both rounds.
+                    val eligible = results.filter { (_,r) -> TuningScore.eligible(r.optInt("success"),r.optInt("total")) }
                     val best = eligible.firstOrNull { it.first == 0 } ?: eligible.minByOrNull { it.second.optLong("elapsed",Long.MAX_VALUE) }
                     if (best == null) {
-                        output.append(if (target.id == "telegram") "\nНе все дата-центры отвечают устойчиво. Не считаем доступ к сайту работающим Telegram. Скопируйте диагностику. Если IP блокируется целиком, понадобится MTProxy или VPN. Прежние настройки не изменены."
-                            else "\nУстойчивый результат не найден; прежние настройки не изменены.")
+                        output.append("\nУстойчивый результат не найден; прежние настройки не изменены.")
                     }
                     else {
                         prefs.edit().putString("tuned_"+target.id,target.strategies[best.first]).apply()
@@ -109,7 +97,7 @@ class ServiceTuningActivity : AppCompatActivity() {
                 val knownPackages = when (target.id) {
                     "youtube" -> setOf("com.google.android.youtube", "com.google.android.youtube.tv")
                     "instagram" -> setOf("com.instagram.android", "com.instagram.lite")
-                    else -> setOf("org.telegram.messenger", "org.telegram.messenger.web")
+                    else -> emptySet()
                 }
                 val selectedApps = TargetApps.installed(this).map { it.packageName }.filter { it in knownPackages }.toSet()
                 prefs.edit().putStringSet(TargetApps.KEY,selectedApps)
@@ -119,33 +107,6 @@ class ServiceTuningActivity : AppCompatActivity() {
                     else "Стратегия сохранена, но стандартный клиент ${target.name} не установлен. Выберите нужный клиент на главном экране перед включением."
             }
         }
-    }
-    private fun openTelegramProxy() {
-        val input = EditText(this).apply { hint = "tg://proxy?... или https://t.me/proxy?..."; inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_URI }
-        val dialog = androidx.appcompat.app.AlertDialog.Builder(this)
-            .setTitle("Ваш MTProxy")
-            .setMessage("Вставьте ссылку доверенного прокси. Telegram запросит подтверждение подключения. Секрет не сохраняется и не включается в диагностику. Прокси может не поддерживать звонки.")
-            .setView(input).setPositiveButton("Открыть в Telegram",null).setNegativeButton(android.R.string.cancel,null).create()
-        dialog.setOnShowListener { dialog.getButton(androidx.appcompat.app.AlertDialog.BUTTON_POSITIVE).setOnClickListener {
-            val uri = android.net.Uri.parse(input.text.toString().trim())
-            val validLink = (uri.scheme == "tg" && uri.host == "proxy") || (uri.scheme == "https" && uri.host == "t.me" && uri.path == "/proxy")
-            if (!validLink || !uri.isHierarchical) {
-                input.error = "Нужна ссылка вида tg://proxy?..."
-                return@setOnClickListener
-            }
-            val server = uri.getQueryParameter("server")
-            val port = uri.getQueryParameter("port")?.toIntOrNull()
-            val secret = uri.getQueryParameter("secret")
-            if (!validLink || server.isNullOrBlank() || port == null || port !in 1..65535 || secret.isNullOrBlank()) {
-                input.error = "Нужна ссылка MTProxy с server, port и secret"
-            } else {
-                val safeUri = android.net.Uri.Builder().scheme("tg").authority("proxy")
-                    .appendQueryParameter("server",server).appendQueryParameter("port",port.toString()).appendQueryParameter("secret",secret).build()
-                try { startActivity(Intent(Intent.ACTION_VIEW,safeUri)); dialog.dismiss() }
-                catch (_: ActivityNotFoundException) { input.error = "Установите Telegram" }
-            }
-        } }
-        dialog.show()
     }
     override fun onStop() { job?.cancel(); super.onStop() }
 
@@ -175,7 +136,7 @@ class ServiceTuningActivity : AppCompatActivity() {
                 replyTo = callback
                 data = Bundle().apply { putString("target",target); putInt("candidate",index) }
             })
-            return JSONObject(withTimeout(if (target == "telegram") 120000L else 90000L) { result.await() })
+            return JSONObject(withTimeout(90000L) { result.await() })
         } finally {
             withContext(NonCancellable) {
                 unbindService(connection)
