@@ -48,13 +48,15 @@ jobs:
             const sha = crypto.createHash('sha256').update(data).digest('hex');
             const {owner,repo} = context.repo;
             const tag = 'v0.4.0';
+            const comparison = await github.rest.repos.compareCommits({owner,repo,base:'a44e45ea2d442a7f343ba9bf7555ca442ee46632',head:context.sha});
+            if ((comparison.data.files || []).some(f => f.filename !== '.github/workflows/publish-apk.yml')) throw new Error('Release source differs from tested app');
             let release;
             try {
               release = (await github.rest.repos.getReleaseByTag({owner,repo,tag})).data;
             } catch (error) {
               if (error.status !== 404) throw error;
               release = (await github.rest.repos.createRelease({
-                owner,repo,tag_name:tag,target_commitish:'a44e45ea2d442a7f343ba9bf7555ca442ee46632',
+                owner,repo,tag_name:tag,target_commitish:context.sha,
                 name:'DPI Pilot 0.4.0 — Telegram WebSocket',draft:true,prerelease:false,
                 body:'Скачайте DPI-Pilot-0.4.0.apk в Assets — ZIP не нужен.\n\nНовый режим Telegram: локальный MTProxy → защищённый WebSocket официальных серверов Telegram. Сначала выключите ByeDPI и другие VPN. Нажмите «Подключить Telegram через WebSocket» → «Запустить режим Telegram» → «Подключить в Telegram» и подтвердите прокси в Telegram. Свой сервер и аккаунт в DPI Pilot не нужны.\n\nПроверка сертификатов включена. TLS не отключается; сторонние relay-домены не используются. Внутренние аккаунтные MTProto-ключи и содержимое не расшифровываются. Звонки этим режимом не обеспечиваются. После остановки сервиса отключите локальный прокси в Telegram.\n\nСборка, тесты криптографической трансляции и двустороннего обмена через локальный WebSocket прошли. На отдельном тестовом подключении получен resPQ с правильным nonce от официального DC2 по WSS. Работа аккаунта и доступность у конкретного оператора ещё требуют проверки на устройстве.\n\nСтарая диагностика SOCKS уточнена: этап соединения и reply code вместо общего SocketException.\n\nAPK имеет отладочную подпись. При конфликте с предыдущей сборкой потребуется её удаление.\n\nGPL-3.0; авторство исходных компонентов сохранено.\nSource: a44e45ea2d442a7f343ba9bf7555ca442ee46632\nSHA-256 APK: '+sha
               })).data;
