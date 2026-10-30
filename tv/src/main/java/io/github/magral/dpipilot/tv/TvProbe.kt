@@ -14,31 +14,43 @@ object TvProbe {
         Spec("youtube","www.youtube.com","/generate_204"),
         Spec("image","i.ytimg.com","/vi/jNQXAC9IVRw/hqdefault.jpg"),
         Spec("media","redirector.googlevideo.com","/"))
-    data class Result(val ok: Boolean,val detail: String)
-    fun check(cancelled: () -> Boolean,progress: (String) -> Unit = {}): Result {
-        var count = 0
-        for (round in 1..2) for (spec in specs) {
-            if (cancelled()) throw java.util.concurrent.CancellationException()
-            count++
-            val label = "$count/6 · ${spec.host} · раунд $round"
-            progress("$label: проверяется…")
-            try {
-                val detail = request(spec)
-                if (detail != null) {
-                    val failed = "$label: ОШИБКА $detail; остальные проверки пропущены"
-                    progress(failed); return Result(false,failed)
-                }
-                progress("$label: OK ${if (spec.kind == "media") "TLS" else if (spec.kind == "youtube") "HTTP 204" else "изображение"}")
-            } catch (e: Exception) {
-                val failed = "$label: ${e.javaClass.simpleName}: ${e.message?.take(180)}; остальные проверки пропущены"
-                progress(failed); return Result(false,failed)
-            }
+    data class Result(val ok: Boolean,val detail: String,val score: Int = 0)
+    class Session {
+        private val socket = java.util.concurrent.atomic.AtomicReference<java.net.Socket?>()
+        private val stopped = java.util.concurrent.atomic.AtomicBoolean(false)
+        fun register(next: java.net.Socket) {
+            socket.set(next)
+            if (stopped.get()) { next.close(); throw java.util.concurrent.CancellationException() }
         }
-        return Result(true,"6/6: YouTube 204, изображение, TLS googlevideo")
+        fun cancel() { stopped.set(true); runCatching { socket.get()?.close() } }
+        fun cancelled(): Boolean = stopped.get()
     }
-    private fun request(spec: Spec): String? = TargetProbe.socket(spec.host,443).use { raw ->
+    fun check(port: Int,index: Int,session: Session,progress: (String) -> Unit = {}): Result {
+        var count = 0
+        var score = 0
+        val rows = mutableListOf<String>()
+        for (round in 1..2) {
+            for (spec in specs) {
+                if (session.cancelled()) throw java.util.concurrent.CancellationException()
+                count++
+                val label = "$count/6 · ${spec.host} · раунд $round"
+                progress("$label: проверяется…")
+                val error = try { request(spec,port,TvPolicy.probeReadTimeout(index),session) }
+                    catch (e: java.util.concurrent.CancellationException) { throw e }
+                    catch (e: Exception) { "${e.javaClass.simpleName}: ${e.message?.take(180)}" }
+                if (session.cancelled()) throw java.util.concurrent.CancellationException()
+                if (error == null) score++
+                val row = "$label: ${error ?: "OK"}"
+                rows.add(row); progress(row)
+            }
+            // Diagnose all three hosts even when the first fails. Repeat only a fully successful round.
+            if (round == 1 && score != 3) break
+        }
+        return Result(score == 6,"$score/$count успешных; "+rows.joinToString(" | "),score)
+    }
+    private fun request(spec: Spec,port: Int,timeout: Int,session: Session): String? = TargetProbe.socket(spec.host,443,port,12000,session::register).use { raw ->
         ((SSLSocketFactory.getDefault() as SSLSocketFactory).createSocket(raw,spec.host,443,true) as SSLSocket).use tlsBlock@{ tls ->
-            tls.soTimeout = 4000
+            tls.soTimeout = timeout
             if (Build.VERSION.SDK_INT >= 24) tls.sslParameters = tls.sslParameters.apply { endpointIdentificationAlgorithm = "HTTPS" }
             tls.startHandshake()
             if (Build.VERSION.SDK_INT < 24 && !HttpsURLConnection.getDefaultHostnameVerifier().verify(spec.host,tls.session))

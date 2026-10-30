@@ -10,7 +10,7 @@ import java.net.InetSocketAddress
 import java.net.Socket
 
 /** One engine configuration per process; unbind destroys all native C globals. */
-class TvEngineService : Service() {
+open class TvEngineService(private val proxyPort: Int = 19080) : Service() {
     private var used = false
     private val control = Messenger(Handler(Looper.getMainLooper()) { message ->
         if (!used) {
@@ -19,13 +19,13 @@ class TvEngineService : Service() {
             val reply = message.replyTo
             if (index !in TvPolicy.strategies.indices) { stopSelf(); return@Handler true }
             Thread {
-                runCatching { runBlocking { ByeDpiProxy().startProxy(ByeDpiProxyCmdPreferences("--ip 127.0.0.1 --port 19080 ${TvPolicy.strategies[index]}")) } }
+                runCatching { runBlocking { ByeDpiProxy().startProxy(ByeDpiProxyCmdPreferences("--ip 127.0.0.1 --port $proxyPort ${TvPolicy.strategies[index]}")) } }
             }.start()
             Thread {
                 var ready = false
                 repeat(40) {
                     if (!ready) {
-                        ready = runCatching { Socket().use { it.connect(InetSocketAddress("127.0.0.1",19080),100) }; true }.getOrDefault(false)
+                        ready = runCatching { Socket().use { it.connect(InetSocketAddress("127.0.0.1",proxyPort),100) }; true }.getOrDefault(false)
                         if (!ready) Thread.sleep(100)
                     }
                 }
@@ -38,3 +38,6 @@ class TvEngineService : Service() {
     override fun onUnbind(intent: Intent): Boolean { stopSelf(); return false }
     override fun onDestroy() { super.onDestroy(); android.os.Process.killProcess(android.os.Process.myPid()) }
 }
+
+/** Disposable candidate engine: never carries the active YouTube tunnel. */
+class TvScoutService : TvEngineService(19081)

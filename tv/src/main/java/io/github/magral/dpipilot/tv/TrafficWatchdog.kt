@@ -11,6 +11,8 @@ class TrafficWatchdog {
             now.sentBytes < old.sentBytes || now.receivedBytes < old.receivedBytes) {
             baseline = now; return false
         }
+        // A sleep/wake gap is not an observed continuous stall.
+        if (now.at-old.at > 90000L) { baseline = now; return false }
         if (now.at-old.at < 45000L) return false
         baseline = now
         val tx = now.sentBytes-old.sentBytes

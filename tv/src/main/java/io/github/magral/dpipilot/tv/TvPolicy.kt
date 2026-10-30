@@ -19,6 +19,8 @@ object TvPolicy {
         val base = (known+listOf(adaptiveIndex)+strategies.indices).filter { it in strategies.indices }.distinct()
         return base.filter { it != failed && it !in blocked } + base.filter { it == failed && it !in blocked }
     }
+    // Three native fallback waits of eight seconds must fit inside the TLS diagnostic deadline.
+    fun probeReadTimeout(index: Int): Int = if (index == adaptiveIndex) 35000 else 12000
     fun backoffMillis(failures: Int): Long = when {
         failures <= 1 -> 60_000L
         failures == 2 -> 120_000L

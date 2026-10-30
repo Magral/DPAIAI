@@ -112,7 +112,7 @@ class TvActivity : Activity() {
         }
         return "Этап: ${TvState.phase}\n${TvState.status}\n\n"+
             "Стратегия: ${index?.let { "№${it+1} из ${TvPolicy.strategies.size}" } ?: "не запущена"}\n$command\n"+
-            "Проверки: ${TvState.probeDetail}\nСледующая проверка: $next\n"+
+            "Диагностика стратегии ${if (TvState.probeIndex >= 0) "№${TvState.probeIndex+1}" else "(предыдущий запуск)"}: ${TvState.probeDetail}\nСледующая проверка: $next\n"+
             "Последняя проверка: ${time(TvState.lastCheckAt)}\nПоследний успех: ${time(prefs.getLong("last_success",0))}; сохранено: $saved\n\n"+
             "Служба: ${if (TvState.running) "работает" else "остановлена"}; движок: ${if (TvState.engineReady) "готов" else "не готов"}\n"+
             "Интерфейс VPN: ${if (TvState.vpnEstablished) "создан" else "не создан"}; разрешение: ${if (VpnService.prepare(this) == null) "есть" else "нужно подтвердить"}\n"+

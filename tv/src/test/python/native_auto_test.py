@@ -69,3 +69,49 @@ with tempfile.TemporaryDirectory() as tmp:
         try: process.wait(3)
         except subprocess.TimeoutExpired: process.kill();process.wait()
         backend.close()
+
+    # Candidate processes must never own or terminate the established active stream.
+    import socketserver
+    class Echo(socketserver.BaseRequestHandler):
+        def handle(self):
+            try:
+                while True:
+                    chunk=self.request.recv(65536)
+                    if not chunk: return
+                    self.request.sendall(chunk)
+            except OSError: pass
+    echo=socketserver.ThreadingTCPServer(('127.0.0.1',0),Echo)
+    echo.daemon_threads=True
+    threading.Thread(target=echo.serve_forever,daemon=True).start()
+    def launch(profile_args):
+        reservation=socket.socket();reservation.bind(('127.0.0.1',0));port=reservation.getsockname()[1];reservation.close()
+        proc=subprocess.Popen([str(exe),'--ip','127.0.0.1','--port',str(port),*profile_args],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+        try:
+            for _ in range(100):
+                try: sock=socket.create_connection(('127.0.0.1',port),.2);break
+                except OSError: time.sleep(.02)
+            else: raise AssertionError('Candidate engine startup failed')
+            sock.settimeout(5)
+            sock.sendall(b'\x05\x01\x00');assert read_exact(sock,2)==b'\x05\x00'
+            sock.sendall(b'\x05\x01\x00\x01\x7f\x00\x00\x01'+struct.pack('!H',echo.server_address[1]))
+            reply=read_exact(sock,4);assert reply[:2]==b'\x05\x00'
+            read_exact(sock,{1:4,4:16}[reply[3]]+2)
+            return proc,sock
+        except BaseException:
+            proc.terminate();proc.wait(5);raise
+    active_proc,active=launch(profile.split())
+    try:
+        for iteration in range(3):
+            payload=(b'active-stream-'+bytes([65+iteration]))*2000
+            active.sendall(payload);assert read_exact(active,len(payload))==payload
+            scout_proc,scout=launch(['--split','1'])
+            try:
+                scout.sendall(b'scout-check');assert read_exact(scout,11)==b'scout-check'
+            finally:
+                scout.close();scout_proc.terminate();scout_proc.wait(5)
+            # Same active TCP connection must still transfer bytes after candidate teardown.
+            active.sendall(payload);assert read_exact(active,len(payload))==payload
+        print('Active native stream survived three independent candidate process start/stop cycles')
+    finally:
+        active.close();active_proc.terminate();active_proc.wait(5)
+        echo.shutdown();echo.server_close()

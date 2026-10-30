@@ -18,6 +18,7 @@ object TvState {
     @Volatile var strategyIndex = -1
     @Volatile var phase = "Остановлено"
     @Volatile var network = "ещё не определена"
+    @Volatile var probeIndex = -1
     @Volatile var probeDetail = "ещё не выполнялись"
     @Volatile var lastCheckAt = 0L
     @Volatile var nextCheckAt = 0L

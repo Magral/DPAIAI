@@ -4,7 +4,7 @@ import android.content.*
 import android.os.*
 import kotlinx.coroutines.*
 
-internal class EngineLease(private val context: Context,private val unexpectedDeath: () -> Unit = {}) {
+internal class EngineLease(private val context: Context,private val scout: Boolean = false,private val unexpectedDeath: () -> Unit = {}) {
     private val closing = java.util.concurrent.atomic.AtomicBoolean(false)
     private val connected = CompletableDeferred<IBinder>()
     private val ready = CompletableDeferred<Boolean>()
@@ -26,7 +26,7 @@ internal class EngineLease(private val context: Context,private val unexpectedDe
     }
     suspend fun open(index: Int) {
         withContext(Dispatchers.Main) {
-            bound = context.bindService(Intent(context,TvEngineService::class.java),connection,Context.BIND_AUTO_CREATE)
+            bound = context.bindService(Intent(context,if (scout) TvScoutService::class.java else TvEngineService::class.java),connection,Context.BIND_AUTO_CREATE)
             check(bound) { "Cannot bind engine" }
         }
         withTimeout(10000) {

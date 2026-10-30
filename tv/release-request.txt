@@ -1,1 +1,1 @@
-TV 0.3.0: detailed remote control dashboard, persistent journal, strategy/probe/tunnel telemetry, explicit on/off and boot diagnostics.
+TV 0.3.1: background scout without tunnel churn, aligned TLS deadlines, all-host diagnostics and traffic-preserving selection.

@@ -20,15 +20,19 @@ class TvVpnService : VpnService() {
     private val scope = CoroutineScope(SupervisorJob()+Dispatchers.IO)
     private var controller: Job? = null
     private var lease: EngineLease? = null
+    private var scoutLease: EngineLease? = null
     private var tun: ParcelFileDescriptor? = null
     private var config: File? = null
     private val requested = AtomicBoolean(true)
     private val different = AtomicBoolean(false)
+    private val stallRequested = AtomicBoolean(false)
     private var activeIndex: Int? = null
     private var networkId: String? = null
     private var monitor: ConnectivityManager.NetworkCallback? = null
     private var screen: BroadcastReceiver? = null
     private val traffic = TrafficWatchdog()
+    private val playback = PlaybackGuard()
+    private var sampleAt = 0L
     private val blocked = mutableMapOf<Int,Long>()
     private var profile = ""
     private var lastReceived = 0L
@@ -166,48 +170,58 @@ class TvVpnService : VpnService() {
         }
         ContextCompat.registerReceiver(this,screen,IntentFilter(Intent.ACTION_SCREEN_ON),ContextCompat.RECEIVER_NOT_EXPORTED)
     }
+    private fun sampleTraffic() {
+        val now = SystemClock.elapsedRealtime()
+        if (tun == null || now < sampleAt) return
+        sampleAt = now+5000L
+        val stats = TProxyService.TProxyGetStats()
+        if (stats.size < 4) return
+        TvState.sentPackets = stats[0]; TvState.sentBytes = stats[1]
+        TvState.receivedPackets = stats[2]; TvState.receivedBytes = stats[3]
+        TvState.trafficAt = System.currentTimeMillis()
+        playback.observe(now,stats[3])
+        if (stats[3] >= lastReceived && stats[3]-lastReceived >= 1024*1024) activeIndex?.let { blocked.remove(it) }
+        lastReceived = stats[3]
+        if (traffic.stalled(TrafficWatchdog.Sample(now,stats[0],stats[1],stats[3])) &&
+            (activeIndex?.let { it !in blocked } == true) && !playback.recent(now)) {
+            activeIndex?.let { blocked[it] = now+15*60*1000L }
+            TvState.update(this,"Повторные запросы YouTube без данных; запрошен фоновый подбор")
+            stallRequested.set(true); requested.set(true)
+        }
+    }
     private suspend fun waitForCheck(milliseconds: Long) {
         TvState.phase = "Ожидание следующей проверки"
         val end = SystemClock.elapsedRealtime()+milliseconds
         TvState.nextCheckAt = end
-        var sampleAt = 0L
         while (SystemClock.elapsedRealtime() < end && !requested.get()) {
-            TvState.beat(this)
-            val now = SystemClock.elapsedRealtime()
-            if (tun != null && now >= sampleAt) {
-                sampleAt = now+5000L
-                val stats = TProxyService.TProxyGetStats()
-                if (stats.size >= 4) {
-                    TvState.sentPackets = stats[0]; TvState.sentBytes = stats[1]
-                    TvState.receivedPackets = stats[2]; TvState.receivedBytes = stats[3]
-                    TvState.trafficAt = System.currentTimeMillis()
-                    if (stats[3] >= lastReceived && stats[3]-lastReceived >= 1024*1024) activeIndex?.let { blocked.remove(it) }
-                    lastReceived = stats[3]
-                    if (traffic.stalled(TrafficWatchdog.Sample(now,stats[0],stats[1],stats[3])) && (activeIndex?.let { it !in blocked } == true)) {
-                        activeIndex?.let { blocked[it] = now+15*60*1000L }
-                        TvState.update(this,"YouTube не получает данные; автоматически меняю соединение")
-                        different.set(true); requested.set(true)
-                    }
-                }
-            }
-            delay(1000)
+            TvState.beat(this); sampleTraffic(); delay(1000)
         }
         TvState.nextCheckAt = 0
     }
-    private suspend fun healthy(): TvProbe.Result {
-        TvState.phase = "Проверка YouTube"
+    private suspend fun healthy(index: Int,port: Int = 19080): TvProbe.Result = coroutineScope {
+        TvState.phase = if (port == 19081) "Фоновая проверка стратегии №${index+1}" else "Проверка текущей стратегии №${index+1}"
+        TvState.probeIndex = index
         TvState.nextCheckAt = 0
-        TvState.probeDetail = "Проверка началась"
-        val result = TvProbe.check({ !scope.isActive }) { row ->
-            TvState.probeDetail = row
-            TvState.update(this,row)
-        }
-        TvState.lastCheckAt = System.currentTimeMillis()
-        TvState.probeDetail = result.detail
-        activeIndex?.let { TvState.results[it] = (if (result.ok) "OK: " else "FAIL: ")+result.detail }
-        prefs.edit().putLong("last_check_at",TvState.lastCheckAt).putString("last_probe",result.detail).apply()
-        currentCoroutineContext().ensureActive()
-        return result
+        TvState.probeDetail = "Проверка началась; порт $port"
+        val session = TvProbe.Session()
+        try {
+            val pending = async(Dispatchers.IO) {
+                TvProbe.check(port,index,session) { row ->
+                    TvState.probeDetail = "№${index+1}: $row"
+                    TvState.update(this@TvVpnService,"Тест №${index+1}: $row")
+                }
+            }
+            while (!pending.isCompleted) {
+                TvState.beat(this@TvVpnService); sampleTraffic(); delay(250)
+            }
+            val result = pending.await()
+            currentCoroutineContext().ensureActive()
+            TvState.lastCheckAt = System.currentTimeMillis()
+            TvState.probeDetail = result.detail
+            TvState.results[index] = (if (result.ok) "OK: " else "Частично/отказ: ")+result.detail
+            prefs.edit().putLong("last_check_at",TvState.lastCheckAt).putString("last_probe",result.detail).apply()
+            result
+        } finally { session.cancel() }
     }
     private fun confirm(index: Int) {
         val known = TvPolicy.history(prefs.getString("history.$profile",null).orEmpty())
@@ -245,9 +259,10 @@ class TvVpnService : VpnService() {
                 tun = null
             }
             config?.delete(); config = null
+            scoutLease?.close(); scoutLease = null
             lease?.close(); lease = null
             activeIndex = null
-            traffic.reset(); lastReceived = 0
+            traffic.reset(); playback.reset(); sampleAt = 0; lastReceived = 0
         }
     }
     private fun establish(network: Network) {
@@ -293,77 +308,83 @@ class TvVpnService : VpnService() {
             TvState.network = "$transport · ${link?.interfaceName ?: "?"} · DNS: ${link?.dnsServers?.mapNotNull { it.hostAddress }?.joinToString() ?: "нет"}"
             val currentProfile = profileKey(network)
             if (profile != currentProfile) { blocked.clear(); profile = currentProfile }
-            val now = SystemClock.elapsedRealtime()
-            blocked.entries.removeAll { it.value <= now }
-            val force = different.getAndSet(false) || (activeIndex?.let { it in blocked } == true)
-            var failedIndex = if (force) activeIndex else null
-            val changedNetwork = networkId != network.toString()
-            if (tun != null && !changedNetwork && !force) {
-                TvState.update(this,"Проверяю текущую стратегию…")
-                var current = healthy()
-                if (!current.ok) { delay(2000); current = healthy() }
-                if (current.ok) {
-                    confirm(activeIndex!!)
-                    traffic.reset() // Discard the pre-sleep sampling window after a fresh health check.
-                    failures = 0
-                    TvState.update(this,"YouTube: соединение проверено. Стратегия ${activeIndex!!+1}/${TvPolicy.strategies.size}. Следующая проверка через 5 минут")
-                    waitForCheck(300000); continue
-                }
-                TvState.verified = false
-                TvState.update(this,"Текущая стратегия не прошла повторную проверку: ${current.detail}")
-                failedIndex = activeIndex
-            }
-            release()
+            blocked.entries.removeAll { it.value <= SystemClock.elapsedRealtime() }
             val old = prefs.getInt("good",-1).takeIf { it in TvPolicy.strategies.indices }
             val known = TvPolicy.history(prefs.getString("history.$profile",null) ?: old?.toString().orEmpty())
-            val saved = known.firstOrNull()
-            var selected = false
-            // After a failed current check, try alternatives before revisiting the saved strategy.
-            for (index in TvPolicy.candidates(known,failedIndex,blocked.keys)) {
+            // Establish once at startup. Every alternative is tested in :scout while this tunnel stays up.
+            if (tun == null || !TvState.engineReady || networkId != network.toString()) {
+                release()
+                val initial = known.firstOrNull() ?: TvPolicy.adaptiveIndex
+                open(initial); establish(network); networkId = network.toString()
+                TvState.update(this,"Включена стратегия №${initial+1}; предварительный режим до проверки")
+            }
+            val active = activeIndex!!
+            var manual = different.getAndSet(false)
+            var stalled = stallRequested.getAndSet(false)
+            var force = manual || ((stalled || active in blocked) && !playback.recent(SystemClock.elapsedRealtime()))
+            val current = healthy(active)
+            if (physical() != network) { requested.set(true); continue }
+            stalled = stallRequested.getAndSet(false) || stalled
+            force = manual || ((stalled || active in blocked) && !playback.recent(SystemClock.elapsedRealtime()))
+            if (current.ok) {
+                confirm(active); failures = 0
+                if (!force) {
+                    TvState.update(this,"Проверки текущей стратегии №${active+1} пройдены; VPN не пересоздавался")
+                    waitForCheck(300000); continue
+                }
+            } else {
+                TvState.verified = false
+                TvState.update(this,"Проверки текущей стратегии: ${current.score} успешных; VPN оставлен включённым")
+                if (!force && playback.recent(SystemClock.elapsedRealtime())) {
+                    TvState.update(this,"YouTube получает данные: сохраняю текущий туннель несмотря на отказ диагностики")
+                    waitForCheck(60000); continue
+                }
+            }
+            var confirmed: Int? = null
+            var trial: Int? = null
+            var bestScore = -1
+            for (index in TvPolicy.candidates(known,active,blocked.keys).filter { it != active }) {
                 currentCoroutineContext().ensureActive()
-                if (physical() != network) { release(); requested.set(true); break }
-                TvState.beat(this)
-                TvState.update(this,"Подбор ${index+1}/${TvPolicy.strategies.size}: ${TvPolicy.strategies[index].ifEmpty { "контроль" }}")
+                if (physical() != network) { requested.set(true); break }
+                force = manual || ((stalled || active in blocked) && !playback.recent(SystemClock.elapsedRealtime()))
+                if (!force && playback.recent(SystemClock.elapsedRealtime())) break
+                TvState.update(this,"Фоновый тест №${index+1}; активна №${active+1}, VPN не отключается")
+                val next = EngineLease(this,scout = true)
+                scoutLease = next
                 try {
-                    // Route YouTube immediately. A failed diagnostic must not prevent first-time VPN creation.
-                    open(index)
-                    establish(network)
-                    val result = healthy()
-                    TvState.update(this,"Стратегия ${index+1}: ${result.detail}")
-                    if (result.ok) {
-                        if (physical() != network) { release(); requested.set(true); break }
-                        confirm(index)
-                        networkId = network.toString()
-                        selected = true; failures = 0
-                        TvState.update(this,"YouTube: подключено. Стратегия ${index+1}/${TvPolicy.strategies.size}; автопроверка каждые 5 минут")
-                        break
-                    }
+                    next.open(index)
+                    val result = healthy(index,19081)
+                    if (result.score > bestScore) { bestScore = result.score; trial = index }
+                    if (result.ok) { confirmed = index; break }
                 } catch (e: TimeoutCancellationException) {
                     currentCoroutineContext().ensureActive()
-                    TvState.results[index] = "FAIL: таймаут движка"
-                    TvState.update(this,"Стратегия ${index+1}: таймаут движка")
-                }
-                catch (e: CancellationException) { throw e }
+                    TvState.results[index] = "FAIL: таймаут тестового движка"
+                    TvState.update(this,"Фоновая стратегия №${index+1}: таймаут; активный VPN сохранён")
+                } catch (e: CancellationException) { throw e }
                 catch (e: Exception) {
                     TvState.results[index] = "FAIL: ${e.javaClass.simpleName}: ${e.message?.take(120)}"
-                    TvState.update(this,"Стратегия ${index+1}: ${TvState.results[index]}")
-                }
-                release()
+                    TvState.update(this,"Фоновая стратегия №${index+1}: ${TvState.results[index]}")
+                } finally { next.close(); scoutLease = null }
             }
-            if (selected) { waitForCheck(300000); continue }
+            if (physical() != network) { requested.set(true); continue }
+            manual = different.getAndSet(false) || manual
+            stalled = stallRequested.getAndSet(false) || stalled
+            force = manual || ((stalled || active in blocked) && !playback.recent(SystemClock.elapsedRealtime()))
+            val replacement = SelectionPolicy.replacement(active,confirmed,trial,force,playback.recent(SystemClock.elapsedRealtime()))
+            if (replacement != null) {
+                if (force) blocked[active] = SystemClock.elapsedRealtime()+15*60*1000L
+                TvState.update(this,"Переключение №${active+1} → №${replacement+1}: ${if (confirmed != null) "запасной вариант прошёл тесты" else "пробная смена после зависания/ручного запроса; успех не подтверждён"}")
+                release(); open(replacement); establish(network); networkId = network.toString()
+                val result = healthy(replacement)
+                if (physical() != network) { requested.set(true); continue }
+                if (result.ok) {
+                    confirm(replacement); failures = 0
+                    TvState.update(this,"Стратегия №${replacement+1} проверена и сохранена")
+                    waitForCheck(300000); continue
+                }
+            }
             failures++
-            if (physical() == network) {
-                // No previous success on a new installation: still leave an adaptive tunnel active.
-                // This is provisional and must never be stored as a confirmed result.
-                val fallback = saved ?: TvPolicy.adaptiveIndex
-                try { open(fallback); establish(network); networkId = network.toString() }
-                catch (e: CancellationException) { throw e }
-                catch (e: Exception) {
-                    TvState.update(this,"Не удалось создать VPN: ${e.javaClass.simpleName}: ${e.message?.take(160)}")
-                    release()
-                }
-            }
-            TvState.update(this,"${if (tun != null) "VPN включён, доступ YouTube не подтверждён" else "VPN не создан"}; история сохранена. Повтор через ${TvPolicy.backoffMillis(failures)/60000} мин.")
+            TvState.update(this,"VPN сохранён без перебора туннелей; доступ YouTube полностью не подтверждён. Повтор через ${TvPolicy.backoffMillis(failures)/60000} мин.")
             waitForCheck(TvPolicy.backoffMillis(failures))
         }
     }
