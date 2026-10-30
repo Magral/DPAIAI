@@ -1,0 +1,107 @@
+# Separate Android TV application; does not replace the mobile release.
+name: Signed Android TV release
+on:
+  push:
+    branches: [main]
+    paths: [.github/workflows/tv-release.yml]
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: signed-tv-release
+  cancel-in-progress: false
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Require permanent signing identity
+        env:
+          SIGNING_BUNDLE: ${{ secrets.DPI_PILOT_SIGNING }}
+        run: |
+          if [[ -z "$SIGNING_BUNDLE" ]]; then
+            echo "::error::Configure permanent signing secrets first; no unsigned/debug release will be published."
+            exit 1
+          fi
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+          log-accepted-android-sdk-licenses: false
+      - name: Install Android toolchain
+        run: sdkmanager 'platforms;android-34' 'build-tools;34.0.0' 'ndk;26.1.10909125' 'cmake;3.22.1'
+      - name: Restore private signing key
+        env:
+          DPI_PILOT_SIGNING: ${{ secrets.DPI_PILOT_SIGNING }}
+        run: python3 scripts/restore-signing.py
+      - name: Test selective QUIC guard
+        run: bash tv/test-quic.sh
+      - name: Build and test TV release
+        run: bash gradlew :tv:assembleRelease :tv:testReleaseUnitTest --stacktrace
+      - name: Verify permanent certificate and prepare APK
+        run: |
+          bash scripts/verify-release.sh tv/build/outputs/apk/release/tv-release.apk
+          python3 scripts/check-tv-apk.py tv/build/outputs/apk/release/tv-release.apk
+          python3 - <<'PY'
+          import hashlib, pathlib, re, shutil
+          source = pathlib.Path("tv/build.gradle.kts").read_text()
+          version = re.search(r'versionName = "([0-9]+\.[0-9]+\.[0-9]+)"', source).group(1)
+          out = pathlib.Path("release")
+          out.mkdir()
+          apk = out / f"DPI-Pilot-TV-{version}.apk"
+          shutil.copyfile("tv/build/outputs/apk/release/tv-release.apk", apk)
+          (out / "SHA256SUMS").write_text(hashlib.sha256(apk.read_bytes()).hexdigest() + "  " + apk.name + "\n")
+          PY
+      - name: Remove private key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/dpipilot-release.p12"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DPI-Pilot-TV-signed-release
+          path: release/*
+          if-no-files-found: error
+      - name: Publish installable APK
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const crypto = require('crypto');
+            const {owner,repo} = context.repo;
+            const files = fs.readdirSync('release').filter(f => f.endsWith('.apk'));
+            if (files.length !== 1) throw new Error('Expected exactly one signed APK');
+            const name = files[0];
+            const version = name.match(/^DPI-Pilot-TV-([0-9]+\.[0-9]+\.[0-9]+)\.apk$/)[1];
+            const tag = 'tv-v'+version;
+            const {data: head} = await github.rest.git.getRef({owner,repo,ref:'heads/main'});
+            if (context.ref !== 'refs/heads/main' || head.object.sha !== context.sha)
+              throw new Error('Release must use current main; rebuild after source changes');
+            const data = fs.readFileSync('release/'+name);
+            const digest = 'sha256:'+crypto.createHash('sha256').update(data).digest('hex');
+            let release;
+            try { release = (await github.rest.repos.getReleaseByTag({owner,repo,tag})).data; }
+            catch (e) {
+              if (e.status !== 404) throw e;
+              release = (await github.rest.repos.createRelease({
+                owner,repo,tag_name:tag,target_commitish:context.sha,name:'DPI Pilot TV '+version,
+                draft:true,prerelease:false,make_latest:'false',
+                body:'Отдельная Android TV-версия для официального YouTube. Скачайте '+name+' в Assets, без ZIP. Пакет io.github.magral.dpipilot.tv устанавливается рядом с телефонной версией; ключ подписи постоянный.\n\nПервый запуск: откройте DPI Pilot TV, нажмите «Включить авторежим» и подтвердите системное разрешение VPN. Автозагрузка включена по умолчанию. На телевизорах с настройкой постоянного VPN можно включить её дополнительно; блокировку соединений без VPN включать не нужно.\n\nУправление с пульта; проверка при запуске, пробуждении, смене сети и каждые 5 минут; подбор альтернатив при повторном сбое; сохранение последнего проверенного результата и увеличивающиеся паузы при общей недоступности сети. Официальные клиенты YouTube — единственные приложения в VPN allowlist. UDP/443 отключён TV-сборкой для перехода на TCP; DNS и TCP/443 сохраняются.\n\nПроверка: YouTube generate_204, изображение и TLS googlevideo — два раунда. Проверка полного видеопотока и скорости не выполняется. Для зависшего видео предусмотрена ручная смена стратегии. Без доступного сетевого маршрута рабочая стратегия может не найтись.\n\nПрошивка ТВ и принудительная остановка приложения могут ограничить автозапуск. Этот первый TV-релиз требует проверки на реальном телевизоре: пульт, холодная загрузка, сон/пробуждение и видео. Подробности: docs/ANDROID_TV.md. GPL-3.0; авторство исходных компонентов сохранено.\n\nSource: '+context.sha+'\nSHA-256 APK: '+digest.slice(7)
+              })).data;
+            }
+            const assets = (await github.rest.repos.listReleaseAssets({owner,repo,release_id:release.id})).data;
+            const existing = assets.find(a => a.name === name);
+            if (existing) {
+              if (existing.digest !== digest) throw new Error('Existing APK differs; refusing overwrite');
+            } else {
+              if (!release.draft) throw new Error('Refusing to change an already published release');
+              await github.rest.repos.uploadReleaseAsset({owner,repo,release_id:release.id,name,data,
+                headers:{'content-type':'application/vnd.android.package-archive','content-length':data.length}});
+            }
+            if (release.draft) await github.rest.repos.updateRelease({owner,repo,release_id:release.id,draft:false});
+            core.notice(release.html_url);
+

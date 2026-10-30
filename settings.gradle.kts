@@ -15,3 +15,5 @@ dependencyResolutionManagement {
 
 rootProject.name = "ByeDpi"
 include(":app")
+
+include(":tv")

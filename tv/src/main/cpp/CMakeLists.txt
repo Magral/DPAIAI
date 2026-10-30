@@ -1,0 +1,5 @@
+cmake_minimum_required(VERSION 3.22.1)
+project(dpipilot_tv_native)
+add_subdirectory("${CMAKE_CURRENT_LIST_DIR}/../../../../app/src/main/cpp" "${CMAKE_BINARY_DIR}/shared-native")
+target_sources(byedpi PRIVATE "${CMAKE_CURRENT_LIST_DIR}/quic_guard.c")
+target_link_options(byedpi PRIVATE "-Wl,--wrap=sendto")

@@ -1,0 +1,9 @@
+<resources>
+    <string name="app_name">DPI Pilot TV</string>
+    <style name="TvTheme" parent="android:style/Theme.Material.NoActionBar">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:colorAccent">#83B4FF</item>
+        <item name="android:windowBackground">#10182A</item>
+        <item name="android:windowActionModeOverlay">true</item>
+    </style>
+</resources>

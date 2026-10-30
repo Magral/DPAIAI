@@ -7,7 +7,7 @@ import javax.net.ssl.SSLSocketFactory
 
 object TargetProbe {
     // Explicit SOCKS5 negotiation gives exact failure stages and reply codes on Android.
-    private fun socket(host: String, port: Int): Socket {
+    internal fun socket(host: String, port: Int): Socket {
         val tcp = Socket(Proxy.NO_PROXY)
         var stage = "local proxy connect"
         try {
