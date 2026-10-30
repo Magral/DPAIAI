@@ -1,4 +1,4 @@
-# DPI Pilot 0.2.0 — Android prototype
+# DPI Pilot 0.3.0 — Android prototype
 
 Experimental GPL-3.0 derivative of dovecoteescapee/ByeDPIAndroid. Original copyright, LICENSE and README are retained. Native engine: hufrea/byedpi; tunnel: heiher/hev-socks5-tunnel. No upstream endorsement.
 
@@ -22,6 +22,6 @@ APK: app/build/outputs/apk/debug/app-debug.apk.
 Debug APK is a development build, not production signing. Keep the debug key private and persistent for update continuity; production releases need a separately managed key.
 
 ## Next milestones
-Per-app routing and an isolated cancellable service-oriented strategy runner are implemented in 0.2.0. See README.md for probe scope and limits. Still missing: full content/media checks, automatic network-specific profile selection and rollback, production VPN lifecycle hardening.
+Per-app routing and an isolated cancellable service-oriented strategy runner are implemented in 0.3.0. See README.md for probe scope and limits. Still missing: full content/media checks, automatic network-specific profile selection and rollback, production VPN lifecycle hardening.
 
 Do not publish as a stable release until launch/stop, Wi-Fi/cellular handoff, screen-off, IPv6, DNS, another VPN, and target service behavior are checked on real devices. Source code must accompany redistribution under the retained license.
