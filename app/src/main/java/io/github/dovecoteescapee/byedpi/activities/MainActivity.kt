@@ -140,6 +140,7 @@ class MainActivity : AppCompatActivity() {
             registerReceiver(receiver, intentFilter)
         }
 
+        binding.telegramBridgeButton.setOnClickListener { startActivity(Intent(this, TelegramBridgeActivity::class.java)) }
         binding.serviceTuningButton.setOnClickListener { startActivity(Intent(this, ServiceTuningActivity::class.java)) }
         binding.targetAppsButton.setOnClickListener { chooseTargetApps() }
 

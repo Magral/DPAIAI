@@ -9,10 +9,36 @@ import javax.net.ssl.SSLSocket
 import javax.net.ssl.SSLSocketFactory
 
 object TargetProbe {
-    private fun socket(host: String, port: Int) = Socket(Proxy(Proxy.Type.SOCKS, InetSocketAddress("127.0.0.1", 19080))).apply {
-        soTimeout = 3500
-        try { connect(InetSocketAddress.createUnresolved(host,port),3500) }
-        catch (e: Exception) { close(); throw e }
+    // Explicit SOCKS5 negotiation gives exact failure stages and reply codes on Android.
+    private fun socket(host: String, port: Int): Socket {
+        val tcp = Socket(Proxy.NO_PROXY)
+        var stage = "local proxy connect"
+        try {
+            tcp.connect(InetSocketAddress("127.0.0.1",19080),1000)
+            tcp.soTimeout = 5000
+            val input = DataInputStream(tcp.inputStream)
+            val output = tcp.outputStream
+            stage = "SOCKS authentication"
+            output.write(byteArrayOf(5,1,0)); output.flush()
+            check(input.readUnsignedByte() == 5 && input.readUnsignedByte() == 0) { "SOCKS method rejected" }
+            val numeric = host.split('.').takeIf { it.size == 4 && it.all { part -> (part.toIntOrNull() ?: -1) in 0..255 } }
+            val address = if (numeric != null) byteArrayOf(1)+numeric.map { it.toInt().toByte() }.toByteArray()
+                else java.net.IDN.toASCII(host).toByteArray(Charsets.US_ASCII).let { name ->
+                    require(name.size in 1..255); byteArrayOf(3,name.size.toByte())+name
+                }
+            stage = "SOCKS upstream connect"
+            output.write(byteArrayOf(5,1,0)+address+byteArrayOf((port ushr 8).toByte(),port.toByte())); output.flush()
+            check(input.readUnsignedByte() == 5) { "Invalid SOCKS version" }
+            val reply = input.readUnsignedByte()
+            input.readUnsignedByte()
+            if (reply != 0) throw java.io.IOException("SOCKS reply=$reply (1=general, 3=network unreachable, 4=host unreachable/timeout, 5=refused, 8=address type)")
+            val length = when (input.readUnsignedByte()) { 1 -> 4; 3 -> input.readUnsignedByte(); 4 -> 16; else -> error("Invalid SOCKS address") }
+            ByteArray(length+2).also { input.readFully(it) }
+            return tcp
+        } catch (e: Exception) {
+            tcp.close()
+            throw java.io.IOException("$stage: ${e.javaClass.simpleName}: ${e.message?.take(180)}",e)
+        }
     }
     fun https(host: String): Boolean = socket(host,443).use { raw ->
         val factory = SSLSocketFactory.getDefault() as SSLSocketFactory
@@ -39,7 +65,7 @@ object TargetProbe {
             try {
                 if (telegramExchange(dc.ip,obfuscated)) return TelegramResult(true,mode)
                 failures.add("$mode: invalid MTProto response")
-            } catch (e: Exception) { failures.add("$mode: ${e.javaClass.simpleName}") }
+            } catch (e: Exception) { failures.add("$mode: ${e.javaClass.simpleName}: ${e.message?.take(220)}") }
         }
         return TelegramResult(false,failures.joinToString("; "))
     }

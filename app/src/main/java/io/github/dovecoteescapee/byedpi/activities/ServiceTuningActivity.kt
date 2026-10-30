@@ -38,6 +38,10 @@ class ServiceTuningActivity : AppCompatActivity() {
             }
         }
         Button(this).apply {
+            text = "Другой способ: Telegram через WebSocket"; box.addView(this)
+            setOnClickListener { startActivity(Intent(this@ServiceTuningActivity,TelegramBridgeActivity::class.java)) }
+        }
+        Button(this).apply {
             text = "Подключить свой MTProxy для Telegram"
             box.addView(this)
             setOnClickListener { openTelegramProxy() }
