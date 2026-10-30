@@ -65,6 +65,7 @@ class TelegramBridgeService : Service() {
                 val hex = secret(this)
                 val bytes = ByteArray(16) { hex.substring(it*2,it*2+2).toInt(16).toByte() }
                 eventLog = "Telegram WSS: проверка сертификатов включена; только официальные домены Telegram"
+                probeReport = "Проверка сети ещё не запускалась"
                 bridge = TelegramWsBridge(bytes,log = ::append).also { it.start() }
                 activeBridge = bridge
                 running = true
@@ -81,8 +82,8 @@ class TelegramBridgeService : Service() {
         networkDescription = description
         if (probing) {
             probeJob?.cancel()
-            probeReport = "Сеть изменилась. Запустите проверку заново."
         }
+        probeReport = "Сеть изменилась. Запустите проверку заново."
         bridge?.networkChanged()
     }
     private fun describe(cm: ConnectivityManager,network: Network): String {
@@ -160,7 +161,7 @@ class TelegramBridgeService : Service() {
     }
     override fun onDestroy() {
         running = false
-        callback?.let { (getSystemService(CONNECTIVITY_SERVICE) as ConnectivityManager).unregisterNetworkCallback(it) }
+        callback?.let { runCatching { (getSystemService(CONNECTIVITY_SERVICE) as ConnectivityManager).unregisterNetworkCallback(it) } }
         receiver?.let { unregisterReceiver(it) }
         callback = null; receiver = null
         scope.cancel(); probing = false

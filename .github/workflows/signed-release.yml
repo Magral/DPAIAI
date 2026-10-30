@@ -1,3 +1,4 @@
+# Network-specific diagnostics are reset when the default network changes.
 name: Signed APK release
 on:
   push:

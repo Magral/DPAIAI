@@ -222,6 +222,8 @@ internal class TelegramWsBridge(
     /** Close obsolete streams so Telegram reconnects on the new default network. */
     fun networkChanged(reason: String = "смена сети") {
         preferred.clear(); cooldown.clear()
+        authenticated.set(0); openedConnections.set(0); receivedConnections.set(0)
+        lastRemoteFailure = "нет; новый цикл соединений"
         sessions.forEach { (socket,session) ->
             session.reason = "$reason; требуется новое соединение"
             session.reasonFixed = true; session.closing.set(true)
