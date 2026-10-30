@@ -1,1 +1,1 @@
-DPI Pilot TV 0.2.0 — recovery and traffic samples distinguish sleep from stalls
+TV 0.2.1: create VPN before probes, provisional initial adaptive tunnel, visible interface state and setup diagnostics.

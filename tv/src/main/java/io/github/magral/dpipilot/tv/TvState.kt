@@ -9,6 +9,8 @@ import java.util.Locale
 object TvState {
     @Volatile var running = false
     @Volatile var alwaysOn = false
+    @Volatile var vpnEstablished = false
+    @Volatile var verified = false
     @Volatile var status = "Нажмите «Включить авторежим»"
     @Volatile var report = ""
     @Volatile var lastBeat = 0L

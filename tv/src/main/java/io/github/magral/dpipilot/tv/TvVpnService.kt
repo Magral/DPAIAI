@@ -175,6 +175,8 @@ class TvVpnService : VpnService() {
         activeIndex = index
     }
     private suspend fun release() {
+        TvState.vpnEstablished = false
+        TvState.verified = false
         withContext(NonCancellable+Dispatchers.IO) {
             if (tun != null) {
                 runCatching { TProxyService.TProxyStopService() }
@@ -204,6 +206,8 @@ class TvVpnService : VpnService() {
         path.writeText("misc:\n  task-stack-size: 81920\nsocks5:\n  address: 127.0.0.1\n  port: 19080\n  udp: udp\n")
         tun = builder.establish() ?: error("VPN permission lost")
         TProxyService.TProxyStartService(path.absolutePath,tun!!.fd)
+        TvState.vpnEstablished = true
+        TvState.update(this,"VPN-интерфейс создан; приложения: ${targets.joinToString()}. Доступ YouTube ещё проверяется")
     }
     private suspend fun control() {
         var failures = 0
@@ -228,11 +232,13 @@ class TvVpnService : VpnService() {
                 var current = healthy()
                 if (!current.ok) { delay(2000); current = healthy() }
                 if (current.ok) {
+                    TvState.verified = true
                     traffic.reset() // Discard the pre-sleep sampling window after a fresh health check.
                     failures = 0
                     TvState.update(this,"YouTube: соединение проверено. Стратегия ${activeIndex!!+1}/${TvPolicy.strategies.size}. Следующая проверка через 5 минут")
                     waitForCheck(300000); continue
                 }
+                TvState.verified = false
                 TvState.update(this,"Текущая стратегия не прошла повторную проверку: ${current.detail}")
                 failedIndex = activeIndex
             }
@@ -244,16 +250,18 @@ class TvVpnService : VpnService() {
             // After a failed current check, try alternatives before revisiting the saved strategy.
             for (index in TvPolicy.candidates(known,failedIndex,blocked.keys)) {
                 currentCoroutineContext().ensureActive()
-                if (physical() != network) { requested.set(true); break }
+                if (physical() != network) { release(); requested.set(true); break }
                 TvState.beat(this)
                 TvState.update(this,"Подбор ${index+1}/${TvPolicy.strategies.size}: ${TvPolicy.strategies[index].ifEmpty { "контроль" }}")
                 try {
+                    // Route YouTube immediately. A failed diagnostic must not prevent first-time VPN creation.
                     open(index)
+                    establish(network)
                     val result = healthy()
                     TvState.update(this,"Стратегия ${index+1}: ${result.detail}")
                     if (result.ok) {
-                        if (physical() != network) { requested.set(true); break }
-                        establish(network)
+                        if (physical() != network) { release(); requested.set(true); break }
+                        TvState.verified = true
                         prefs.edit().putInt("good",index).putString("history.$profile",TvPolicy.remember(known,index).joinToString(",")).putLong("last_success",System.currentTimeMillis()).apply()
                         networkId = network.toString()
                         selected = true; failures = 0
@@ -270,11 +278,18 @@ class TvVpnService : VpnService() {
             }
             if (selected) { waitForCheck(300000); continue }
             failures++
-            if (saved != null && physical() == network) {
-                try { open(saved); establish(network); networkId = network.toString() }
-                catch (_: Exception) { release() }
+            if (physical() == network) {
+                // No previous success on a new installation: still leave an adaptive tunnel active.
+                // This is provisional and must never be stored as a confirmed result.
+                val fallback = saved ?: TvPolicy.adaptiveIndex
+                try { open(fallback); establish(network); networkId = network.toString() }
+                catch (e: CancellationException) { throw e }
+                catch (e: Exception) {
+                    TvState.update(this,"Не удалось создать VPN: ${e.javaClass.simpleName}: ${e.message?.take(160)}")
+                    release()
+                }
             }
-            TvState.update(this,"Рабочая стратегия не подтверждена; прежний результат сохранён. Повтор через ${TvPolicy.backoffMillis(failures)/60000} мин.")
+            TvState.update(this,"${if (tun != null) "VPN включён, доступ YouTube не подтверждён" else "VPN не создан"}; история сохранена. Повтор через ${TvPolicy.backoffMillis(failures)/60000} мин.")
             waitForCheck(TvPolicy.backoffMillis(failures))
         }
     }
@@ -288,6 +303,8 @@ class TvVpnService : VpnService() {
         monitor?.let { runCatching { cm.unregisterNetworkCallback(it) } }
         screen?.let { runCatching { unregisterReceiver(it) } }
         scope.cancel()
+        TvState.vpnEstablished = false
+        TvState.verified = false
         TvState.running = false
         super.onDestroy()
     }

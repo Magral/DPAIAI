@@ -26,8 +26,10 @@ class TvActivity : Activity() {
                 !enabled -> "Требуется первоначальная настройка помощником"
                 VpnService.prepare(this@TvActivity) != null -> "Помощнику нужно один раз разрешить работу приложения"
                 TvState.status.startsWith("Ожидаю сеть") -> "Ожидаем подключение к интернету"
-                TvState.running && (TvState.status.startsWith("YouTube: подключено") || TvState.status.startsWith("YouTube: соединение проверено")) -> "Помощник работает автоматически"
-                else -> "Восстанавливаем соединение. Ничего нажимать не нужно"
+                TvState.vpnEstablished && TvState.verified -> "VPN включён · проверки YouTube пройдены"
+                TvState.vpnEstablished -> "VPN включён · подбираем соединение для YouTube"
+                TvState.running -> "VPN ещё не создан · запускаем соединение"
+                else -> "VPN не запущен · требуется проверка установщиком"
             }
             handler.postDelayed(this,1000)
         }
@@ -57,16 +59,22 @@ class TvActivity : Activity() {
         setup = button("Первоначальная настройка — один раз") { configure() }
         if (prefs.getBoolean("setup_complete",false)) { setup.visibility = View.GONE; open.requestFocus() }
         else setup.requestFocus()
-        if (prefs.getBoolean("enabled",false) && VpnService.prepare(this) == null) runCatching {
-            MaintenanceJob.schedule(this); TvVpnService.start(this)
-        }
+        if (prefs.getBoolean("enabled",false) && VpnService.prepare(this) == null) startHelper()
     }
     private fun openYouTube() {
-        if (prefs.getBoolean("enabled",false) && VpnService.prepare(this) == null) runCatching { TvVpnService.start(this) }
+        if (prefs.getBoolean("enabled",false) && VpnService.prepare(this) == null) startHelper()
         val intent = TvVpnService.installed(this).firstNotNullOfOrNull { pkg ->
             packageManager.getLeanbackLaunchIntentForPackage(pkg) ?: packageManager.getLaunchIntentForPackage(pkg)
         }
         if (intent == null) Toast.makeText(this,"YouTube не установлен",Toast.LENGTH_LONG).show() else startActivity(intent)
+    }
+    private fun startHelper() {
+        try { MaintenanceJob.schedule(this); TvVpnService.start(this) }
+        catch (e: Exception) {
+            TvState.update(this,"Запуск VPN отклонён: ${e.javaClass.simpleName}: ${e.message?.take(160)}")
+            AlertDialog.Builder(this).setTitle("Не удалось запустить VPN").setMessage(TvState.status)
+                .setPositiveButton("Закрыть",null).show()
+        }
     }
     private fun configure() {
         val permission = VpnService.prepare(this)
@@ -74,8 +82,7 @@ class TvActivity : Activity() {
     }
     private fun enable() {
         prefs.edit().putBoolean("enabled",true).putBoolean("boot",true).apply()
-        MaintenanceJob.schedule(this)
-        TvVpnService.start(this)
+        startHelper()
         if (Build.VERSION.SDK_INT >= 23 && !(getSystemService(POWER_SERVICE) as PowerManager).isIgnoringBatteryOptimizations(packageName) &&
             !prefs.getBoolean("background_prompted",false)) {
             prefs.edit().putBoolean("background_prompted",true).apply()
@@ -104,7 +111,7 @@ class TvActivity : Activity() {
                 1 -> if (prefs.getBoolean("enabled",false)) TvVpnService.start(this)
                 2 -> if (prefs.getBoolean("enabled",false)) TvVpnService.start(this,"different")
                 3 -> AlertDialog.Builder(this).setTitle("Технический отчёт").setMessage(
-                    "Автозапуск: ${prefs.getBoolean("boot",true)}; фоновое восстановление: ${MaintenanceJob.backgroundAllowed(this)}; постоянный VPN: ${TvState.alwaysOn}\n\n"+TvState.report.ifBlank { TvState.status })
+                    "DPI Pilot TV ${BuildConfig.VERSION_NAME}; Android ${Build.VERSION.RELEASE} / API ${Build.VERSION.SDK_INT}; ${Build.MANUFACTURER} ${Build.MODEL}\nРазрешение VPN: ${VpnService.prepare(this) == null}; служба: ${TvState.running}; интерфейс VPN: ${TvState.vpnEstablished}; проверки: ${TvState.verified}\nYouTube: ${TvVpnService.installed(this).joinToString().ifEmpty { "не найден" }}\nАвтозапуск: ${prefs.getBoolean("boot",true)}; фоновое восстановление: ${MaintenanceJob.backgroundAllowed(this)}; постоянный VPN: ${TvState.alwaysOn}\n\n"+TvState.report.ifBlank { TvState.status })
                     .setPositiveButton("Закрыть",null).show()
                 4 -> requestBackground()
                 5 -> try { startActivity(Intent(Settings.ACTION_VPN_SETTINGS)) }
