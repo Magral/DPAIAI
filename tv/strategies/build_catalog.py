@@ -45,7 +45,7 @@ def normalize(line):
 
 def starts(exe,args):
     reservation=socket.socket();reservation.bind(('127.0.0.1',0));port=reservation.getsockname()[1];reservation.close()
-    proc=subprocess.Popen([str(exe),'--ip','127.0.0.1','--port',str(port),*shlex.split(args)],stdout=subprocess.DEVNULL,stderr=subprocess.PIPE)
+    proc=subprocess.Popen([str(exe),'--ip','127.0.0.1','--port',str(port),'--proto','udp','--pf','53','--auto','none',*shlex.split(args)],stdout=subprocess.DEVNULL,stderr=subprocess.PIPE)
     try:
         deadline=time.monotonic()+1
         while time.monotonic()<deadline:

@@ -16,7 +16,7 @@ public class ByeDpiProxy {
  public static void main(String[] args) throws Exception {
   System.load(args[0]);
   ByeDpiProxy p=new ByeDpiProxy();
-  int fd=p.jniCreateSocketWithCommandLine(new String[]{"byedpi","--ip","127.0.0.1","--port",args[1],"--split","1","--fake-tls-mod","rand","--auto","torst,ssl_err,conn","--disorder","1"});
+  int fd=p.jniCreateSocketWithCommandLine(new String[]{"byedpi","--ip","127.0.0.1","--port",args[1],"--proto","udp","--pf","53","--auto","none","--split","1","--fake-tls-mod","rand","--auto","torst,ssl_err,conn","--disorder","1"});
   if(fd<0) throw new IllegalStateException("JNI parser/listener failed");
   Thread worker=new Thread(()->p.jniStartProxy(fd));worker.setDaemon(true);worker.start();
   System.out.println("READY");System.out.flush();System.in.read();

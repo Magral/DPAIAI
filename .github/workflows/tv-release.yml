@@ -44,6 +44,8 @@ jobs:
         run: bash tv/test-quic.sh
       - name: Verify every catalog command with pinned engine
         run: python3 tv/strategies/build_catalog.py --check
+      - name: Test DNS forwarding despite imported UDP fakes
+        run: python3 tv/src/test/python/udp_policy_test.py
       - name: Test TV JNI adapter with the CI JVM
         run: python3 tv/src/test/python/jni_adapter_test.py
       - name: Test actual native automatic fallback

@@ -19,7 +19,7 @@ open class TvEngineService(private val proxyPort: Int = 19080) : Service() {
             val reply = message.replyTo
             if (index !in TvPolicy.strategies.indices) { stopSelf(); return@Handler true }
             Thread {
-                runCatching { runBlocking { ByeDpiProxy().startProxy(ByeDpiProxyCmdPreferences("--ip 127.0.0.1 --port $proxyPort ${TvPolicy.strategies[index]}")) } }
+                runCatching { runBlocking { ByeDpiProxy().startProxy(ByeDpiProxyCmdPreferences("--ip 127.0.0.1 --port $proxyPort --proto udp --pf 53 --auto none ${TvPolicy.strategies[index]}")) } }
             }.start()
             Thread {
                 var ready = false

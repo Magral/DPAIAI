@@ -3,6 +3,7 @@ import pathlib,subprocess,tempfile,socket,struct,threading,time,re,json
 root=pathlib.Path(__file__).resolve().parents[4]
 source=root/'tv/src/main/cpp/engine'
 profile=json.loads((root/'tv/strategies/catalog.json').read_text())['strategies'][7]['args']
+profile='--proto udp --pf 53 --auto none '+profile
 assert '--auto torst,ssl_err' in profile
 
 
