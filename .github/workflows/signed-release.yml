@@ -13,11 +13,9 @@ jobs:
     steps:
       - name: Require permanent signing identity
         env:
-          KEYSTORE: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-          PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          CERTIFICATE: ${{ secrets.ANDROID_SIGNING_CERT_SHA256 }}
+          SIGNING_BUNDLE: ${{ secrets.DPI_PILOT_SIGNING }}
         run: |
-          if [[ -z "$KEYSTORE" || -z "$PASSWORD" || -z "$CERTIFICATE" ]]; then
+          if [[ -z "$SIGNING_BUNDLE" ]]; then
             echo "::error::Configure permanent signing secrets first; no unsigned/debug release will be published."
             exit 1
           fi
@@ -36,18 +34,11 @@ jobs:
         run: sdkmanager 'platforms;android-34' 'build-tools;34.0.0' 'ndk;26.1.10909125' 'cmake;3.22.1'
       - name: Restore private signing key
         env:
-          KEYSTORE: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-        run: |
-          umask 077
-          printf '%s' "$KEYSTORE" | base64 --decode > "$RUNNER_TEMP/dpipilot-release.p12"
+          DPI_PILOT_SIGNING: ${{ secrets.DPI_PILOT_SIGNING }}
+        run: python3 scripts/restore-signing.py
       - name: Build and test release
-        env:
-          ANDROID_KEYSTORE_PATH: ${{ runner.temp }}/dpipilot-release.p12
-          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
         run: bash gradlew assembleRelease testReleaseUnitTest --stacktrace
       - name: Verify permanent certificate and prepare APK
-        env:
-          ANDROID_SIGNING_CERT_SHA256: ${{ secrets.ANDROID_SIGNING_CERT_SHA256 }}
         run: |
           bash scripts/verify-release.sh app/build/outputs/apk/release/app-release.apk
           python3 - <<'PY'

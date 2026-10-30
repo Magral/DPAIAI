@@ -7,22 +7,23 @@
 
 ## Однократная настройка
 
-Создайте в безопасном месте PKCS12 keystore с alias `dpipilot`, RSA 4096,
-сроком 10000 дней. Пароль хранилища и ключа должен совпадать. Пример:
-`keytool -genkeypair -keystore dpipilot-release.p12 -storetype PKCS12 -alias dpipilot -keyalg RSA -keysize 4096 -validity 10000 -dname "CN=DPI Pilot"`
-Keytool запросит пароль интерактивно.
+Постоянный ключ уже создан. Его публичный SHA-256 закреплён в
+`signing/certificate-sha256.txt`. В публичном репозитории нет закрытого ключа.
 
-В Settings → Secrets and variables → Actions добавьте repository secrets:
+В Settings → Secrets and variables → Actions → New repository secret:
 
-| Secret | Значение |
-| --- | --- |
-| ANDROID_KEYSTORE_BASE64 | Содержимое файла p12 в Base64; это кодировка, не шифрование |
-| ANDROID_KEYSTORE_PASSWORD | Пароль хранилища и ключа |
-| ANDROID_SIGNING_CERT_SHA256 | SHA-256 сертификата из `keytool -list -v -keystore dpipilot-release.p12 -alias dpipilot` |
+- Name: `DPI_PILOT_SIGNING`
+- Secret: полное содержимое приватного файла `DPI-Pilot-signing-secret.txt`.
 
-Не публикуйте keystore, Base64 и пароль в репозитории, логах или чате.
-Сохраните резервную копию keystore и пароля отдельно от GitHub.
-Не генерируйте новый ключ для каждого релиза.
+Файл содержит JSON: schema=1, keystore_base64 (PKCS12, alias dpipilot),
+store_password, certificate_sha256. Это одновременно резервная копия
+закрытого ключа и пароля. Храните её приватно; не добавляйте в репозиторий,
+issues или сообщения. Base64 является кодировкой, а не шифрованием.
+Не создавайте новый ключ при следующих релизах.
+
+Скрипт восстановления сверяет сертификат keystore с закреплённым SHA-256,
+а проверка APK повторно сверяет сертификат уже собранного приложения.
+Пароль и Base64 маскируются в логах. Временный keystore удаляется после сборки.
 
 После настройки: Actions → Signed APK release → Run workflow → main.
 Workflow публикует APK прямо в GitHub Release без необходимости распаковки ZIP.
