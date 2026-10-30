@@ -3,6 +3,11 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 
+// Release keys are supplied only through private CI/local environment variables.
+val releaseStore = providers.environmentVariable("ANDROID_KEYSTORE_PATH")
+val releasePassword = providers.environmentVariable("ANDROID_KEYSTORE_PASSWORD")
+val releaseSigningReady = releaseStore.isPresent && releasePassword.isPresent
+
 android {
     namespace = "io.github.dovecoteescapee.byedpi"
     compileSdk = 34
@@ -12,8 +17,8 @@ android {
         applicationId = "io.github.magral.dpipilot"
         minSdk = 21
         targetSdk = 34
-        versionCode = 5
-        versionName = "0.4.1"
+        versionCode = 6
+        versionName = "0.4.2"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -29,8 +34,23 @@ android {
         buildConfig = true
     }
 
+    signingConfigs {
+        if (releaseSigningReady) {
+            create("permanentRelease") {
+                storeFile = file(releaseStore.get())
+                storePassword = releasePassword.get()
+                keyAlias = "dpipilot"
+                keyPassword = releasePassword.get()
+                storeType = "PKCS12"
+                enableV1Signing = true // Android 5 and 6
+                enableV2Signing = true
+            }
+        }
+    }
+
     buildTypes {
         release {
+            if (releaseSigningReady) signingConfig = signingConfigs.getByName("permanentRelease")
             buildConfigField("String", "VERSION_NAME",  "\"${defaultConfig.versionName}\"")
 
             isMinifyEnabled = false
@@ -104,3 +124,16 @@ tasks.register<Exec>("runNdkBuild") {
 tasks.preBuild {
     dependsOn("runNdkBuild")
 }
+
+// Never produce a release APK with an unsigned or temporary debug identity.
+tasks.configureEach {
+    if (name == "validateSigningRelease" || name == "packageRelease" ||
+        name == "packageReleaseBundle") {
+        doFirst {
+            check(releaseSigningReady) {
+                "Permanent release signing is missing: set ANDROID_KEYSTORE_PATH and ANDROID_KEYSTORE_PASSWORD."
+            }
+        }
+    }
+}
+

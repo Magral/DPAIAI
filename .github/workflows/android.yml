@@ -28,6 +28,7 @@ jobs:
         run: bash gradlew assembleDebug testDebugUnitTest --stacktrace
       - uses: actions/upload-artifact@v4
         with:
-          name: DPI-Pilot-0.4.1-debug
+          name: DPI-Pilot-debug
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
+

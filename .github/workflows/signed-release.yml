@@ -1,0 +1,109 @@
+name: Signed APK release
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: signed-apk-release
+  cancel-in-progress: false
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Require permanent signing identity
+        env:
+          KEYSTORE: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          CERTIFICATE: ${{ secrets.ANDROID_SIGNING_CERT_SHA256 }}
+        run: |
+          if [[ -z "$KEYSTORE" || -z "$PASSWORD" || -z "$CERTIFICATE" ]]; then
+            echo "::error::Configure permanent signing secrets first; no unsigned/debug release will be published."
+            exit 1
+          fi
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+          log-accepted-android-sdk-licenses: false
+      - name: Install Android toolchain
+        run: sdkmanager 'platforms;android-34' 'build-tools;34.0.0' 'ndk;26.1.10909125' 'cmake;3.22.1'
+      - name: Restore private signing key
+        env:
+          KEYSTORE: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          umask 077
+          printf '%s' "$KEYSTORE" | base64 --decode > "$RUNNER_TEMP/dpipilot-release.p12"
+      - name: Build and test release
+        env:
+          ANDROID_KEYSTORE_PATH: ${{ runner.temp }}/dpipilot-release.p12
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        run: bash gradlew assembleRelease testReleaseUnitTest --stacktrace
+      - name: Verify permanent certificate and prepare APK
+        env:
+          ANDROID_SIGNING_CERT_SHA256: ${{ secrets.ANDROID_SIGNING_CERT_SHA256 }}
+        run: |
+          bash scripts/verify-release.sh app/build/outputs/apk/release/app-release.apk
+          python3 - <<'PY'
+          import hashlib, pathlib, re, shutil
+          source = pathlib.Path("app/build.gradle.kts").read_text()
+          version = re.search(r'versionName = "([0-9]+\.[0-9]+\.[0-9]+)"', source).group(1)
+          out = pathlib.Path("release")
+          out.mkdir()
+          apk = out / f"DPI-Pilot-{version}.apk"
+          shutil.copyfile("app/build/outputs/apk/release/app-release.apk", apk)
+          (out / "SHA256SUMS").write_text(hashlib.sha256(apk.read_bytes()).hexdigest() + "  " + apk.name + "\n")
+          PY
+      - name: Remove private key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/dpipilot-release.p12"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DPI-Pilot-signed-release
+          path: release/*
+          if-no-files-found: error
+      - name: Publish installable APK
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const crypto = require('crypto');
+            const {owner,repo} = context.repo;
+            const files = fs.readdirSync('release').filter(f => f.endsWith('.apk'));
+            if (files.length !== 1) throw new Error('Expected exactly one signed APK');
+            const name = files[0];
+            const version = name.match(/^DPI-Pilot-([0-9]+\.[0-9]+\.[0-9]+)\.apk$/)[1];
+            const tag = 'v'+version;
+            const {data: head} = await github.rest.git.getRef({owner,repo,ref:'heads/main'});
+            if (context.ref !== 'refs/heads/main' || head.object.sha !== context.sha)
+              throw new Error('Release must use current main; rebuild after source changes');
+            const data = fs.readFileSync('release/'+name);
+            const digest = 'sha256:'+crypto.createHash('sha256').update(data).digest('hex');
+            let release;
+            try { release = (await github.rest.repos.getReleaseByTag({owner,repo,tag})).data; }
+            catch (e) {
+              if (e.status !== 404) throw e;
+              release = (await github.rest.repos.createRelease({
+                owner,repo,tag_name:tag,target_commitish:context.sha,name:'DPI Pilot '+version,
+                draft:true,prerelease:false,
+                body:'APK подписан постоянным ключом DPI Pilot. Скачайте '+name+' в Assets, без ZIP.\n\nПервый переход с прежней отладочной подписи требует удаления старой версии. Следующие релизы с этим ключом обновляются поверх с сохранением данных. После удаления добавьте локальный прокси в Telegram заново.\n\nИзменение 0.4.2: постоянная релизная подпись и проверка сертификата перед публикацией. Исправление работы на Tele2 в этот выпуск не входит.\n\nSource: '+context.sha+'\nSHA-256 APK: '+digest.slice(7)
+              })).data;
+            }
+            const assets = (await github.rest.repos.listReleaseAssets({owner,repo,release_id:release.id})).data;
+            const existing = assets.find(a => a.name === name);
+            if (existing) {
+              if (existing.digest !== digest) throw new Error('Existing APK differs; refusing overwrite');
+            } else {
+              if (!release.draft) throw new Error('Refusing to change an already published release');
+              await github.rest.repos.uploadReleaseAsset({owner,repo,release_id:release.id,name,data,
+                headers:{'content-type':'application/vnd.android.package-archive','content-length':data.length}});
+            }
+            if (release.draft) await github.rest.repos.updateRelease({owner,repo,release_id:release.id,draft:false});
+            core.notice(release.html_url);
+

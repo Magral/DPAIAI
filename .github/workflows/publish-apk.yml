@@ -1,8 +1,5 @@
-name: Publish APK release
+name: Legacy debug publisher (disabled)
 on:
-  push:
-    branches: [main]
-    paths: [.github/workflows/publish-apk.yml]
   workflow_dispatch:
 permissions:
   contents: write
@@ -12,6 +9,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   publish:
+    if: false # Replaced by signed-release.yml; never publish a debug APK again.
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -72,3 +70,4 @@ jobs:
             }
             if (release.draft) release = (await github.rest.repos.updateRelease({owner,repo,release_id:release.id,draft:false})).data;
             core.notice(release.html_url);
+
