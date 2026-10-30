@@ -8,17 +8,32 @@ permissions:
   contents: write
   actions: read
 concurrency:
-  group: publish-v0.3.0
+  group: publish-v0.4.0
   cancel-in-progress: false
 jobs:
   publish:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
+      - name: Verify source build and tests
+        uses: actions/github-script@v7
+        with:
+          script: |
+            let verified = false;
+            for (let attempt = 0; attempt < 20; attempt++) {
+              const {data: run} = await github.rest.actions.getWorkflowRun({...context.repo, run_id: 41050558672});
+              if (run.head_sha !== 'a44e45ea2d442a7f343ba9bf7555ca442ee46632') throw new Error('Unexpected build source');
+              if (run.status === 'completed') {
+                if (run.conclusion !== 'success') throw new Error('Build or tests failed');
+                verified = true; break;
+              }
+              await new Promise(resolve => setTimeout(resolve,15000));
+            }
+            if (!verified) throw new Error('Timed out waiting for tested APK');
       - uses: actions/download-artifact@v4
         with:
-          name: DPI-Pilot-0.3.0-debug
-          run-id: 41046822264
+          name: DPI-Pilot-0.4.0-debug
+          run-id: 41050558672
           github-token: ${{ secrets.GITHUB_TOKEN }}
           path: apk
       - uses: actions/github-script@v7
@@ -29,37 +44,29 @@ jobs:
             const path = require('path');
             const files = fs.readdirSync('apk').filter(f => f.endsWith('.apk'));
             if (files.length !== 1) throw new Error('Expected one verified APK');
-            const data = fs.readFileSync(path.join('apk', files[0]));
+            const data = fs.readFileSync(path.join('apk',files[0]));
             const sha = crypto.createHash('sha256').update(data).digest('hex');
-            if (sha !== '8930c24d9f8dddd9466c145069c286ae1774d7577b6f5908a5a3347b5e208dff') throw new Error('APK hash mismatch');
-            const {owner, repo} = context.repo;
-            const tag = 'v0.3.0';
+            const {owner,repo} = context.repo;
+            const tag = 'v0.4.0';
             let release;
             try {
               release = (await github.rest.repos.getReleaseByTag({owner,repo,tag})).data;
             } catch (error) {
               if (error.status !== 404) throw error;
               release = (await github.rest.repos.createRelease({
-                owner, repo, tag_name: tag,
-                target_commitish: '7894b4cb79d3d14016d8c4f1b35af37447f9a86e',
-                name: 'DPI Pilot 0.3.0 — Telegram',
-                draft: true,
-                prerelease: false,
-                body: 'Скачайте DPI-Pilot-0.3.0.apk ниже в Assets и установите на Android. ZIP распаковывать не нужно.\n\nВосемь режимов для Telegram, проверка пяти дата-центров, обфусцированный MTProto, отдельная диагностика. Сборка и автоматические тесты прошли; работоспособность на конкретном провайдере требует проверки на устройстве.\n\nAPK использует отладочную подпись из проверенной сборки. При конфликте подписей с предыдущей версией может потребоваться её удаление.\n\nИсходники: commit 7894b4cb79d3d14016d8c4f1b35af37447f9a86e. Лицензия GPL-3.0; авторство исходных компонентов сохранено.\n\nSHA-256 APK: 8930c24d9f8dddd9466c145069c286ae1774d7577b6f5908a5a3347b5e208dff'
+                owner,repo,tag_name:tag,target_commitish:'a44e45ea2d442a7f343ba9bf7555ca442ee46632',
+                name:'DPI Pilot 0.4.0 — Telegram WebSocket',draft:true,prerelease:false,
+                body:'Скачайте DPI-Pilot-0.4.0.apk в Assets — ZIP не нужен.\n\nНовый режим Telegram: локальный MTProxy → защищённый WebSocket официальных серверов Telegram. Сначала выключите ByeDPI и другие VPN. Нажмите «Подключить Telegram через WebSocket» → «Запустить режим Telegram» → «Подключить в Telegram» и подтвердите прокси в Telegram. Свой сервер и аккаунт в DPI Pilot не нужны.\n\nПроверка сертификатов включена. TLS не отключается; сторонние relay-домены не используются. Внутренние аккаунтные MTProto-ключи и содержимое не расшифровываются. Звонки этим режимом не обеспечиваются. После остановки сервиса отключите локальный прокси в Telegram.\n\nСборка, тесты криптографической трансляции и двустороннего обмена через локальный WebSocket прошли. На отдельном тестовом подключении получен resPQ с правильным nonce от официального DC2 по WSS. Работа аккаунта и доступность у конкретного оператора ещё требуют проверки на устройстве.\n\nСтарая диагностика SOCKS уточнена: этап соединения и reply code вместо общего SocketException.\n\nAPK имеет отладочную подпись. При конфликте с предыдущей сборкой потребуется её удаление.\n\nGPL-3.0; авторство исходных компонентов сохранено.\nSource: a44e45ea2d442a7f343ba9bf7555ca442ee46632\nSHA-256 APK: '+sha
               })).data;
             }
-            const name = 'DPI-Pilot-0.3.0.apk';
+            const name = 'DPI-Pilot-0.4.0.apk';
             const assets = (await github.rest.repos.listReleaseAssets({owner,repo,release_id:release.id})).data;
             const existing = assets.find(a => a.name === name);
             if (!existing) {
-              await github.rest.repos.uploadReleaseAsset({
-                owner, repo, release_id: release.id, name, data,
-                headers: {'content-type': 'application/vnd.android.package-archive', 'content-length': data.length}
-              });
-            } else if (existing.digest && existing.digest !== 'sha256:' + sha) {
+              await github.rest.repos.uploadReleaseAsset({owner,repo,release_id:release.id,name,data,
+                headers:{'content-type':'application/vnd.android.package-archive','content-length':data.length}});
+            } else if (existing.digest && existing.digest !== 'sha256:'+sha) {
               throw new Error('Existing release APK differs; refusing overwrite');
             }
-            if (release.draft) {
-              release = (await github.rest.repos.updateRelease({owner,repo,release_id:release.id,draft:false})).data;
-            }
+            if (release.draft) release = (await github.rest.repos.updateRelease({owner,repo,release_id:release.id,draft:false})).data;
             core.notice(release.html_url);
