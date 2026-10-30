@@ -1,1 +1,1 @@
-DPI Pilot TV 0.2.0 — unattended operation
+DPI Pilot TV 0.2.0 — unattended recovery; watchdog uses awake time

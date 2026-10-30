@@ -14,7 +14,7 @@ object TvState {
     @Volatile var lastBeat = 0L
     fun prefs(context: Context): SharedPreferences = context.getSharedPreferences("tv_auto",Context.MODE_PRIVATE)
     fun beat(context: Context) {
-        val now = android.os.SystemClock.elapsedRealtime()
+        val now = android.os.SystemClock.uptimeMillis()
         if (now-lastBeat >= 30000L || lastBeat == 0L) {
             lastBeat = now
             prefs(context).edit().putLong("heartbeat",now).apply()

@@ -22,10 +22,11 @@ class MaintenanceJob : JobService() {
     override fun onStartJob(params: JobParameters): Boolean {
         val prefs = TvState.prefs(this)
         if (!prefs.getBoolean("enabled",false) || VpnService.prepare(this) != null) return false
-        val now = SystemClock.elapsedRealtime()
+        val now = SystemClock.uptimeMillis()
+        val recoveryClock = SystemClock.elapsedRealtime()
         if (TvState.running && RecoveryPolicy.hung(now,prefs.getLong("heartbeat",0)) &&
-            RecoveryPolicy.allowRestart(now,prefs.getLong("last_process_recovery",0))) {
-            prefs.edit().putLong("last_process_recovery",now).commit()
+            RecoveryPolicy.allowRestart(recoveryClock,prefs.getLong("last_process_recovery",0))) {
+            prefs.edit().putLong("last_process_recovery",recoveryClock).commit()
             // Kill only this application's process. Android restarts its sticky foreground VPN.
             android.os.Process.killProcess(android.os.Process.myPid())
             return false
