@@ -6,7 +6,7 @@ source=root/'tv/src/main/cpp'
 with tempfile.TemporaryDirectory() as tmp:
     tmp=pathlib.Path(tmp);lib=tmp/'libbyedpi.so'
     units=[source/'engine'/(name+'.c') for name in ['packets','main','conev','proxy','desync','mpool','extend']]
-    subprocess.run(['cc','-shared','-fPIC','-D_DEFAULT_SOURCE','-std=c99','-O2','-I'+str(source/'engine'),'-I'+str(java/'include'),'-I'+str(java/'include/linux'),*[str(p) for p in units],str(source/'tv_jni.c'),str(source/'quic_guard.c'),'-Wl,--wrap=sendto','-o',str(lib)],check=True)
+    subprocess.run(['cc','-shared','-fPIC','-D_DEFAULT_SOURCE','-std=c99','-O2','-I'+str(source/'engine'),'-I'+str(java/'include'),'-I'+str(java/'include/linux'),*[str(p) for p in units],str(source/'tv_jni.c'),str(source/'quic_guard.c'),'-Wl,--wrap=sendto','-Wl,--wrap=connect','-o',str(lib)],check=True)
     directory=tmp/'io/github/dovecoteescapee/byedpi/core';directory.mkdir(parents=True)
     test=directory/'ByeDpiProxy.java'
     test.write_text('''package io.github.dovecoteescapee.byedpi.core;

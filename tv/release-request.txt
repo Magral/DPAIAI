@@ -1,1 +1,1 @@
-TV 0.4.0: pinned ByeDPI 17.3, audited multi-source strategy catalog, stable IDs and resumable background scan windows.
+TV 0.4.0: pinned ByeDPI 17.3, audited multi-source strategy catalog, stable IDs and resumable background scan windows. Updated UDP association guard for connected sockets.

@@ -16,7 +16,7 @@ for value in ['android.intent.category.LEANBACK_LAUNCHER','android.intent.action
 with zipfile.ZipFile(apk) as archive:
     for abi in ['armeabi-v7a','arm64-v8a','x86','x86_64']:
         native = archive.read(f'lib/{abi}/libbyedpi.so')
-        assert b'__wrap_sendto' in native, 'Missing selective QUIC guard: '+abi
+        assert b'__wrap_sendto' in native and b'__wrap_connect' in native, 'Missing selective QUIC guard: '+abi
         assert archive.getinfo(f'lib/{abi}/libhev-socks5-tunnel.so').file_size > 0
     dex = b''.join(archive.read(name) for name in archive.namelist() if name.endswith('.dex'))
     for cls in [b'Lio/github/magral/dpipilot/tv/TvActivity;',b'Lio/github/dovecoteescapee/byedpi/core/TProxyService;']:
