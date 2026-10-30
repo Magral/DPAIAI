@@ -14,6 +14,29 @@ object TvState {
     @Volatile var status = "Нажмите «Включить авторежим»"
     @Volatile var report = ""
     @Volatile var lastBeat = 0L
+    @Volatile var engineReady = false
+    @Volatile var strategyIndex = -1
+    @Volatile var phase = "Остановлено"
+    @Volatile var network = "ещё не определена"
+    @Volatile var probeDetail = "ещё не выполнялись"
+    @Volatile var lastCheckAt = 0L
+    @Volatile var nextCheckAt = 0L
+    @Volatile var sentBytes = 0L
+    @Volatile var receivedBytes = 0L
+    @Volatile var sentPackets = 0L
+    @Volatile var receivedPackets = 0L
+    @Volatile var trafficAt = 0L
+    val results = java.util.concurrent.ConcurrentHashMap<Int,String>()
+    @Synchronized fun restore(context: Context) {
+        if (report.isEmpty()) report = prefs(context).getString("last_report","").orEmpty()
+        if (!running) {
+            status = prefs(context).getString("last_status","Нажмите «Включить VPN»").orEmpty()
+            if (lastCheckAt == 0L) {
+                lastCheckAt = prefs(context).getLong("last_check_at",0)
+                probeDetail = prefs(context).getString("last_probe","ещё не выполнялись").orEmpty()
+            }
+        }
+    }
     fun prefs(context: Context): SharedPreferences = context.getSharedPreferences("tv_auto",Context.MODE_PRIVATE)
     fun beat(context: Context) {
         val now = android.os.SystemClock.uptimeMillis()
@@ -23,10 +46,11 @@ object TvState {
         }
     }
     @Synchronized fun update(context: Context,text: String) {
+        restore(context)
         beat(context)
         status = text
         val time = SimpleDateFormat("HH:mm:ss",Locale.getDefault()).format(Date())
-        report = (report.lines().takeLast(29)+"$time $text").joinToString("\n")
-        prefs(context).edit().putString("last_status",text).apply()
+        report = (report.lines().takeLast(79)+"$time $text").joinToString("\n")
+        prefs(context).edit().putString("last_status",text).putString("last_report",report).apply()
     }
 }

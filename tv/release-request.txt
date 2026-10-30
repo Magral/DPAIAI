@@ -1,1 +1,1 @@
-TV 0.2.1: create VPN before probes, provisional initial adaptive tunnel, visible interface state and setup diagnostics.
+TV 0.3.0: detailed remote control dashboard, persistent journal, strategy/probe/tunnel telemetry, explicit on/off and boot diagnostics.

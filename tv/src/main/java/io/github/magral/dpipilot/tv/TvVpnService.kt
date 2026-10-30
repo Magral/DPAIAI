@@ -46,6 +46,7 @@ class TvVpnService : VpnService() {
     }
     override fun onStartCommand(intent: Intent?,flags: Int,startId: Int): Int {
         foreground()
+        TvState.restore(this)
         TvState.alwaysOn = Build.VERSION.SDK_INT >= 29 && isAlwaysOn
         if (intent?.action == "stop") {
             if (TvState.alwaysOn) {
@@ -57,12 +58,14 @@ class TvVpnService : VpnService() {
             stopSelf(); return START_NOT_STICKY
         }
         if (prepare(this) != null) {
+            TvState.phase = "Нет разрешения VPN"
             TvState.update(this,"Нужно один раз разрешить VPN: откройте DPI Pilot TV")
             stopSelf(); return START_NOT_STICKY
         }
         if (TvState.alwaysOn || intent?.action == SERVICE_INTERFACE) prefs.edit().putBoolean("enabled",true).apply()
         if (!prefs.getBoolean("enabled",false)) { stopSelf(); return START_NOT_STICKY }
         if (installed(this).isEmpty()) {
+            TvState.phase = "YouTube не найден"
             TvState.update(this,"Официальный YouTube не установлен")
             stopSelf(); return START_NOT_STICKY
         }
@@ -70,6 +73,19 @@ class TvVpnService : VpnService() {
         requested.set(true)
         if (intent?.action == "different") different.set(true)
         if (controller == null) {
+            TvState.results.clear()
+            val reason = when (intent?.action) {
+                "boot" -> "загрузка системы"
+                "update" -> "обновление приложения"
+                "manual" -> "кнопка включения"
+                "watchdog" -> "фоновое восстановление"
+                SERVICE_INTERFACE -> "системный VPN"
+                null -> "восстановление Android"
+                else -> "открытие приложения / запрос проверки"
+            }
+            prefs.edit().putLong("service_start_at",System.currentTimeMillis()).putString("service_start_reason",reason).apply()
+            TvState.phase = "Запуск службы"
+            TvState.update(this,"Запуск службы: $reason; автопроверка YouTube")
             TvState.running = true
             watch()
             controller = scope.launch {
@@ -81,12 +97,18 @@ class TvVpnService : VpnService() {
                         catch (e: TimeoutCancellationException) {
                             currentCoroutineContext().ensureActive()
                             TvState.update(this@TvVpnService,"Таймаут движка; повтор через минуту")
+                            TvState.phase = "Ожидание восстановления"
+                            TvState.nextCheckAt = SystemClock.elapsedRealtime()+60000L
                             delay(60000)
+                            TvState.nextCheckAt = 0
                         }
                         catch (e: CancellationException) { throw e }
                         catch (e: Exception) {
                             TvState.update(this@TvVpnService,"Восстановление после ошибки: ${e.javaClass.simpleName}. Повтор через минуту")
+                            TvState.phase = "Ожидание восстановления"
+                            TvState.nextCheckAt = SystemClock.elapsedRealtime()+60000L
                             delay(60000)
+                            TvState.nextCheckAt = 0
                         }
                     }
                 }
@@ -94,6 +116,9 @@ class TvVpnService : VpnService() {
                 finally {
                     withContext(NonCancellable) { release() }
                     TvState.running = false
+                    TvState.phase = "Остановлено"
+                    TvState.nextCheckAt = 0
+                    TvState.update(this@TvVpnService,"Служба остановлена; VPN-интерфейс закрыт")
                     stopSelf()
                 }
                 }
@@ -142,7 +167,9 @@ class TvVpnService : VpnService() {
         ContextCompat.registerReceiver(this,screen,IntentFilter(Intent.ACTION_SCREEN_ON),ContextCompat.RECEIVER_NOT_EXPORTED)
     }
     private suspend fun waitForCheck(milliseconds: Long) {
+        TvState.phase = "Ожидание следующей проверки"
         val end = SystemClock.elapsedRealtime()+milliseconds
+        TvState.nextCheckAt = end
         var sampleAt = 0L
         while (SystemClock.elapsedRealtime() < end && !requested.get()) {
             TvState.beat(this)
@@ -151,6 +178,9 @@ class TvVpnService : VpnService() {
                 sampleAt = now+5000L
                 val stats = TProxyService.TProxyGetStats()
                 if (stats.size >= 4) {
+                    TvState.sentPackets = stats[0]; TvState.sentBytes = stats[1]
+                    TvState.receivedPackets = stats[2]; TvState.receivedBytes = stats[3]
+                    TvState.trafficAt = System.currentTimeMillis()
                     if (stats[3] >= lastReceived && stats[3]-lastReceived >= 1024*1024) activeIndex?.let { blocked.remove(it) }
                     lastReceived = stats[3]
                     if (traffic.stalled(TrafficWatchdog.Sample(now,stats[0],stats[1],stats[3])) && (activeIndex?.let { it !in blocked } == true)) {
@@ -162,21 +192,52 @@ class TvVpnService : VpnService() {
             }
             delay(1000)
         }
+        TvState.nextCheckAt = 0
     }
     private suspend fun healthy(): TvProbe.Result {
-        val result = TvProbe.check { !scope.isActive }
+        TvState.phase = "Проверка YouTube"
+        TvState.nextCheckAt = 0
+        TvState.probeDetail = "Проверка началась"
+        val result = TvProbe.check({ !scope.isActive }) { row ->
+            TvState.probeDetail = row
+            TvState.update(this,row)
+        }
+        TvState.lastCheckAt = System.currentTimeMillis()
+        TvState.probeDetail = result.detail
+        activeIndex?.let { TvState.results[it] = (if (result.ok) "OK: " else "FAIL: ")+result.detail }
+        prefs.edit().putLong("last_check_at",TvState.lastCheckAt).putString("last_probe",result.detail).apply()
         currentCoroutineContext().ensureActive()
         return result
     }
+    private fun confirm(index: Int) {
+        val known = TvPolicy.history(prefs.getString("history.$profile",null).orEmpty())
+        prefs.edit().putInt("good",index)
+            .putString("history.$profile",TvPolicy.remember(known,index).joinToString(","))
+            .putLong("last_success",System.currentTimeMillis()).apply()
+        TvState.verified = true
+    }
     private suspend fun open(index: Int) {
-        val next = EngineLease(this) { requested.set(true) }
+        TvState.phase = "Запуск движка"
+        TvState.strategyIndex = index
+        val next = EngineLease(this) {
+            TvState.engineReady = false
+            TvState.verified = false
+            TvState.update(this,"Процесс движка завершился; запрошено восстановление")
+            requested.set(true)
+        }
         lease = next
         next.open(index)
         activeIndex = index
+        TvState.engineReady = true
     }
     private suspend fun release() {
+        TvState.phase = "Закрытие предыдущего туннеля"
         TvState.vpnEstablished = false
         TvState.verified = false
+        TvState.engineReady = false
+        TvState.strategyIndex = -1
+        TvState.sentBytes = 0; TvState.receivedBytes = 0
+        TvState.sentPackets = 0; TvState.receivedPackets = 0; TvState.trafficAt = 0
         withContext(NonCancellable+Dispatchers.IO) {
             if (tun != null) {
                 runCatching { TProxyService.TProxyStopService() }
@@ -190,6 +251,7 @@ class TvVpnService : VpnService() {
         }
     }
     private fun establish(network: Network) {
+        TvState.phase = "Создание VPN-интерфейса"
         val targets = installed(this)
         check(targets.isNotEmpty()) { "YouTube removed" }
         val dns = cm.getLinkProperties(network)?.dnsServers?.filterIsInstance<Inet4Address>()
@@ -217,9 +279,18 @@ class TvVpnService : VpnService() {
             val network = physical()
             if (network == null) {
                 release()
+                TvState.network = "нет подключения Wi-Fi / Ethernet"
                 TvState.update(this,"Ожидаю сеть; сохранённая стратегия не изменена")
                 waitForCheck(10000); continue
             }
+            val caps = cm.getNetworkCapabilities(network)
+            val transport = when {
+                caps?.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) == true -> "Ethernet"
+                caps?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true -> "Wi-Fi"
+                else -> "другая физическая сеть"
+            }
+            val link = cm.getLinkProperties(network)
+            TvState.network = "$transport · ${link?.interfaceName ?: "?"} · DNS: ${link?.dnsServers?.mapNotNull { it.hostAddress }?.joinToString() ?: "нет"}"
             val currentProfile = profileKey(network)
             if (profile != currentProfile) { blocked.clear(); profile = currentProfile }
             val now = SystemClock.elapsedRealtime()
@@ -232,7 +303,7 @@ class TvVpnService : VpnService() {
                 var current = healthy()
                 if (!current.ok) { delay(2000); current = healthy() }
                 if (current.ok) {
-                    TvState.verified = true
+                    confirm(activeIndex!!)
                     traffic.reset() // Discard the pre-sleep sampling window after a fresh health check.
                     failures = 0
                     TvState.update(this,"YouTube: соединение проверено. Стратегия ${activeIndex!!+1}/${TvPolicy.strategies.size}. Следующая проверка через 5 минут")
@@ -261,8 +332,7 @@ class TvVpnService : VpnService() {
                     TvState.update(this,"Стратегия ${index+1}: ${result.detail}")
                     if (result.ok) {
                         if (physical() != network) { release(); requested.set(true); break }
-                        TvState.verified = true
-                        prefs.edit().putInt("good",index).putString("history.$profile",TvPolicy.remember(known,index).joinToString(",")).putLong("last_success",System.currentTimeMillis()).apply()
+                        confirm(index)
                         networkId = network.toString()
                         selected = true; failures = 0
                         TvState.update(this,"YouTube: подключено. Стратегия ${index+1}/${TvPolicy.strategies.size}; автопроверка каждые 5 минут")
@@ -270,10 +340,14 @@ class TvVpnService : VpnService() {
                     }
                 } catch (e: TimeoutCancellationException) {
                     currentCoroutineContext().ensureActive()
+                    TvState.results[index] = "FAIL: таймаут движка"
                     TvState.update(this,"Стратегия ${index+1}: таймаут движка")
                 }
                 catch (e: CancellationException) { throw e }
-                catch (e: Exception) { TvState.update(this,"Стратегия ${index+1}: ${e.javaClass.simpleName}: ${e.message?.take(120)}") }
+                catch (e: Exception) {
+                    TvState.results[index] = "FAIL: ${e.javaClass.simpleName}: ${e.message?.take(120)}"
+                    TvState.update(this,"Стратегия ${index+1}: ${TvState.results[index]}")
+                }
                 release()
             }
             if (selected) { waitForCheck(300000); continue }

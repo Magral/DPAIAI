@@ -15,13 +15,24 @@ object TvProbe {
         Spec("image","i.ytimg.com","/vi/jNQXAC9IVRw/hqdefault.jpg"),
         Spec("media","redirector.googlevideo.com","/"))
     data class Result(val ok: Boolean,val detail: String)
-    fun check(cancelled: () -> Boolean): Result {
+    fun check(cancelled: () -> Boolean,progress: (String) -> Unit = {}): Result {
+        var count = 0
         for (round in 1..2) for (spec in specs) {
             if (cancelled()) throw java.util.concurrent.CancellationException()
+            count++
+            val label = "$count/6 · ${spec.host} · раунд $round"
+            progress("$label: проверяется…")
             try {
                 val detail = request(spec)
-                if (detail != null) return Result(false,"${spec.kind}, раунд $round: $detail")
-            } catch (e: Exception) { return Result(false,"${spec.kind}, раунд $round: ${e.javaClass.simpleName}: ${e.message?.take(180)}") }
+                if (detail != null) {
+                    val failed = "$label: ОШИБКА $detail; остальные проверки пропущены"
+                    progress(failed); return Result(false,failed)
+                }
+                progress("$label: OK ${if (spec.kind == "media") "TLS" else if (spec.kind == "youtube") "HTTP 204" else "изображение"}")
+            } catch (e: Exception) {
+                val failed = "$label: ${e.javaClass.simpleName}: ${e.message?.take(180)}; остальные проверки пропущены"
+                progress(failed); return Result(false,failed)
+            }
         }
         return Result(true,"6/6: YouTube 204, изображение, TLS googlevideo")
     }

@@ -12,7 +12,7 @@ class MaintenanceJob : JobService() {
         private const val ID = 771
         fun schedule(context: Context) {
             val job = JobInfo.Builder(ID,ComponentName(context,MaintenanceJob::class.java))
-                .setPersisted(true).setPeriodic(15*60*1000L).build()
+                .setPersisted(TvState.prefs(context).getBoolean("boot",true)).setPeriodic(15*60*1000L).build()
             (context.getSystemService(Context.JOB_SCHEDULER_SERVICE) as JobScheduler).schedule(job)
         }
         fun cancel(context: Context) { (context.getSystemService(Context.JOB_SCHEDULER_SERVICE) as JobScheduler).cancel(ID) }
