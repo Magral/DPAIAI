@@ -9,6 +9,8 @@ import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import io.github.dovecoteescapee.byedpi.core.TProxyService
 import kotlinx.coroutines.*
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.io.File
 import java.net.Inet4Address
 import java.util.concurrent.atomic.AtomicBoolean
@@ -28,6 +30,7 @@ class TvVpnService : VpnService() {
     private val cm get() = getSystemService(CONNECTIVITY_SERVICE) as ConnectivityManager
     private val prefs get() = TvState.prefs(this)
     companion object {
+        private val lifetime = Mutex()
         val packages = listOf("com.google.android.youtube.tv","com.google.android.youtube")
         fun installed(context: Context): List<String> = packages.filter { pkg ->
             runCatching { context.packageManager.getApplicationInfo(pkg,0).enabled }.getOrDefault(false)
@@ -63,9 +66,16 @@ class TvVpnService : VpnService() {
             TvState.running = true
             watch()
             controller = scope.launch {
+                lifetime.withLock {
+                TvState.running = true
                 try {
                     while (isActive && prefs.getBoolean("enabled",false)) {
                         try { control(); break }
+                        catch (e: TimeoutCancellationException) {
+                            currentCoroutineContext().ensureActive()
+                            TvState.update(this@TvVpnService,"Таймаут движка; повтор через минуту")
+                            delay(60000)
+                        }
                         catch (e: CancellationException) { throw e }
                         catch (e: Exception) {
                             TvState.update(this@TvVpnService,"Восстановление после ошибки: ${e.javaClass.simpleName}. Повтор через минуту")
@@ -78,6 +88,7 @@ class TvVpnService : VpnService() {
                     withContext(NonCancellable) { release() }
                     TvState.running = false
                     stopSelf()
+                }
                 }
             }
         }
@@ -121,7 +132,7 @@ class TvVpnService : VpnService() {
         return result
     }
     private suspend fun open(index: Int) {
-        val next = EngineLease(this)
+        val next = EngineLease(this) { requested.set(true) }
         lease = next
         next.open(index)
         activeIndex = index
@@ -200,7 +211,11 @@ class TvVpnService : VpnService() {
                         TvState.update(this,"YouTube: подключено. Стратегия ${index+1}/${TvPolicy.strategies.size}; автопроверка каждые 5 минут")
                         break
                     }
-                } catch (e: CancellationException) { throw e }
+                } catch (e: TimeoutCancellationException) {
+                    currentCoroutineContext().ensureActive()
+                    TvState.update(this,"Стратегия ${index+1}: таймаут движка")
+                }
+                catch (e: CancellationException) { throw e }
                 catch (e: Exception) { TvState.update(this,"Стратегия ${index+1}: ${e.javaClass.simpleName}: ${e.message?.take(120)}") }
                 release()
             }

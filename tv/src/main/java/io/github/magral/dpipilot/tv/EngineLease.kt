@@ -4,7 +4,8 @@ import android.content.*
 import android.os.*
 import kotlinx.coroutines.*
 
-internal class EngineLease(private val context: Context) {
+internal class EngineLease(private val context: Context,private val unexpectedDeath: () -> Unit = {}) {
+    private val closing = java.util.concurrent.atomic.AtomicBoolean(false)
     private val connected = CompletableDeferred<IBinder>()
     private val ready = CompletableDeferred<Boolean>()
     private val died = CompletableDeferred<Unit>()
@@ -14,11 +15,12 @@ internal class EngineLease(private val context: Context) {
     private val connection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName,service: IBinder) {
             binder = service
-            try { service.linkToDeath({ died.complete(Unit) },0); connected.complete(service) }
+            try { service.linkToDeath({ died.complete(Unit); if (!closing.get()) unexpectedDeath() },0); connected.complete(service) }
             catch (e: RemoteException) { connected.completeExceptionally(e) }
         }
         override fun onServiceDisconnected(name: ComponentName) {
             died.complete(Unit)
+            if (!closing.get()) unexpectedDeath()
             ready.completeExceptionally(IllegalStateException("Engine stopped"))
         }
     }
@@ -29,11 +31,12 @@ internal class EngineLease(private val context: Context) {
         }
         withTimeout(10000) {
             val remote = Messenger(connected.await())
-            remote.send(Message.obtain().apply { replyTo = callback; data = Bundle().apply { putInt("candidate",index) } })
+            remote.send(Message.obtain().apply { replyTo = this@EngineLease.callback; data = Bundle().apply { putInt("candidate",index) } })
             check(ready.await()) { "Engine did not start" }
         }
     }
     suspend fun close(): Unit = withContext(NonCancellable+Dispatchers.Main) {
+        closing.set(true)
         if (bound) {
             context.unbindService(connection)
             bound = false

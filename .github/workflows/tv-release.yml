@@ -1,4 +1,4 @@
-# Separate Android TV application; does not replace the mobile release.
+# Separate Android TV application with supervised engine recovery; mobile release is independent.
 name: Signed Android TV release
 on:
   push:
