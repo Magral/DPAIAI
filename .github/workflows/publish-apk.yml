@@ -8,7 +8,7 @@ permissions:
   contents: write
   actions: read
 concurrency:
-  group: publish-v0.4.0
+  group: publish-v0.4.1
   cancel-in-progress: false
 jobs:
   publish:
@@ -21,8 +21,8 @@ jobs:
           script: |
             let verified = false;
             for (let attempt = 0; attempt < 20; attempt++) {
-              const {data: run} = await github.rest.actions.getWorkflowRun({...context.repo, run_id: 41050558672});
-              if (run.head_sha !== 'a44e45ea2d442a7f343ba9bf7555ca442ee46632') throw new Error('Unexpected build source');
+              const {data: run} = await github.rest.actions.getWorkflowRun({...context.repo, run_id: 41055113268});
+              if (run.head_sha !== '7b6c577308f439bb6019a31b7bb290aca0b7ff12') throw new Error('Unexpected build source');
               if (run.status === 'completed') {
                 if (run.conclusion !== 'success') throw new Error('Build or tests failed');
                 verified = true; break;
@@ -32,8 +32,8 @@ jobs:
             if (!verified) throw new Error('Timed out waiting for tested APK');
       - uses: actions/download-artifact@v4
         with:
-          name: DPI-Pilot-0.4.0-debug
-          run-id: 41050558672
+          name: DPI-Pilot-0.4.1-debug
+          run-id: 41055113268
           github-token: ${{ secrets.GITHUB_TOKEN }}
           path: apk
       - uses: actions/github-script@v7
@@ -47,8 +47,8 @@ jobs:
             const data = fs.readFileSync(path.join('apk',files[0]));
             const sha = crypto.createHash('sha256').update(data).digest('hex');
             const {owner,repo} = context.repo;
-            const tag = 'v0.4.0';
-            const comparison = await github.rest.repos.compareCommits({owner,repo,base:'a44e45ea2d442a7f343ba9bf7555ca442ee46632',head:context.sha});
+            const tag = 'v0.4.1';
+            const comparison = await github.rest.repos.compareCommits({owner,repo,base:'7b6c577308f439bb6019a31b7bb290aca0b7ff12',head:context.sha});
             if ((comparison.data.files || []).some(f => f.filename !== '.github/workflows/publish-apk.yml')) throw new Error('Release source differs from tested app');
             let release;
             try {
@@ -57,11 +57,11 @@ jobs:
               if (error.status !== 404) throw error;
               release = (await github.rest.repos.createRelease({
                 owner,repo,tag_name:tag,target_commitish:context.sha,
-                name:'DPI Pilot 0.4.0 — Telegram WebSocket',draft:true,prerelease:false,
-                body:'Скачайте DPI-Pilot-0.4.0.apk в Assets — ZIP не нужен.\n\nНовый режим Telegram: локальный MTProxy → защищённый WebSocket официальных серверов Telegram. Сначала выключите ByeDPI и другие VPN. Нажмите «Подключить Telegram через WebSocket» → «Запустить режим Telegram» → «Подключить в Telegram» и подтвердите прокси в Telegram. Свой сервер и аккаунт в DPI Pilot не нужны.\n\nПроверка сертификатов включена. TLS не отключается; сторонние relay-домены не используются. Внутренние аккаунтные MTProto-ключи и содержимое не расшифровываются. Звонки этим режимом не обеспечиваются. После остановки сервиса отключите локальный прокси в Telegram.\n\nСборка, тесты криптографической трансляции и двустороннего обмена через локальный WebSocket прошли. На отдельном тестовом подключении получен resPQ с правильным nonce от официального DC2 по WSS. Работа аккаунта и доступность у конкретного оператора ещё требуют проверки на устройстве.\n\nСтарая диагностика SOCKS уточнена: этап соединения и reply code вместо общего SocketException.\n\nAPK имеет отладочную подпись. При конфликте с предыдущей сборкой потребуется её удаление.\n\nGPL-3.0; авторство исходных компонентов сохранено.\nSource: a44e45ea2d442a7f343ba9bf7555ca442ee46632\nSHA-256 APK: '+sha
+                name:'DPI Pilot 0.4.1 — Telegram WebSocket',draft:true,prerelease:false,
+                body:"Скачайте DPI-Pilot-0.4.1.apk ниже в Assets — без ZIP.\n\nСтабилизация режима Telegram WebSocket:\n- Отключены активные RFC WebSocket ping; остаются собственные MTProto heartbeat клиента.\n- Убран локальный read timeout 300 секунд после авторизации и искусственное закрытие очереди отправки через 5 секунд; используется ограниченная очередь с обратным давлением.\n- TCP-поток собирается в полные MTProto transport packets (abridged/intermediate/padded) перед отправкой в WS; quick-ack и padding сохраняются.\n- Нормальный EOF/cancel не выдаётся за сетевую потерю. В диагностике C-ID, DC/media, этап, точная причина, длительность, tx/rx; без секретов и содержимого сообщений.\n- Переподключение предпочитает официальный endpoint, от которого получены данные; при отказе без данных сначала пробуется другая официальная alias-ссылка.\n\nВыключите ByeDPI и другие VPN → Подключить Telegram через WebSocket → Запустить режим Telegram → Подключить в Telegram и подтвердить прокси. После остановки режима отключите локальный прокси в Telegram. Звонки этим режимом не обеспечиваются.\n\nПроверка TLS включена; сторонние relay-серверы не используются. Аккаунтное MTProto-шифрование не расшифровывается. Результат на конкретном провайдере и аккаунте ещё требует проверки на телефоне.\n\nТесты: все варианты дробления/объединения transport packets, extended и quick-ack заголовки, ограничения размера; двусторонний обмен через локальный WS с разбитым TCP и нормальное завершение без ложного сбоя.\n\nAPK с отладочной подписью. Если Android сообщает конфликт подписей, удалите предыдущую сборку перед установкой.\n\nGPL-3.0; авторство исходных компонентов сохранено.\nSource: 7b6c577308f439bb6019a31b7bb290aca0b7ff12\nSHA-256 APK: "+sha
               })).data;
             }
-            const name = 'DPI-Pilot-0.4.0.apk';
+            const name = 'DPI-Pilot-0.4.1.apk';
             const assets = (await github.rest.repos.listReleaseAssets({owner,repo,release_id:release.id})).data;
             const existing = assets.find(a => a.name === name);
             if (!existing) {
