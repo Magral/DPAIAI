@@ -137,7 +137,7 @@ internal class TelegramWsBridge(
             sockets.remove(socket); try { socket.close() } catch (_: IOException) {}
             sessions.remove(socket)
             connections.decrementAndGet()
-            if (session.endpoint.isNotEmpty() && session.rx.get() == 0L && session.tx.get() > 0L &&
+            if (!session.reasonFixed && session.endpoint.isNotEmpty() && session.rx.get() == 0L && session.tx.get() > 0L &&
                 System.nanoTime()-session.started > TimeUnit.SECONDS.toNanos(3)) {
                 cooldown[session.endpoint] = System.nanoTime()+TimeUnit.SECONDS.toNanos(30)
             }

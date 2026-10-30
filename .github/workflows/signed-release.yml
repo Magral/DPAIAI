@@ -1,4 +1,4 @@
-# Network-specific diagnostics are reset when the default network changes.
+# Network-specific diagnostics reset on handoff; deliberate reconnects do not penalize tested routes.
 name: Signed APK release
 on:
   push:
