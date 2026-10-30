@@ -72,4 +72,12 @@
     <string name="desync_https_category">HTTPS</string>
     <string name="byedpi_protocols_category">Protocols</string>
     <string name="byedpi_protocols_hint">Uncheck all to desync all traffic</string>
+    <string name="choose_target_apps">Выбрать приложения</string>
+    <string name="target_apps_summary">Приложения: %1$s</string>
+    <string name="target_apps_title">Для каких приложений включить обход?</string>
+    <string name="target_apps_help">YouTube, Instagram и Telegram будут в начале списка, если установлены. Можно выбрать несколько. Остальные приложения работают напрямую.</string>
+    <string name="target_apps_empty">Выберите хотя бы одно установленное приложение</string>
+    <string name="target_apps_stop_first">Сначала выключите обработку, затем измените приложения</string>
+    <string name="target_apps_save">Сохранить выбор</string>
+    <string name="target_apps_saved">Выбор сохранён. Теперь нажмите кнопку включения</string>
 </resources>

@@ -16,6 +16,7 @@ import android.view.MenuItem
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.app.AlertDialog
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import io.github.dovecoteescapee.byedpi.R
@@ -139,6 +140,9 @@ class MainActivity : AppCompatActivity() {
             registerReceiver(receiver, intentFilter)
         }
 
+        binding.serviceTuningButton.setOnClickListener { startActivity(Intent(this, ServiceTuningActivity::class.java)) }
+        binding.targetAppsButton.setOnClickListener { chooseTargetApps() }
+
         binding.statusButton.setOnClickListener {
             val (status, _) = appStatus
             when (status) {
@@ -212,7 +216,49 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun chooseTargetApps() {
+        if (appStatus.first != AppStatus.Halted) {
+            Toast.makeText(this, R.string.target_apps_stop_first, Toast.LENGTH_SHORT).show()
+            return
+        }
+        lifecycleScope.launch {
+            val apps = kotlinx.coroutines.withContext(Dispatchers.IO) { TargetApps.installed(this@MainActivity) }
+            if (isFinishing || isDestroyed) return@launch
+            val chosen = TargetApps.selected(this@MainActivity).toMutableSet()
+            val dialog = AlertDialog.Builder(this@MainActivity)
+                .setTitle(R.string.target_apps_title)
+                .setMultiChoiceItems(apps.map { it.label }.toTypedArray(),
+                    apps.map { it.packageName in chosen }.toBooleanArray()) { _, index, checked ->
+                    if (checked) chosen.add(apps[index].packageName) else chosen.remove(apps[index].packageName)
+                }
+                .setPositiveButton(R.string.target_apps_save, null)
+                .setNegativeButton(android.R.string.cancel, null)
+                .create()
+            dialog.setOnShowListener {
+                dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                    val selected = chosen.intersect(apps.map { it.packageName }.toSet())
+                    if (selected.isEmpty()) {
+                        Toast.makeText(this@MainActivity, R.string.target_apps_empty, Toast.LENGTH_SHORT).show()
+                    } else if (appStatus.first != AppStatus.Halted) {
+                        Toast.makeText(this@MainActivity, R.string.target_apps_stop_first, Toast.LENGTH_SHORT).show()
+                    } else {
+                        getPreferences().edit().putStringSet(TargetApps.KEY, selected)
+                            .putString("byedpi_mode", "vpn").apply()
+                        updateStatus()
+                        Toast.makeText(this@MainActivity, R.string.target_apps_saved, Toast.LENGTH_SHORT).show()
+                        dialog.dismiss()
+                    }
+                }
+            }
+            dialog.show()
+        }
+    }
+
     private fun start() {
+        if (getPreferences().mode() == Mode.VPN && TargetApps.selected(this).isEmpty()) {
+            chooseTargetApps()
+            return
+        }
         when (getPreferences().mode()) {
             Mode.VPN -> {
                 val intentPrepare = VpnService.prepare(this)
@@ -237,6 +283,14 @@ class MainActivity : AppCompatActivity() {
         Log.i(TAG, "Updating status: $status, $mode")
 
         val preferences = getPreferences()
+        val targets = TargetApps.selected(this)
+        @Suppress("DEPRECATION")
+        val labels = targets.map { pkg ->
+            try { packageManager.getApplicationLabel(packageManager.getApplicationInfo(pkg, 0)).toString() }
+            catch (_: PackageManager.NameNotFoundException) { pkg }
+        }.sorted()
+        binding.targetAppsButton.text = if (labels.isEmpty()) getString(R.string.choose_target_apps)
+            else getString(R.string.target_apps_summary, labels.joinToString(", "))
         val proxyIp = preferences.getStringNotNull("byedpi_proxy_ip", "127.0.0.1")
         val proxyPort = preferences.getStringNotNull("byedpi_proxy_port", "1080")
         binding.proxyAddress.text = getString(R.string.proxy_address, proxyIp, proxyPort)

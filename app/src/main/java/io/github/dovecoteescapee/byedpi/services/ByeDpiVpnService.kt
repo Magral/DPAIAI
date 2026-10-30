@@ -297,7 +297,20 @@ class ByeDpiVpnService : LifecycleVpnService() {
             builder.setMetered(false)
         }
 
-        builder.addDisallowedApplication(applicationContext.packageName)
+        // An empty allowlist means ALL apps in Android. Never establish it accidentally.
+        val targets = TargetApps.selected(this)
+        require(targets.isNotEmpty()) { "Select at least one application" }
+        var added = 0
+        for (packageName in targets) {
+            try {
+                builder.addAllowedApplication(packageName)
+                added++
+            } catch (_: android.content.pm.PackageManager.NameNotFoundException) {
+                Log.w(TAG, "Selected application is no longer installed")
+            }
+        }
+        check(added > 0) { "Selected applications are no longer installed" }
+        // The utility is absent from the allowlist: its native outbound sockets remain outside TUN.
 
         return builder
     }
