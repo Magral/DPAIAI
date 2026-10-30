@@ -10,6 +10,7 @@ class BootReceiver : BroadcastReceiver() {
         if (intent.action !in setOf(Intent.ACTION_BOOT_COMPLETED,Intent.ACTION_MY_PACKAGE_REPLACED)) return
         val prefs = TvState.prefs(context)
         if (!prefs.getBoolean("enabled",false) || !prefs.getBoolean("boot",true)) return
+        MaintenanceJob.schedule(context)
         if (VpnService.prepare(context) != null) {
             TvState.update(context,"Для автозапуска откройте приложение и разрешите VPN")
             return

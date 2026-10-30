@@ -11,7 +11,7 @@ aapt = Path(os.environ['ANDROID_HOME']) / 'build-tools/34.0.0/aapt'
 badging = subprocess.check_output([str(aapt),'dump','badging',str(apk)],text=True)
 assert "package: name='io.github.magral.dpipilot.tv'" in badging, 'Wrong application ID'
 manifest = subprocess.check_output([str(aapt),'dump','xmltree',str(apk),'AndroidManifest.xml'],text=True)
-for value in ['android.intent.category.LEANBACK_LAUNCHER','android.intent.action.BOOT_COMPLETED','TvVpnService','TvEngineService',':engine']:
+for value in ['android.intent.category.LEANBACK_LAUNCHER','android.intent.action.BOOT_COMPLETED','TvVpnService','TvEngineService','MaintenanceJob','android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS',':engine']:
     assert value in manifest, 'Missing TV manifest component: '+value
 with zipfile.ZipFile(apk) as archive:
     for abi in ['armeabi-v7a','arm64-v8a','x86','x86_64']:
