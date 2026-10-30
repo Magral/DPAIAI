@@ -1,4 +1,4 @@
-# DPI Pilot TV 0.4.0
+# DPI Pilot TV 0.4.1
 
 Отдельное приложение `io.github.magral.dpipilot.tv` для официального YouTube на Android TV и приставках, включая X96 Ultra Max. Не заменяет телефонную версию. Android 5+; ARMv7, ARM64, x86, x86_64. Разрешённые пакеты: `com.google.android.youtube.tv`, `com.google.android.youtube`.
 
@@ -54,7 +54,7 @@ TV-релизы `tv-vX.Y.Z` не заменяют latest телефонной в
 https://developer.android.com/develop/background-work/services/fgs/restrictions-bg-start
 
 
-## Расширенная база 0.4.0
+## Расширенная база 0.4.1
 
 TV использует отдельный подмодуль ByeDPI 17.3, commit `ba532298de7b28cfe854aea83d061369d13ca290`, и отдельный JNI-адаптер только командной строки. Движок и UI-настройки телефонного APK не переводятся на новую версию. Фоновый процесс `:scout` и активный `:engine` сохраняются. MIT notice движка включён в APK.
 
