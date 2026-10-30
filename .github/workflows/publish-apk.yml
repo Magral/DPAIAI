@@ -1,0 +1,65 @@
+name: Publish APK release
+on:
+  push:
+    branches: [main]
+    paths: [.github/workflows/publish-apk.yml]
+  workflow_dispatch:
+permissions:
+  contents: write
+  actions: read
+concurrency:
+  group: publish-v0.3.0
+  cancel-in-progress: false
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: DPI-Pilot-0.3.0-debug
+          run-id: 41046822264
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: apk
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const crypto = require('crypto');
+            const path = require('path');
+            const files = fs.readdirSync('apk').filter(f => f.endsWith('.apk'));
+            if (files.length !== 1) throw new Error('Expected one verified APK');
+            const data = fs.readFileSync(path.join('apk', files[0]));
+            const sha = crypto.createHash('sha256').update(data).digest('hex');
+            if (sha !== '8930c24d9f8dddd9466c145069c286ae1774d7577b6f5908a5a3347b5e208dff') throw new Error('APK hash mismatch');
+            const {owner, repo} = context.repo;
+            const tag = 'v0.3.0';
+            let release;
+            try {
+              release = (await github.rest.repos.getReleaseByTag({owner,repo,tag})).data;
+            } catch (error) {
+              if (error.status !== 404) throw error;
+              release = (await github.rest.repos.createRelease({
+                owner, repo, tag_name: tag,
+                target_commitish: '7894b4cb79d3d14016d8c4f1b35af37447f9a86e',
+                name: 'DPI Pilot 0.3.0 — Telegram',
+                draft: true,
+                prerelease: false,
+                body: 'Скачайте DPI-Pilot-0.3.0.apk ниже в Assets и установите на Android. ZIP распаковывать не нужно.\n\nВосемь режимов для Telegram, проверка пяти дата-центров, обфусцированный MTProto, отдельная диагностика. Сборка и автоматические тесты прошли; работоспособность на конкретном провайдере требует проверки на устройстве.\n\nAPK использует отладочную подпись из проверенной сборки. При конфликте подписей с предыдущей версией может потребоваться её удаление.\n\nИсходники: commit 7894b4cb79d3d14016d8c4f1b35af37447f9a86e. Лицензия GPL-3.0; авторство исходных компонентов сохранено.\n\nSHA-256 APK: 8930c24d9f8dddd9466c145069c286ae1774d7577b6f5908a5a3347b5e208dff'
+              })).data;
+            }
+            const name = 'DPI-Pilot-0.3.0.apk';
+            const assets = (await github.rest.repos.listReleaseAssets({owner,repo,release_id:release.id})).data;
+            const existing = assets.find(a => a.name === name);
+            if (!existing) {
+              await github.rest.repos.uploadReleaseAsset({
+                owner, repo, release_id: release.id, name, data,
+                headers: {'content-type': 'application/vnd.android.package-archive', 'content-length': data.length}
+              });
+            } else if (existing.digest && existing.digest !== 'sha256:' + sha) {
+              throw new Error('Existing release APK differs; refusing overwrite');
+            }
+            if (release.draft) {
+              release = (await github.rest.repos.updateRelease({owner,repo,release_id:release.id,draft:false})).data;
+            }
+            core.notice(release.html_url);
