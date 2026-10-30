@@ -1,0 +1,2419 @@
+{
+  "version": "2026-10-31.1",
+  "engine_commit": "ba532298de7b28cfe854aea83d061369d13ca290",
+  "strategies": [
+    {
+      "id": "e3b0c44298fc1c14",
+      "args": "",
+      "sources": [
+        "pilot-original"
+      ],
+      "legacy": 0
+    },
+    {
+      "id": "593529bb722690d6",
+      "args": "--split 1",
+      "sources": [
+        "pilot-original"
+      ],
+      "legacy": 1
+    },
+    {
+      "id": "844d7d18e0c278ef",
+      "args": "--disorder 1",
+      "sources": [
+        "pilot-original"
+      ],
+      "legacy": 2
+    },
+    {
+      "id": "869bf3801d544fd8",
+      "args": "--tlsrec 1+s",
+      "sources": [
+        "pilot-original"
+      ],
+      "legacy": 3
+    },
+    {
+      "id": "49ad84ac8e17bc3a",
+      "args": "--disorder 1 --tlsrec 1+s",
+      "sources": [
+        "pilot-original"
+      ],
+      "legacy": 4
+    },
+    {
+      "id": "228df208ed83f9b0",
+      "args": "--split 2",
+      "sources": [
+        "pilot-original"
+      ],
+      "legacy": 5
+    },
+    {
+      "id": "2f05ed92d87a0d8c",
+      "args": "--split 1 --tlsrec 1+s",
+      "sources": [
+        "pilot-original"
+      ],
+      "legacy": 6
+    },
+    {
+      "id": "39e3899cfccdba99",
+      "args": "--timeout 8 --cache-ttl 600 --split 1 --auto torst,ssl_err --disorder 1 --auto torst,ssl_err --tlsrec 1+s --auto torst,ssl_err --disorder 1 --tlsrec 1+s",
+      "sources": [
+        "pilot-original"
+      ],
+      "legacy": 7
+    },
+    {
+      "id": "03939df85bd15aec",
+      "args": "--fake -200 --fake-tls-mod r --split 3:5+sm --udp-fake 1 --auto t,r,s,c --disorder 1 --split 4+sm --split 8+s --fake -300 --disorder 6+s --udp-fake 1 --auto t,r,s,c --oob 2 --fake -30 --auto t,r,s,c --tlsrec 5 --mod-http h --tlsrec 6+s --fake -250 --split 2:7+s --split 3:6+sm --udp-fake 1 --auto t,r,s,c --split 3:5+sm --split 6+s --split 7:9+s --disoob 30+sm --udp-fake 1",
+      "sources": [
+        "byebyedpi"
+      ]
+    },
+    {
+      "id": "b55013dea302bbb1",
+      "args": "--disorder 1 --disorder 3+s --split 6+s --disorder 9+s --split 12+s --disorder 15+s --split 20+s --disorder 25+s --split 30+s --disorder 35+s --tlsrec 1+s --md5sig --udp-fake 1 --auto t,r,s,c --disorder 1 --disorder 3+s --split 6+s --disorder 9+s --split 12+s --disorder 15+s --split 20+s --disorder 25+s --split 30+s --disorder 35+s --md5sig --udp-fake 1",
+      "sources": [
+        "byebyedpi"
+      ]
+    },
+    {
+      "id": "4eda43aa964b02c2",
+      "args": "--disoob 2 --split 2 --split 3+s --tlsrec 3 --split 4 --tlsrec 4 --split 5+s --tlsrec 5+s --split 6 --split 7+s --tlsrec 8 --split 9+s --fake-tls-mod r --mod-http h,d,r --udp-fake 1 --auto t,r,s,c --split 2+s --tlsrec 2 --disorder 2 --split 3 --tlsrec 3 --tlsrec 4 --split 4 --disorder 5+s --tlsrec 5 --disorder 6 --split 7+s --disorder 7 --udp-fake 1",
+      "sources": [
+        "byebyedpi"
+      ]
+    },
+    {
+      "id": "679516f90451de8d",
+      "args": "--oob 1 --disorder 1 --udp-fake 1 --auto t,r,s,c --split 1 --disorder 1 --split 5+s --split 10+s --split 15+s --split 20+s --tlsrec 1+s --md5sig --udp-fake 1 --auto t,r,s,c --split 1 --disorder 1 --split 5+s --split 10+s --split 15+s --split 20+s --md5sig --udp-fake 1",
+      "sources": [
+        "byebyedpi"
+      ]
+    },
+    {
+      "id": "ab2c2ed84388c080",
+      "args": "--fake-sni google.com --fake-tls-mod r --fake -204 --split 1:5+sm --udp-fake 1 --auto t,r,s,c --disorder 1 --split 3+s --split 5+s --disoob 7 --udp-fake 1 --auto t,r,s,c --oob 2 --fake -43 --udp-fake 1 --auto t,r,s,c --tlsrec 5 --mod-http h --split 1:5+s --split 3:7+sm --udp-fake 1",
+      "sources": [
+        "byebyedpi"
+      ]
+    },
+    {
+      "id": "a7fa5a513c645512",
+      "args": "--fake-sni youtube.com --fake-tls-mod r --fake -204 --split 1:5+sm --udp-fake 1 --auto t,r,s,c --disorder 1 --split 3+s --split 5+s --disoob 7 --udp-fake 1 --auto t,r,s,c --oob 2 --fake -43 --udp-fake 1 --auto t,r,s,c --tlsrec 5 --mod-http h --split 1:5+s --split 3:7+sm --udp-fake 1",
+      "sources": [
+        "byebyedpi"
+      ]
+    },
+    {
+      "id": "e5cab92e6d70ebd5",
+      "args": "--fake-sni googlevideo.com --fake-tls-mod r --fake -204 --split 1:5+sm --udp-fake 1 --auto t,r,s,c --disorder 1 --split 3+s --split 5+s --disoob 7 --udp-fake 1 --auto t,r,s,c --oob 2 --fake -43 --udp-fake 1 --auto t,r,s,c --tlsrec 5 --mod-http h --split 1:5+s --split 3:7+sm --udp-fake 1",
+      "sources": [
+        "byebyedpi"
+      ]
+    },
+    {
+      "id": "b45577d0068974e5",
+      "args": "--fake-sni ytimg.com --fake-tls-mod r --fake -204 --split 1:5+sm --udp-fake 1 --auto t,r,s,c --disorder 1 --split 3+s --split 5+s --disoob 7 --udp-fake 1 --auto t,r,s,c --oob 2 --fake -43 --udp-fake 1 --auto t,r,s,c --tlsrec 5 --mod-http h --split 1:5+s --split 3:7+sm --udp-fake 1",
+      "sources": [
+        "byebyedpi"
+      ]
+    },
+    {
+      "id": "4f53ed82618d59a2",
+      "args": "--fake-sni ggpht.com --fake-tls-mod r --fake -204 --split 1:5+sm --udp-fake 1 --auto t,r,s,c --disorder 1 --split 3+s --split 5+s --disoob 7 --udp-fake 1 --auto t,r,s,c --oob 2 --fake -43 --udp-fake 1 --auto t,r,s,c --tlsrec 5 --mod-http h --split 1:5+s --split 3:7+sm --udp-fake 1",
+      "sources": [
+        "byebyedpi"
+      ]
+    },
+    {
+      "id": "5e3434b3b03ba7de",
+      "args": "--fake-sni google.com --fake-tls-mod r --fake -205 --udp-fake 1 --auto t,r,s,c --split 1:3+sm --udp-fake 1 --auto t,r,s,c --split 5:8+sm --udp-fake 1 --auto t,r,s,c --disorder 3 --disoob 7 --oob 2 --fake -43 --fake -85 --fake -165 --tlsrec 5 --mod-http h --udp-fake 1",
+      "sources": [
+        "byebyedpi"
+      ]
+    },
+    {
+      "id": "4ccf3688746884ad",
+      "args": "--fake-sni youtube.com --fake-tls-mod r --fake -205 --udp-fake 1 --auto t,r,s,c --split 1:3+sm --udp-fake 1 --auto t,r,s,c --split 5:8+sm --udp-fake 1 --auto t,r,s,c --disorder 3 --disoob 7 --oob 2 --fake -43 --fake -85 --fake -165 --tlsrec 5 --mod-http h --udp-fake 1",
+      "sources": [
+        "byebyedpi"
+      ]
+    },
+    {
+      "id": "c5ae8a9477e54b0f",
+      "args": "--fake-sni googlevideo.com --fake-tls-mod r --fake -205 --udp-fake 1 --auto t,r,s,c --split 1:3+sm --udp-fake 1 --auto t,r,s,c --split 5:8+sm --udp-fake 1 --auto t,r,s,c --disorder 3 --disoob 7 --oob 2 --fake -43 --fake -85 --fake -165 --tlsrec 5 --mod-http h --udp-fake 1",
+      "sources": [
+        "byebyedpi"
+      ]
+    },
+    {
+      "id": "410337b84610eb14",
+      "args": "--fake-sni ytimg.com --fake-tls-mod r --fake -205 --udp-fake 1 --auto t,r,s,c --split 1:3+sm --udp-fake 1 --auto t,r,s,c --split 5:8+sm --udp-fake 1 --auto t,r,s,c --disorder 3 --disoob 7 --oob 2 --fake -43 --fake -85 --fake -165 --tlsrec 5 --mod-http h --udp-fake 1",
+      "sources": [
+        "byebyedpi"
+      ]
+    },
+    {
+      "id": "aae10fbdb76df7f7",
+      "args": "--fake-sni ggpht.com --fake-tls-mod r --fake -205 --udp-fake 1 --auto t,r,s,c --split 1:3+sm --udp-fake 1 --auto t,r,s,c --split 5:8+sm --udp-fake 1 --auto t,r,s,c --disorder 3 --disoob 7 --oob 2 --fake -43 --fake -85 --fake -165 --tlsrec 5 --mod-http h --udp-fake 1",
+      "sources": [
+        "byebyedpi"
+      ]
+    },
+    {
+      "id": "a6eb2b4db09e477d",
+      "args": "--disorder 1+s --split 50+s --udp-fake 1 --auto t,r,s,c --fake 20 --tlsrec 2+s --udp-fake 1 --auto t,r,s,c --disorder 2 --split 1+s --split 5+s --split 10+s --split 15+s --split 25+s --split 35+s --split 50+s --split 60+s --udp-fake 1",
+      "sources": [
+        "byebyedpi"
+      ]
+    },
+    {
+      "id": "7ff94ed6cd06ebb5",
+      "args": "--oob 1 --udp-fake 1 --auto t,r,s,c --fake -1 --udp-fake 1 --auto t,r,s,c --disorder 1:11+sm --md5sig --udp-fake 1 --auto t,r,s,c --fake-sni google.com --fake-tls-mod r --fake 1 --disorder 1:11+sm --split 1:11+sm --md5sig --udp-fake 1",
+      "sources": [
+        "byebyedpi"
+      ]
+    },
+    {
+      "id": "a83baea5e336f753",
+      "args": "--oob 1 --udp-fake 1 --auto t,r,s,c --fake -1 --udp-fake 1 --auto t,r,s,c --disorder 1:11+sm --md5sig --udp-fake 1 --auto t,r,s,c --fake-sni youtube.com --fake-tls-mod r --fake 1 --disorder 1:11+sm --split 1:11+sm --md5sig --udp-fake 1",
+      "sources": [
+        "byebyedpi"
+      ]
+    },
+    {
+      "id": "79d4dd72037b5609",
+      "args": "--oob 1 --udp-fake 1 --auto t,r,s,c --fake -1 --udp-fake 1 --auto t,r,s,c --disorder 1:11+sm --md5sig --udp-fake 1 --auto t,r,s,c --fake-sni googlevideo.com --fake-tls-mod r --fake 1 --disorder 1:11+sm --split 1:11+sm --md5sig --udp-fake 1",
+      "sources": [
+        "byebyedpi"
+      ]
+    },
+    {
+      "id": "04ecbc70d9478923",
+      "args": "--oob 1 --udp-fake 1 --auto t,r,s,c --fake -1 --udp-fake 1 --auto t,r,s,c --disorder 1:11+sm --md5sig --udp-fake 1 --auto t,r,s,c --fake-sni ytimg.com --fake-tls-mod r --fake 1 --disorder 1:11+sm --split 1:11+sm --md5sig --udp-fake 1",
+      "sources": [
+        "byebyedpi"
+      ]
+    },
+    {
+      "id": "ea4038a32adc2bb7",
+      "args": "--oob 1 --udp-fake 1 --auto t,r,s,c --fake -1 --udp-fake 1 --auto t,r,s,c --disorder 1:11+sm --md5sig --udp-fake 1 --auto t,r,s,c --fake-sni ggpht.com --fake-tls-mod r --fake 1 --disorder 1:11+sm --split 1:11+sm --md5sig --udp-fake 1",
+      "sources": [
+        "byebyedpi"
+      ]
+    },
+    {
+      "id": "0c44bf7a06ccb7da",
+      "args": "--disorder 1 --split 1 --disoob 1 --udp-fake 1 --auto t,r,s,c --split 5 --oob 1+s --disorder 3+s --split 6+s --disorder 9+s --split 12+s --disorder 15+s --split 20+s --disorder 25+s --split 30+s --disorder 35+s --udp-fake 1",
+      "sources": [
+        "byebyedpi"
+      ]
+    },
+    {
+      "id": "0dcacb2377d39c16",
+      "args": "--fake 1+nm --ttl 6 --udp-fake 1 --auto t,r,s,c --fake-sni google.com --fake-tls-mod r --split 1:6+sm --udp-fake 1 --auto t,r,s,c --split 5:12+sm --udp-fake 1 --auto t,r,s,c --disorder 3 --disoob 7 --tlsrec 6 --mod-http h --udp-fake 1",
+      "sources": [
+        "byebyedpi"
+      ]
+    },
+    {
+      "id": "515fbd23033c3f96",
+      "args": "--fake 1+nm --ttl 6 --udp-fake 1 --auto t,r,s,c --fake-sni youtube.com --fake-tls-mod r --split 1:6+sm --udp-fake 1 --auto t,r,s,c --split 5:12+sm --udp-fake 1 --auto t,r,s,c --disorder 3 --disoob 7 --tlsrec 6 --mod-http h --udp-fake 1",
+      "sources": [
+        "byebyedpi"
+      ]
+    },
+    {
+      "id": "49cbdb1ad5b4a35e",
+      "args": "--fake 1+nm --ttl 6 --udp-fake 1 --auto t,r,s,c --fake-sni googlevideo.com --fake-tls-mod r --split 1:6+sm --udp-fake 1 --auto t,r,s,c --split 5:12+sm --udp-fake 1 --auto t,r,s,c --disorder 3 --disoob 7 --tlsrec 6 --mod-http h --udp-fake 1",
+      "sources": [
+        "byebyedpi"
+      ]
+    },
+    {
+      "id": "b10ae4962c7235b5",
+      "args": "--fake 1+nm --ttl 6 --udp-fake 1 --auto t,r,s,c --fake-sni ytimg.com --fake-tls-mod r --split 1:6+sm --udp-fake 1 --auto t,r,s,c --split 5:12+sm --udp-fake 1 --auto t,r,s,c --disorder 3 --disoob 7 --tlsrec 6 --mod-http h --udp-fake 1",
+      "sources": [
+        "byebyedpi"
+      ]
+    },
+    {
+      "id": "afd20f1413592278",
+      "args": "--fake 1+nm --ttl 6 --udp-fake 1 --auto t,r,s,c --fake-sni ggpht.com --fake-tls-mod r --split 1:6+sm --udp-fake 1 --auto t,r,s,c --split 5:12+sm --udp-fake 1 --auto t,r,s,c --disorder 3 --disoob 7 --tlsrec 6 --mod-http h --udp-fake 1",
+      "sources": [
+        "byebyedpi"
+      ]
+    },
+    {
+      "id": "364cbc1e6191009a",
+      "args": "--disorder 1 --split 1+s --disorder 3+s --split 6+s --disorder 9+s --split 12+s --disorder 15+s --split 20+s --disorder 25+s --split 30+s --disorder 35+s --udp-fake 1",
+      "sources": [
+        "byebyedpi",
+        "ewen",
+        "netfix"
+      ]
+    },
+    {
+      "id": "665dfb8a8725932b",
+      "args": "--disorder 1 --split 1+s --disorder 1+s --split 3+s --disorder 6+s --split 12+s --disorder 14+s --split 20+s --disorder 24+s --split 30+s --udp-fake 1",
+      "sources": [
+        "byebyedpi",
+        "ewen",
+        "netfix"
+      ]
+    },
+    {
+      "id": "0fb98f3bc9be3b38",
+      "args": "--oob 1 --udp-fake 1 --auto t,r,s,c --fake -1 --udp-fake 1 --auto t,r,s,c --oob 1 --udp-fake 1 --auto t,r,s,c --tlsrec 1+s --fake -1 --ttl 6 --udp-fake 1",
+      "sources": [
+        "byebyedpi"
+      ]
+    },
+    {
+      "id": "023d86927f2fda57",
+      "args": "--disorder 1 --split 1+s --split 3+s --split 6+s --split 9+s --split 12+s --split 15+s --split 20+s --split 30+s --udp-fake 1",
+      "sources": [
+        "byebyedpi",
+        "ewen",
+        "netfix"
+      ]
+    },
+    {
+      "id": "86c951a6bb14f942",
+      "args": "--disorder 1 --disorder 3+s --split 6+s --disorder 6+s --split 7+s --disorder 8+s --split 10+s --udp-fake 1 --ttl 12 --auto t,r,s,c --tlsrec 3",
+      "sources": [
+        "byebyedpi"
+      ]
+    },
+    {
+      "id": "e60bf0fb320d4881",
+      "args": "--fake 1 --ttl 5 --fake-sni google.com --disoob 3+h --fake-tls-mod r --fake 2 --disoob 1 --tlsrec 1+s --ttl 15 --disoob 1 --oob 2 --udp-fake 1",
+      "sources": [
+        "byebyedpi",
+        "ewen",
+        "netfix"
+      ]
+    },
+    {
+      "id": "f68cbb00cd9178bb",
+      "args": "--fake 1 --ttl 5 --fake-sni youtube.com --disoob 3+h --fake-tls-mod r --fake 2 --disoob 1 --tlsrec 1+s --ttl 15 --disoob 1 --oob 2 --udp-fake 1",
+      "sources": [
+        "byebyedpi",
+        "ewen",
+        "netfix"
+      ]
+    },
+    {
+      "id": "b90408615f73a1b6",
+      "args": "--fake 1 --ttl 5 --fake-sni googlevideo.com --disoob 3+h --fake-tls-mod r --fake 2 --disoob 1 --tlsrec 1+s --ttl 15 --disoob 1 --oob 2 --udp-fake 1",
+      "sources": [
+        "byebyedpi",
+        "ewen",
+        "netfix"
+      ]
+    },
+    {
+      "id": "ebc479ee42c97202",
+      "args": "--fake 1 --ttl 5 --fake-sni ytimg.com --disoob 3+h --fake-tls-mod r --fake 2 --disoob 1 --tlsrec 1+s --ttl 15 --disoob 1 --oob 2 --udp-fake 1",
+      "sources": [
+        "byebyedpi",
+        "ewen",
+        "netfix"
+      ]
+    },
+    {
+      "id": "7ce0d9a47a543092",
+      "args": "--fake 1 --ttl 5 --fake-sni ggpht.com --disoob 3+h --fake-tls-mod r --fake 2 --disoob 1 --tlsrec 1+s --ttl 15 --disoob 1 --oob 2 --udp-fake 1",
+      "sources": [
+        "byebyedpi",
+        "ewen",
+        "netfix"
+      ]
+    },
+    {
+      "id": "6a616d548a8d3895",
+      "args": "--fake-sni google.com --disorder 2:5:2+h --fake -3 --tlsrec 2+sm --oob 2 --oob 50+s --tlsrec 2+s --fake -4 --udp-fake 1",
+      "sources": [
+        "byebyedpi",
+        "ewen",
+        "netfix"
+      ]
+    },
+    {
+      "id": "7daef29f15d6b194",
+      "args": "--fake-sni youtube.com --disorder 2:5:2+h --fake -3 --tlsrec 2+sm --oob 2 --oob 50+s --tlsrec 2+s --fake -4 --udp-fake 1",
+      "sources": [
+        "byebyedpi",
+        "ewen",
+        "netfix"
+      ]
+    },
+    {
+      "id": "57db02782e220b92",
+      "args": "--fake-sni googlevideo.com --disorder 2:5:2+h --fake -3 --tlsrec 2+sm --oob 2 --oob 50+s --tlsrec 2+s --fake -4 --udp-fake 1",
+      "sources": [
+        "byebyedpi",
+        "ewen",
+        "netfix"
+      ]
+    },
+    {
+      "id": "454290f1958426bb",
+      "args": "--fake-sni ytimg.com --disorder 2:5:2+h --fake -3 --tlsrec 2+sm --oob 2 --oob 50+s --tlsrec 2+s --fake -4 --udp-fake 1",
+      "sources": [
+        "byebyedpi",
+        "ewen",
+        "netfix"
+      ]
+    },
+    {
+      "id": "2162af3859e67d86",
+      "args": "--fake-sni ggpht.com --disorder 2:5:2+h --fake -3 --tlsrec 2+sm --oob 2 --oob 50+s --tlsrec 2+s --fake -4 --udp-fake 1",
+      "sources": [
+        "byebyedpi",
+        "ewen",
+        "netfix"
+      ]
+    },
+    {
+      "id": "2352e60e4356d267",
+      "args": "--fake -1 --fake-tls-mod r --split 1+sm --disorder 3+s --split 5+sm --oob 2 --udp-fake 1 --auto t,r,s,c --tlsrec 1+s --disorder 8+s --udp-fake 1",
+      "sources": [
+        "byebyedpi"
+      ]
+    },
+    {
+      "id": "af0c588ecde5769d",
+      "args": "--tlsrec -1+s --oob 20+sm --split 3:7+sm --disorder 5:3+sm --fake 300+s --fake-tls-mod r --fake -1 --udp-fake 1",
+      "sources": [
+        "byebyedpi",
+        "ewen",
+        "netfix"
+      ]
+    },
+    {
+      "id": "917253a6267e0c96",
+      "args": "--oob 2 --fake-offset 4 --split 1 --disoob 1 --udp-fake 1 --auto t,r,s,c --split 5 --oob 1+s --fake 1+s --tlsrec 20+s --udp-fake 1",
+      "sources": [
+        "byebyedpi"
+      ]
+    },
+    {
+      "id": "4e4e7144cb42c1d6",
+      "args": "--oob 1 --tlsrec -5+se --udp-fake 1 --auto t,r,s,c --disorder 1 --fake-sni google.com --fake-tls-mod r --fake -1 --udp-fake 1",
+      "sources": [
+        "byebyedpi"
+      ]
+    },
+    {
+      "id": "5a79785fb0c6c1f0",
+      "args": "--oob 1 --tlsrec -5+se --udp-fake 1 --auto t,r,s,c --disorder 1 --fake-sni youtube.com --fake-tls-mod r --fake -1 --udp-fake 1",
+      "sources": [
+        "byebyedpi"
+      ]
+    },
+    {
+      "id": "ce39d60c7f096e79",
+      "args": "--oob 1 --tlsrec -5+se --udp-fake 1 --auto t,r,s,c --disorder 1 --fake-sni googlevideo.com --fake-tls-mod r --fake -1 --udp-fake 1",
+      "sources": [
+        "byebyedpi"
+      ]
+    },
+    {
+      "id": "5e855cef66a76406",
+      "args": "--oob 1 --tlsrec -5+se --udp-fake 1 --auto t,r,s,c --disorder 1 --fake-sni ytimg.com --fake-tls-mod r --fake -1 --udp-fake 1",
+      "sources": [
+        "byebyedpi"
+      ]
+    },
+    {
+      "id": "5a9bddc750140471",
+      "args": "--oob 1 --tlsrec -5+se --udp-fake 1 --auto t,r,s,c --disorder 1 --fake-sni ggpht.com --fake-tls-mod r --fake -1 --udp-fake 1",
+      "sources": [
+        "byebyedpi"
+      ]
+    },
+    {
+      "id": "646f7f521b696c72",
+      "args": "--fake -1 --ttl 8 --split 1+s --disorder 3+s --udp-fake 1",
+      "sources": [
+        "byebyedpi",
+        "ewen",
+        "netfix"
+      ]
+    },
+    {
+      "id": "7c8d4ca9212ca4d7",
+      "args": "--fake-sni google.com --fake-tls-mod r --fake 6+nr --disorder 2 --disorder 11 --fake 9+hm --oob 3 --ttl 7 --udp-fake 1",
+      "sources": [
+        "byebyedpi",
+        "ewen",
+        "netfix"
+      ]
+    },
+    {
+      "id": "e75187b0809b4149",
+      "args": "--fake-sni youtube.com --fake-tls-mod r --fake 6+nr --disorder 2 --disorder 11 --fake 9+hm --oob 3 --ttl 7 --udp-fake 1",
+      "sources": [
+        "byebyedpi",
+        "ewen",
+        "netfix"
+      ]
+    },
+    {
+      "id": "8f3c4413fbe487f9",
+      "args": "--fake-sni googlevideo.com --fake-tls-mod r --fake 6+nr --disorder 2 --disorder 11 --fake 9+hm --oob 3 --ttl 7 --udp-fake 1",
+      "sources": [
+        "byebyedpi",
+        "ewen",
+        "netfix"
+      ]
+    },
+    {
+      "id": "fa6a18613704d889",
+      "args": "--fake-sni ytimg.com --fake-tls-mod r --fake 6+nr --disorder 2 --disorder 11 --fake 9+hm --oob 3 --ttl 7 --udp-fake 1",
+      "sources": [
+        "byebyedpi",
+        "ewen",
+        "netfix"
+      ]
+    },
+    {
+      "id": "4defa5877c4909e1",
+      "args": "--fake-sni ggpht.com --fake-tls-mod r --fake 6+nr --disorder 2 --disorder 11 --fake 9+hm --oob 3 --ttl 7 --udp-fake 1",
+      "sources": [
+        "byebyedpi",
+        "ewen",
+        "netfix"
+      ]
+    },
+    {
+      "id": "36d2c21c52cb9c7d",
+      "args": "--tlsrec 5+s --split 25+s --udp-fake 1 --auto t,r,s,c --split 50 --tlsrec 5+s --split 50+s --udp-fake 1",
+      "sources": [
+        "byebyedpi"
+      ]
+    },
+    {
+      "id": "ac3346497f5857fc",
+      "args": "--disorder 1 --disorder 3+s --split 6+s --disorder 9+s --split 20+s --disorder 25+s --split 30+s --udp-fake 1",
+      "sources": [
+        "byebyedpi",
+        "ewen",
+        "netfix"
+      ]
+    },
+    {
+      "id": "02cbd70899a59bb7",
+      "args": "--disorder 9+s --disoob 20+s --split 25+s --ttl 5 --udp-fake 1 --auto t,r,s,c --tlsrec 1+h --udp-fake 1",
+      "sources": [
+        "byebyedpi"
+      ]
+    },
+    {
+      "id": "ba256911c88bbc91",
+      "args": "--disoob 1+s --split 29+s --split 30+s --split 14+s --oob 5+s --fake -1 --md5sig --udp-fake 1",
+      "sources": [
+        "byebyedpi",
+        "ewen",
+        "netfix"
+      ]
+    },
+    {
+      "id": "cc2d147c16750922",
+      "args": "--disorder 1 --split 1+s --tlsrec 1+s --oob-data 1 --tlsminor 1 --oob 1+s --fake -1 --ttl 2 --udp-fake 1",
+      "sources": [
+        "byebyedpi",
+        "ewen",
+        "netfix"
+      ]
+    },
+    {
+      "id": "61e802defab503b2",
+      "args": "--disorder 1 --oob 1 --udp-fake 1 --auto t,r,s,c --oob 1 --udp-fake 1 --auto t,r,s,c --fake -1 --tlsrec 1+s --udp-fake 1",
+      "sources": [
+        "byebyedpi"
+      ]
+    },
+    {
+      "id": "9c585fd63ef9c224",
+      "args": "--disorder 1 --split 4 --disorder 8 --split 1+s --disorder 5+s --split 10+s --disorder 20+s --udp-fake 1",
+      "sources": [
+        "byebyedpi",
+        "ewen",
+        "netfix"
+      ]
+    },
+    {
+      "id": "57b7b09d72fa8233",
+      "args": "--fake -1 --fake-sni google.com --fake-tls-mod r --split 2+s --tlsrec 3 --oob 20 --ttl 4 --udp-fake 1",
+      "sources": [
+        "byebyedpi",
+        "ewen",
+        "netfix"
+      ]
+    },
+    {
+      "id": "21810e1c41d4d245",
+      "args": "--fake -1 --fake-sni youtube.com --fake-tls-mod r --split 2+s --tlsrec 3 --oob 20 --ttl 4 --udp-fake 1",
+      "sources": [
+        "byebyedpi",
+        "ewen",
+        "netfix"
+      ]
+    },
+    {
+      "id": "bc6210fc7a124275",
+      "args": "--fake -1 --fake-sni googlevideo.com --fake-tls-mod r --split 2+s --tlsrec 3 --oob 20 --ttl 4 --udp-fake 1",
+      "sources": [
+        "byebyedpi",
+        "ewen",
+        "netfix"
+      ]
+    },
+    {
+      "id": "a09ebb530ade20cd",
+      "args": "--fake -1 --fake-sni ytimg.com --fake-tls-mod r --split 2+s --tlsrec 3 --oob 20 --ttl 4 --udp-fake 1",
+      "sources": [
+        "byebyedpi",
+        "ewen",
+        "netfix"
+      ]
+    },
+    {
+      "id": "d333999e982c9ecf",
+      "args": "--fake -1 --fake-sni ggpht.com --fake-tls-mod r --split 2+s --tlsrec 3 --oob 20 --ttl 4 --udp-fake 1",
+      "sources": [
+        "byebyedpi",
+        "ewen",
+        "netfix"
+      ]
+    },
+    {
+      "id": "59841402f7ca65a0",
+      "args": "--fake-sni google.com --fake-tls-mod r --disorder 5+sm --fake 3+sm --oob 2 --ttl 4 --udp-fake 1",
+      "sources": [
+        "byebyedpi",
+        "ewen",
+        "netfix"
+      ]
+    },
+    {
+      "id": "1403894d9f1ca325",
+      "args": "--fake-sni youtube.com --fake-tls-mod r --disorder 5+sm --fake 3+sm --oob 2 --ttl 4 --udp-fake 1",
+      "sources": [
+        "byebyedpi",
+        "ewen",
+        "netfix"
+      ]
+    },
+    {
+      "id": "469d4f1cda39045d",
+      "args": "--fake-sni googlevideo.com --fake-tls-mod r --disorder 5+sm --fake 3+sm --oob 2 --ttl 4 --udp-fake 1",
+      "sources": [
+        "byebyedpi",
+        "ewen",
+        "netfix"
+      ]
+    },
+    {
+      "id": "f492d6dc5afdbdf9",
+      "args": "--fake-sni ytimg.com --fake-tls-mod r --disorder 5+sm --fake 3+sm --oob 2 --ttl 4 --udp-fake 1",
+      "sources": [
+        "byebyedpi",
+        "ewen",
+        "netfix"
+      ]
+    },
+    {
+      "id": "7aa16fb8913f873d",
+      "args": "--fake-sni ggpht.com --fake-tls-mod r --disorder 5+sm --fake 3+sm --oob 2 --ttl 4 --udp-fake 1",
+      "sources": [
+        "byebyedpi",
+        "ewen",
+        "netfix"
+      ]
+    },
+    {
+      "id": "cfe82c199ab91e48",
+      "args": "--oob 1 --udp-fake 1 --auto t,r,s,c --disoob 1 --udp-fake 1 --auto t,r,s,c --fake -1 --tlsrec 1+s --udp-fake 1",
+      "sources": [
+        "byebyedpi"
+      ]
+    },
+    {
+      "id": "662c409a95b72eb5",
+      "args": "--disoob 1 --udp-fake 1 --auto t,r,s,c --oob 1 --udp-fake 1 --auto t,r,s,c --fake -1 --tlsrec 1+s --udp-fake 1",
+      "sources": [
+        "byebyedpi"
+      ]
+    },
+    {
+      "id": "7d40a3dbe916747b",
+      "args": "--split 4+s --tlsrec 9+s --fake-tls-mod r --fake-sni google.com --md5sig --udp-fake 1",
+      "sources": [
+        "byebyedpi"
+      ]
+    },
+    {
+      "id": "6586fdafc8d292cd",
+      "args": "--split 4+s --tlsrec 9+s --fake-tls-mod r --fake-sni youtube.com --md5sig --udp-fake 1",
+      "sources": [
+        "byebyedpi"
+      ]
+    },
+    {
+      "id": "cdd81937b57ce95f",
+      "args": "--split 4+s --tlsrec 9+s --fake-tls-mod r --fake-sni googlevideo.com --md5sig --udp-fake 1",
+      "sources": [
+        "byebyedpi"
+      ]
+    },
+    {
+      "id": "ed20e35cdc756f6d",
+      "args": "--split 4+s --tlsrec 9+s --fake-tls-mod r --fake-sni ytimg.com --md5sig --udp-fake 1",
+      "sources": [
+        "byebyedpi"
+      ]
+    },
+    {
+      "id": "097ce745d8f47848",
+      "args": "--split 4+s --tlsrec 9+s --fake-tls-mod r --fake-sni ggpht.com --md5sig --udp-fake 1",
+      "sources": [
+        "byebyedpi"
+      ]
+    },
+    {
+      "id": "e397f1c07270b9e3",
+      "args": "--oob 1 --disorder 1 --tlsrec 1+s --md5sig --split 1+s --disorder 3+s --udp-fake 1",
+      "sources": [
+        "byebyedpi",
+        "ewen",
+        "netfix"
+      ]
+    },
+    {
+      "id": "04a2723ccc1dabd8",
+      "args": "--disoob 1+s --split 29+s --oob 5+s --fake -1 --md5sig --udp-fake 1",
+      "sources": [
+        "byebyedpi",
+        "ewen",
+        "netfix"
+      ]
+    },
+    {
+      "id": "8bdfd16a9feef3cd",
+      "args": "--fake-sni google.com --fake-tls-mod r --tlsminor 2 --fake -1 --disorder 7 --udp-fake 1",
+      "sources": [
+        "byebyedpi",
+        "ewen",
+        "netfix"
+      ]
+    },
+    {
+      "id": "61dab3f9df8087c7",
+      "args": "--fake-sni youtube.com --fake-tls-mod r --tlsminor 2 --fake -1 --disorder 7 --udp-fake 1",
+      "sources": [
+        "byebyedpi",
+        "ewen",
+        "netfix"
+      ]
+    },
+    {
+      "id": "affb3a5480ceb59c",
+      "args": "--fake-sni googlevideo.com --fake-tls-mod r --tlsminor 2 --fake -1 --disorder 7 --udp-fake 1",
+      "sources": [
+        "byebyedpi",
+        "ewen",
+        "netfix"
+      ]
+    },
+    {
+      "id": "80ef9d6e57b08053",
+      "args": "--fake-sni ytimg.com --fake-tls-mod r --tlsminor 2 --fake -1 --disorder 7 --udp-fake 1",
+      "sources": [
+        "byebyedpi",
+        "ewen",
+        "netfix"
+      ]
+    },
+    {
+      "id": "e0022fbb53061866",
+      "args": "--fake-sni ggpht.com --fake-tls-mod r --tlsminor 2 --fake -1 --disorder 7 --udp-fake 1",
+      "sources": [
+        "byebyedpi",
+        "ewen",
+        "netfix"
+      ]
+    },
+    {
+      "id": "a8addf460da1e1f7",
+      "args": "--disorder 1 --split 1+s --tlsrec 1+s --fake -1 --ttl 8 --udp-fake 1",
+      "sources": [
+        "byebyedpi",
+        "ewen",
+        "netfix"
+      ]
+    },
+    {
+      "id": "eecf06ee7d075ef7",
+      "args": "--oob 1 --udp-fake 1 --auto t,r,s,c --fake 1+nm --ttl 6 --udp-fake 1",
+      "sources": [
+        "byebyedpi"
+      ]
+    },
+    {
+      "id": "aa2eebb1104f9871",
+      "args": "--fake-sni google.com --fake-tls-mod r --fake -1 --tlsrec 1+s --udp-fake 1",
+      "sources": [
+        "byebyedpi",
+        "ewen",
+        "netfix"
+      ]
+    },
+    {
+      "id": "337b2ccfba1d98aa",
+      "args": "--fake-sni youtube.com --fake-tls-mod r --fake -1 --tlsrec 1+s --udp-fake 1",
+      "sources": [
+        "byebyedpi",
+        "ewen",
+        "netfix"
+      ]
+    },
+    {
+      "id": "e978d1b12a1736e6",
+      "args": "--fake-sni googlevideo.com --fake-tls-mod r --fake -1 --tlsrec 1+s --udp-fake 1",
+      "sources": [
+        "byebyedpi",
+        "ewen",
+        "netfix"
+      ]
+    },
+    {
+      "id": "5a898f7a0db803e0",
+      "args": "--fake-sni ytimg.com --fake-tls-mod r --fake -1 --tlsrec 1+s --udp-fake 1",
+      "sources": [
+        "byebyedpi",
+        "ewen",
+        "netfix"
+      ]
+    },
+    {
+      "id": "a8e2c30a01e86733",
+      "args": "--fake-sni ggpht.com --fake-tls-mod r --fake -1 --tlsrec 1+s --udp-fake 1",
+      "sources": [
+        "byebyedpi",
+        "ewen",
+        "netfix"
+      ]
+    },
+    {
+      "id": "95db6dc9b4a28678",
+      "args": "--fake-sni google.com --fake-tls-mod r --disorder 1:3 --fake -1 --udp-fake 1",
+      "sources": [
+        "byebyedpi",
+        "ewen",
+        "netfix"
+      ]
+    },
+    {
+      "id": "8056fea72a7af87b",
+      "args": "--fake-sni youtube.com --fake-tls-mod r --disorder 1:3 --fake -1 --udp-fake 1",
+      "sources": [
+        "byebyedpi",
+        "ewen",
+        "netfix"
+      ]
+    },
+    {
+      "id": "0fbfa22fe293479c",
+      "args": "--fake-sni googlevideo.com --fake-tls-mod r --disorder 1:3 --fake -1 --udp-fake 1",
+      "sources": [
+        "byebyedpi",
+        "ewen",
+        "netfix"
+      ]
+    },
+    {
+      "id": "cfb8d6d7316ed73f",
+      "args": "--fake-sni ytimg.com --fake-tls-mod r --disorder 1:3 --fake -1 --udp-fake 1",
+      "sources": [
+        "byebyedpi",
+        "ewen",
+        "netfix"
+      ]
+    },
+    {
+      "id": "2cf618a9e935aa51",
+      "args": "--fake-sni ggpht.com --fake-tls-mod r --disorder 1:3 --fake -1 --udp-fake 1",
+      "sources": [
+        "byebyedpi",
+        "ewen",
+        "netfix"
+      ]
+    },
+    {
+      "id": "8a2340f7a1d8e92e",
+      "args": "--split 1 --disorder 3+s --udp-fake 1 --auto t,r,s,c --tlsrec 1+s --udp-fake 1",
+      "sources": [
+        "byebyedpi"
+      ]
+    },
+    {
+      "id": "413cdb01b93a94c2",
+      "args": "--fake -1 --ttl 8 --fake-sni google.com --split 1+s --udp-fake 1",
+      "sources": [
+        "byebyedpi",
+        "ewen",
+        "netfix"
+      ]
+    },
+    {
+      "id": "5f60bb2c8c5537c9",
+      "args": "--fake -1 --ttl 8 --fake-sni youtube.com --split 1+s --udp-fake 1",
+      "sources": [
+        "byebyedpi",
+        "ewen",
+        "netfix"
+      ]
+    },
+    {
+      "id": "8fbc400a05ad9a47",
+      "args": "--fake -1 --ttl 8 --fake-sni googlevideo.com --split 1+s --udp-fake 1",
+      "sources": [
+        "byebyedpi",
+        "ewen",
+        "netfix"
+      ]
+    },
+    {
+      "id": "85a85a5931f98701",
+      "args": "--fake -1 --ttl 8 --fake-sni ytimg.com --split 1+s --udp-fake 1",
+      "sources": [
+        "byebyedpi",
+        "ewen",
+        "netfix"
+      ]
+    },
+    {
+      "id": "e8ad5bd17c7f0e69",
+      "args": "--fake -1 --ttl 8 --fake-sni ggpht.com --split 1+s --udp-fake 1",
+      "sources": [
+        "byebyedpi",
+        "ewen",
+        "netfix"
+      ]
+    },
+    {
+      "id": "a15ee45c7a5527bb",
+      "args": "--fake-sni google.com --fake-tls-mod r --disorder 1 --fake -1 --udp-fake 1",
+      "sources": [
+        "byebyedpi",
+        "ewen",
+        "netfix"
+      ]
+    },
+    {
+      "id": "d858b74763b9b4d2",
+      "args": "--fake-sni youtube.com --fake-tls-mod r --disorder 1 --fake -1 --udp-fake 1",
+      "sources": [
+        "byebyedpi",
+        "ewen",
+        "netfix"
+      ]
+    },
+    {
+      "id": "efc7baefd20f49f6",
+      "args": "--fake-sni googlevideo.com --fake-tls-mod r --disorder 1 --fake -1 --udp-fake 1",
+      "sources": [
+        "byebyedpi",
+        "ewen",
+        "netfix"
+      ]
+    },
+    {
+      "id": "f0e5a9e43a2295b1",
+      "args": "--fake-sni ytimg.com --fake-tls-mod r --disorder 1 --fake -1 --udp-fake 1",
+      "sources": [
+        "byebyedpi",
+        "ewen",
+        "netfix"
+      ]
+    },
+    {
+      "id": "d54be7a5faf024cc",
+      "args": "--fake-sni ggpht.com --fake-tls-mod r --disorder 1 --fake -1 --udp-fake 1",
+      "sources": [
+        "byebyedpi",
+        "ewen",
+        "netfix"
+      ]
+    },
+    {
+      "id": "7390ac48b0d9f711",
+      "args": "--fake 64+se --fake-sni google.com --ttl 5 --udp-fake 1",
+      "sources": [
+        "byebyedpi",
+        "ewen",
+        "netfix"
+      ]
+    },
+    {
+      "id": "49301b5318ad422b",
+      "args": "--fake 64+se --fake-sni youtube.com --ttl 5 --udp-fake 1",
+      "sources": [
+        "byebyedpi",
+        "ewen",
+        "netfix"
+      ]
+    },
+    {
+      "id": "b46d70852ad16aa1",
+      "args": "--fake 64+se --fake-sni googlevideo.com --ttl 5 --udp-fake 1",
+      "sources": [
+        "byebyedpi",
+        "ewen",
+        "netfix"
+      ]
+    },
+    {
+      "id": "87f15340417cf8b9",
+      "args": "--fake 64+se --fake-sni ytimg.com --ttl 5 --udp-fake 1",
+      "sources": [
+        "byebyedpi",
+        "ewen",
+        "netfix"
+      ]
+    },
+    {
+      "id": "62f1bb3bf90f087c",
+      "args": "--fake 64+se --fake-sni ggpht.com --ttl 5 --udp-fake 1",
+      "sources": [
+        "byebyedpi",
+        "ewen",
+        "netfix"
+      ]
+    },
+    {
+      "id": "9a1f32120dee5f53",
+      "args": "--oob 1 --udp-fake 1 --auto t,r,s,c --disorder 1 --udp-fake 1",
+      "sources": [
+        "byebyedpi"
+      ]
+    },
+    {
+      "id": "9bfb04594d99347a",
+      "args": "--disorder 1+s --oob 2 --split 5 --tlsrec 5 --udp-fake 1",
+      "sources": [
+        "byebyedpi",
+        "ewen",
+        "netfix"
+      ]
+    },
+    {
+      "id": "433fc4efb03185fa",
+      "args": "--tlsrec 8 --oob 2 --split 7 --disoob 4+s --udp-fake 1",
+      "sources": [
+        "byebyedpi",
+        "ewen",
+        "netfix"
+      ]
+    },
+    {
+      "id": "ca2c2fa10ac16a04",
+      "args": "--oob 1 --fake -1 --tlsrec -5+se --udp-fake 1",
+      "sources": [
+        "byebyedpi",
+        "ewen",
+        "netfix"
+      ]
+    },
+    {
+      "id": "2d6eaeb88ac895a8",
+      "args": "--disorder 6+s --disoob 4+hm --oob 2 --udp-fake 1",
+      "sources": [
+        "byebyedpi",
+        "ewen",
+        "netfix"
+      ]
+    },
+    {
+      "id": "f734a685f6d934b6",
+      "args": "--split 5+s --split 35+s --tlsminor 4 --udp-fake 1",
+      "sources": [
+        "byebyedpi",
+        "ewen",
+        "netfix"
+      ]
+    },
+    {
+      "id": "381104c35ba543cc",
+      "args": "--fake -1+sm --ttl 7 --tlsminor 2 --udp-fake 1",
+      "sources": [
+        "byebyedpi",
+        "ewen",
+        "netfix"
+      ]
+    },
+    {
+      "id": "9fb74cdc464aab3b",
+      "args": "--oob 1 --tlsrec -5+se --udp-fake 1",
+      "sources": [
+        "byebyedpi",
+        "ewen",
+        "netfix"
+      ]
+    },
+    {
+      "id": "cab827387729d180",
+      "args": "--oob 1+s --disorder 3+s --udp-fake 1",
+      "sources": [
+        "byebyedpi",
+        "ewen",
+        "netfix"
+      ]
+    },
+    {
+      "id": "42069233c11ffa73",
+      "args": "--oob 1 --split 4 --split 6 --udp-fake 1",
+      "sources": [
+        "byebyedpi",
+        "ewen",
+        "netfix"
+      ]
+    },
+    {
+      "id": "5038bfc80cc70b91",
+      "args": "--disoob 1 --tlsrec 25+s --udp-fake 1",
+      "sources": [
+        "byebyedpi",
+        "ewen",
+        "netfix"
+      ]
+    },
+    {
+      "id": "bb9bbc06353476d7",
+      "args": "--disorder 1 --split 3+s --udp-fake 1",
+      "sources": [
+        "byebyedpi",
+        "ewen",
+        "netfix"
+      ]
+    },
+    {
+      "id": "a8f26951a2627d12",
+      "args": "--oob 3 --disorder 7 --udp-fake 1",
+      "sources": [
+        "byebyedpi",
+        "ewen",
+        "netfix"
+      ]
+    },
+    {
+      "id": "da6dc01052819566",
+      "args": "--disorder 7 --split 2 --udp-fake 1",
+      "sources": [
+        "byebyedpi",
+        "ewen",
+        "netfix"
+      ]
+    },
+    {
+      "id": "899c93d537c6a561",
+      "args": "--fake -200 --fake-tls-mod r --split 3:5+sm --udp-fake 1 --auto s --disorder 1 --split 4+sm --split 8+sh --fake -300 --disorder 6+sh --udp-fake 1 --auto t,r,s --oob 2 --fake -30 --auto s --tlsrec 5 --mod-http h --tlsrec 6+sh --fake -250 --split 2:7+s --split 3:6+sm --udp-fake 1 --auto t,r,s --split 3:5+sm --split 6+s --split 7:9+s --disoob 30+sm --udp-fake 1",
+      "sources": [
+        "ewen",
+        "netfix"
+      ]
+    },
+    {
+      "id": "6010e2515a3e59ef",
+      "args": "--disorder 1 --disorder 3+s --split 6+s --disorder 9+s --split 12+s --disorder 15+s --split 20+s --disorder 25+s --split 30+s --disorder 35+s --tlsrec 1+s --md5sig --udp-fake 1 --auto s --disorder 1 --disorder 3+s --split 6+s --disorder 9+s --split 12+s --disorder 15+s --split 20+s --disorder 25+s --split 30+s --disorder 35+s --md5sig --udp-fake 1",
+      "sources": [
+        "ewen",
+        "netfix",
+        "4pda5"
+      ]
+    },
+    {
+      "id": "317f3e2eddf0972a",
+      "args": "--disoob 2 --split 2 --split 3+s --tlsrec 3 --split 4 --tlsrec 4 --split 5+s --tlsrec 5+s --split 6 --split 7+s --tlsrec 8 --split 9+s --fake-tls-mod r --mod-http h,d,r --udp-fake 1 --auto t,r --split 2+s --tlsrec 2 --disorder 2 --split 3 --tlsrec 3 --tlsrec 4 --split 4 --disorder 5+s --tlsrec 5 --disorder 6 --split 7+s --disorder 7 --udp-fake 1",
+      "sources": [
+        "ewen",
+        "netfix"
+      ]
+    },
+    {
+      "id": "a2118ee81eb124f1",
+      "args": "--oob 1 --disorder 1 --udp-fake 1 --auto t,r,s --split 1 --disorder 1 --split 5+s --split 10+s --split 15+s --split 20+s --tlsrec 1+s --md5sig --udp-fake 1 --auto s --split 1 --disorder 1 --split 5+s --split 10+s --split 15+s --split 20+s --md5sig --udp-fake 1",
+      "sources": [
+        "ewen",
+        "netfix",
+        "4pda4"
+      ]
+    },
+    {
+      "id": "0ef6e84a43e795fc",
+      "args": "--fake-sni google.com --fake-tls-mod r --fake -204 --split 1:5+sm --udp-fake 1 --auto s --disorder 1 --split 3+s --split 5+s --disoob 7 --udp-fake 1 --auto s --oob 2 --fake -43 --udp-fake 1 --auto s --tlsrec 5 --mod-http h --split 1:5+s --split 3:7+sm --udp-fake 1",
+      "sources": [
+        "ewen",
+        "netfix"
+      ]
+    },
+    {
+      "id": "a07ae0efd636ca48",
+      "args": "--fake-sni youtube.com --fake-tls-mod r --fake -204 --split 1:5+sm --udp-fake 1 --auto s --disorder 1 --split 3+s --split 5+s --disoob 7 --udp-fake 1 --auto s --oob 2 --fake -43 --udp-fake 1 --auto s --tlsrec 5 --mod-http h --split 1:5+s --split 3:7+sm --udp-fake 1",
+      "sources": [
+        "ewen",
+        "netfix"
+      ]
+    },
+    {
+      "id": "98639d904df31e1b",
+      "args": "--fake-sni googlevideo.com --fake-tls-mod r --fake -204 --split 1:5+sm --udp-fake 1 --auto s --disorder 1 --split 3+s --split 5+s --disoob 7 --udp-fake 1 --auto s --oob 2 --fake -43 --udp-fake 1 --auto s --tlsrec 5 --mod-http h --split 1:5+s --split 3:7+sm --udp-fake 1",
+      "sources": [
+        "ewen",
+        "netfix"
+      ]
+    },
+    {
+      "id": "3f62aae678b17c9f",
+      "args": "--fake-sni ytimg.com --fake-tls-mod r --fake -204 --split 1:5+sm --udp-fake 1 --auto s --disorder 1 --split 3+s --split 5+s --disoob 7 --udp-fake 1 --auto s --oob 2 --fake -43 --udp-fake 1 --auto s --tlsrec 5 --mod-http h --split 1:5+s --split 3:7+sm --udp-fake 1",
+      "sources": [
+        "ewen",
+        "netfix"
+      ]
+    },
+    {
+      "id": "5d900b1feab7097f",
+      "args": "--fake-sni ggpht.com --fake-tls-mod r --fake -204 --split 1:5+sm --udp-fake 1 --auto s --disorder 1 --split 3+s --split 5+s --disoob 7 --udp-fake 1 --auto s --oob 2 --fake -43 --udp-fake 1 --auto s --tlsrec 5 --mod-http h --split 1:5+s --split 3:7+sm --udp-fake 1",
+      "sources": [
+        "ewen",
+        "netfix"
+      ]
+    },
+    {
+      "id": "a5d973aa81f0e190",
+      "args": "--fake-sni google.com --fake-tls-mod r --fake -205 --udp-fake 1 --auto s --split 1:3+sm --udp-fake 1 --auto s --split 5:8+sm --udp-fake 1 --auto s --disorder 3 --disoob 7 --oob 2 --fake -43 --fake -85 --fake -165 --tlsrec 5 --mod-http h --udp-fake 1",
+      "sources": [
+        "ewen",
+        "netfix"
+      ]
+    },
+    {
+      "id": "db4cc55f002e6bcd",
+      "args": "--fake-sni youtube.com --fake-tls-mod r --fake -205 --udp-fake 1 --auto s --split 1:3+sm --udp-fake 1 --auto s --split 5:8+sm --udp-fake 1 --auto s --disorder 3 --disoob 7 --oob 2 --fake -43 --fake -85 --fake -165 --tlsrec 5 --mod-http h --udp-fake 1",
+      "sources": [
+        "ewen",
+        "netfix"
+      ]
+    },
+    {
+      "id": "24ec6f4d0a952f00",
+      "args": "--fake-sni googlevideo.com --fake-tls-mod r --fake -205 --udp-fake 1 --auto s --split 1:3+sm --udp-fake 1 --auto s --split 5:8+sm --udp-fake 1 --auto s --disorder 3 --disoob 7 --oob 2 --fake -43 --fake -85 --fake -165 --tlsrec 5 --mod-http h --udp-fake 1",
+      "sources": [
+        "ewen",
+        "netfix"
+      ]
+    },
+    {
+      "id": "6aaaa33dc41875ab",
+      "args": "--fake-sni ytimg.com --fake-tls-mod r --fake -205 --udp-fake 1 --auto s --split 1:3+sm --udp-fake 1 --auto s --split 5:8+sm --udp-fake 1 --auto s --disorder 3 --disoob 7 --oob 2 --fake -43 --fake -85 --fake -165 --tlsrec 5 --mod-http h --udp-fake 1",
+      "sources": [
+        "ewen",
+        "netfix"
+      ]
+    },
+    {
+      "id": "415eadcb80fab262",
+      "args": "--fake-sni ggpht.com --fake-tls-mod r --fake -205 --udp-fake 1 --auto s --split 1:3+sm --udp-fake 1 --auto s --split 5:8+sm --udp-fake 1 --auto s --disorder 3 --disoob 7 --oob 2 --fake -43 --fake -85 --fake -165 --tlsrec 5 --mod-http h --udp-fake 1",
+      "sources": [
+        "ewen",
+        "netfix"
+      ]
+    },
+    {
+      "id": "f9ed08d74b0b39e4",
+      "args": "--disorder 1+s --split 50+s --udp-fake 1 --auto s --fake 20 --tlsrec 2+s --udp-fake 1 --auto t --disorder 2 --split 1+s --split 5+s --split 10+s --split 15+s --split 25+s --split 35+s --split 50+s --split 60+s --udp-fake 1",
+      "sources": [
+        "ewen",
+        "netfix"
+      ]
+    },
+    {
+      "id": "d304f143097f7443",
+      "args": "--oob 1 --udp-fake 1 --auto t,r,s --fake -1 --udp-fake 1 --auto t,r,s --disorder 1:11+sm --md5sig --udp-fake 1 --auto t,r,s --fake-sni google.com --fake-tls-mod r --fake 1 --disorder 1:11+sm --split 1:11+sm --md5sig --udp-fake 1",
+      "sources": [
+        "ewen",
+        "netfix"
+      ]
+    },
+    {
+      "id": "5d48349597b46bd3",
+      "args": "--oob 1 --udp-fake 1 --auto t,r,s --fake -1 --udp-fake 1 --auto t,r,s --disorder 1:11+sm --md5sig --udp-fake 1 --auto t,r,s --fake-sni youtube.com --fake-tls-mod r --fake 1 --disorder 1:11+sm --split 1:11+sm --md5sig --udp-fake 1",
+      "sources": [
+        "ewen",
+        "netfix"
+      ]
+    },
+    {
+      "id": "94c16a2cb186ca29",
+      "args": "--oob 1 --udp-fake 1 --auto t,r,s --fake -1 --udp-fake 1 --auto t,r,s --disorder 1:11+sm --md5sig --udp-fake 1 --auto t,r,s --fake-sni googlevideo.com --fake-tls-mod r --fake 1 --disorder 1:11+sm --split 1:11+sm --md5sig --udp-fake 1",
+      "sources": [
+        "ewen",
+        "netfix"
+      ]
+    },
+    {
+      "id": "884a5131b8158a63",
+      "args": "--oob 1 --udp-fake 1 --auto t,r,s --fake -1 --udp-fake 1 --auto t,r,s --disorder 1:11+sm --md5sig --udp-fake 1 --auto t,r,s --fake-sni ytimg.com --fake-tls-mod r --fake 1 --disorder 1:11+sm --split 1:11+sm --md5sig --udp-fake 1",
+      "sources": [
+        "ewen",
+        "netfix"
+      ]
+    },
+    {
+      "id": "8a09088b1bcfdb81",
+      "args": "--oob 1 --udp-fake 1 --auto t,r,s --fake -1 --udp-fake 1 --auto t,r,s --disorder 1:11+sm --md5sig --udp-fake 1 --auto t,r,s --fake-sni ggpht.com --fake-tls-mod r --fake 1 --disorder 1:11+sm --split 1:11+sm --md5sig --udp-fake 1",
+      "sources": [
+        "ewen",
+        "netfix"
+      ]
+    },
+    {
+      "id": "8a852c4fc70382a2",
+      "args": "--disorder 1 --split 1 --disoob 1 --udp-fake 1 --auto r --split 5 --oob 1+s --disorder 3+s --split 6+s --disorder 9+s --split 12+s --disorder 15+s --split 20+s --disorder 25+s --split 30+s --disorder 35+s --udp-fake 1",
+      "sources": [
+        "ewen",
+        "netfix"
+      ]
+    },
+    {
+      "id": "d5b77361af388c28",
+      "args": "--fake 1+nme --ttl 6 --udp-fake 1 --auto s --fake-sni google.com --fake-tls-mod r --split 1:6+sm --udp-fake 1 --auto s --split 5:12+sm --udp-fake 1 --auto s --disorder 3 --disoob 7 --tlsrec 6 --mod-http h --udp-fake 1",
+      "sources": [
+        "ewen",
+        "netfix"
+      ]
+    },
+    {
+      "id": "715f644e6c2a59f2",
+      "args": "--fake 1+nme --ttl 6 --udp-fake 1 --auto s --fake-sni youtube.com --fake-tls-mod r --split 1:6+sm --udp-fake 1 --auto s --split 5:12+sm --udp-fake 1 --auto s --disorder 3 --disoob 7 --tlsrec 6 --mod-http h --udp-fake 1",
+      "sources": [
+        "ewen",
+        "netfix"
+      ]
+    },
+    {
+      "id": "3981732941bdafdf",
+      "args": "--fake 1+nme --ttl 6 --udp-fake 1 --auto s --fake-sni googlevideo.com --fake-tls-mod r --split 1:6+sm --udp-fake 1 --auto s --split 5:12+sm --udp-fake 1 --auto s --disorder 3 --disoob 7 --tlsrec 6 --mod-http h --udp-fake 1",
+      "sources": [
+        "ewen",
+        "netfix"
+      ]
+    },
+    {
+      "id": "03d9ad8e85d5e575",
+      "args": "--fake 1+nme --ttl 6 --udp-fake 1 --auto s --fake-sni ytimg.com --fake-tls-mod r --split 1:6+sm --udp-fake 1 --auto s --split 5:12+sm --udp-fake 1 --auto s --disorder 3 --disoob 7 --tlsrec 6 --mod-http h --udp-fake 1",
+      "sources": [
+        "ewen",
+        "netfix"
+      ]
+    },
+    {
+      "id": "62ac8484acb49d37",
+      "args": "--fake 1+nme --ttl 6 --udp-fake 1 --auto s --fake-sni ggpht.com --fake-tls-mod r --split 1:6+sm --udp-fake 1 --auto s --split 5:12+sm --udp-fake 1 --auto s --disorder 3 --disoob 7 --tlsrec 6 --mod-http h --udp-fake 1",
+      "sources": [
+        "ewen",
+        "netfix"
+      ]
+    },
+    {
+      "id": "36433fd7ca8b0f4e",
+      "args": "--oob 1 --udp-fake 1 --auto t,r,s --fake -1 --udp-fake 1 --auto r,s --oob 1 --udp-fake 1 --auto t --tlsrec 1+s --fake -1 --ttl 6 --udp-fake 1",
+      "sources": [
+        "ewen",
+        "netfix"
+      ]
+    },
+    {
+      "id": "cde3f7c600d39c5b",
+      "args": "--disorder 1 --disorder 3+s --split 6+s --disorder 6+s --split 7+s --disorder 8+s --split 10+s --udp-fake 1 --ttl 12 --auto t,s --tlsrec 3",
+      "sources": [
+        "ewen",
+        "netfix"
+      ]
+    },
+    {
+      "id": "5e48997273e1a999",
+      "args": "--fake -1 --fake-tls-mod r --split 1+sm --disorder 3+s --split 5+sm --oob 2 --udp-fake 1 --auto s --tlsrec 1+s --disorder 8+s --udp-fake 1",
+      "sources": [
+        "ewen",
+        "netfix"
+      ]
+    },
+    {
+      "id": "0a8f601bb5961dfd",
+      "args": "--oob 2 --fake-offset 4 --split 1 --disoob 1 --udp-fake 1 --auto r --split 5 --oob 1+s --fake 1+s --tlsrec 20+s --udp-fake 1",
+      "sources": [
+        "ewen",
+        "netfix"
+      ]
+    },
+    {
+      "id": "88b145e1f072700c",
+      "args": "--oob 1 --tlsrec -5+se --udp-fake 1 --auto t,r,s --disorder 1 --fake-sni google.com --fake-tls-mod r --fake -1 --udp-fake 1",
+      "sources": [
+        "ewen",
+        "netfix"
+      ]
+    },
+    {
+      "id": "fe6adc925e6c5a8e",
+      "args": "--oob 1 --tlsrec -5+se --udp-fake 1 --auto t,r,s --disorder 1 --fake-sni youtube.com --fake-tls-mod r --fake -1 --udp-fake 1",
+      "sources": [
+        "ewen",
+        "netfix"
+      ]
+    },
+    {
+      "id": "965df49e5472b932",
+      "args": "--oob 1 --tlsrec -5+se --udp-fake 1 --auto t,r,s --disorder 1 --fake-sni googlevideo.com --fake-tls-mod r --fake -1 --udp-fake 1",
+      "sources": [
+        "ewen",
+        "netfix"
+      ]
+    },
+    {
+      "id": "805a56268c21f290",
+      "args": "--oob 1 --tlsrec -5+se --udp-fake 1 --auto t,r,s --disorder 1 --fake-sni ytimg.com --fake-tls-mod r --fake -1 --udp-fake 1",
+      "sources": [
+        "ewen",
+        "netfix"
+      ]
+    },
+    {
+      "id": "a90e91c7a0d416b1",
+      "args": "--oob 1 --tlsrec -5+se --udp-fake 1 --auto t,r,s --disorder 1 --fake-sni ggpht.com --fake-tls-mod r --fake -1 --udp-fake 1",
+      "sources": [
+        "ewen",
+        "netfix"
+      ]
+    },
+    {
+      "id": "65117473d75d75b2",
+      "args": "--tlsrec 5+s --split 25+s --udp-fake 1 --auto t,r,s --split 50 --tlsrec 5+s --split 50+s --udp-fake 1",
+      "sources": [
+        "ewen",
+        "netfix"
+      ]
+    },
+    {
+      "id": "c8fce01f6005f80b",
+      "args": "--disorder 9+s --disoob 20+s --split 25+s --ttl 5 --udp-fake 1 --auto t,r,s --tlsrec 1+h --udp-fake 1",
+      "sources": [
+        "ewen",
+        "netfix"
+      ]
+    },
+    {
+      "id": "c1dcfcdd99179126",
+      "args": "--disorder 1 --oob 1 --udp-fake 1 --auto r --oob 1 --udp-fake 1 --auto t --fake -1 --tlsrec 1+s --udp-fake 1",
+      "sources": [
+        "ewen",
+        "netfix"
+      ]
+    },
+    {
+      "id": "2238002c3cb758e7",
+      "args": "--oob 1 --udp-fake 1 --auto r --disoob 1 --udp-fake 1 --auto t --fake -1 --tlsrec 1+s --udp-fake 1",
+      "sources": [
+        "ewen",
+        "netfix"
+      ]
+    },
+    {
+      "id": "21c8fd3847d7047a",
+      "args": "--disoob 1 --udp-fake 1 --auto r --oob 1 --udp-fake 1 --auto t --fake -1 --tlsrec 1+s --udp-fake 1",
+      "sources": [
+        "ewen",
+        "netfix"
+      ]
+    },
+    {
+      "id": "54d20d167b9915a0",
+      "args": "--split 4+sn --tlsrec 9+s --fake-tls-mod r --fake-sni google.com --md5sig --udp-fake 1",
+      "sources": [
+        "ewen",
+        "netfix"
+      ]
+    },
+    {
+      "id": "b66adcdd6c00b3ec",
+      "args": "--split 4+sn --tlsrec 9+s --fake-tls-mod r --fake-sni youtube.com --md5sig --udp-fake 1",
+      "sources": [
+        "ewen",
+        "netfix"
+      ]
+    },
+    {
+      "id": "80df5a0d44a74245",
+      "args": "--split 4+sn --tlsrec 9+s --fake-tls-mod r --fake-sni googlevideo.com --md5sig --udp-fake 1",
+      "sources": [
+        "ewen",
+        "netfix"
+      ]
+    },
+    {
+      "id": "0289bbcb9c85f8b1",
+      "args": "--split 4+sn --tlsrec 9+s --fake-tls-mod r --fake-sni ytimg.com --md5sig --udp-fake 1",
+      "sources": [
+        "ewen",
+        "netfix"
+      ]
+    },
+    {
+      "id": "7cadeb62c4b15b96",
+      "args": "--split 4+sn --tlsrec 9+s --fake-tls-mod r --fake-sni ggpht.com --md5sig --udp-fake 1",
+      "sources": [
+        "ewen",
+        "netfix"
+      ]
+    },
+    {
+      "id": "290ac24e1c9de106",
+      "args": "--oob 1 --udp-fake 1 --auto n --fake 1+nme --ttl 6 --udp-fake 1",
+      "sources": [
+        "ewen",
+        "netfix"
+      ]
+    },
+    {
+      "id": "159df226b8b5039e",
+      "args": "--split 1 --disorder 3+s --udp-fake 1 --auto t --tlsrec 1+s --udp-fake 1",
+      "sources": [
+        "ewen",
+        "netfix"
+      ]
+    },
+    {
+      "id": "e3506eaa65b0912f",
+      "args": "--oob 1 --udp-fake 1 --auto t,r,s --disorder 1 --udp-fake 1",
+      "sources": [
+        "ewen",
+        "netfix"
+      ]
+    },
+    {
+      "id": "4721ee12d299ca4b",
+      "args": "--fake-sni google.com --fake-tls-mod r --split 1:3+sm --udp-fake 1 --auto s --disorder 1:3 --disoob 7 --oob 2 --udp-fake 1",
+      "sources": [
+        "netfix"
+      ]
+    },
+    {
+      "id": "04a80c7510fb4df2",
+      "args": "--fake-sni youtube.com --fake-tls-mod r --split 1:3+sm --udp-fake 1 --auto s --disorder 1:3 --disoob 7 --oob 2 --udp-fake 1",
+      "sources": [
+        "netfix"
+      ]
+    },
+    {
+      "id": "8334a9533cf1cbd9",
+      "args": "--fake-sni googlevideo.com --fake-tls-mod r --split 1:3+sm --udp-fake 1 --auto s --disorder 1:3 --disoob 7 --oob 2 --udp-fake 1",
+      "sources": [
+        "netfix"
+      ]
+    },
+    {
+      "id": "f04ce7db66e62289",
+      "args": "--fake-sni ytimg.com --fake-tls-mod r --split 1:3+sm --udp-fake 1 --auto s --disorder 1:3 --disoob 7 --oob 2 --udp-fake 1",
+      "sources": [
+        "netfix"
+      ]
+    },
+    {
+      "id": "a0e5522229f2bf1e",
+      "args": "--fake-sni ggpht.com --fake-tls-mod r --split 1:3+sm --udp-fake 1 --auto s --disorder 1:3 --disoob 7 --oob 2 --udp-fake 1",
+      "sources": [
+        "netfix"
+      ]
+    },
+    {
+      "id": "fb5df14025ff7320",
+      "args": "--split 1 --disorder 1 --udp-fake 1 --auto r --disorder 5 --oob 1+s --udp-fake 1 --auto t --fake -1 --tlsrec 1+s --udp-fake 1 --auto s --disorder 1 --oob 1+s --split -1 --udp-fake 1",
+      "sources": [
+        "netfix"
+      ]
+    },
+    {
+      "id": "8f4f73679471cd6a",
+      "args": "--split 1 --disoob 1 --udp-fake 1 --auto r --split 5 --oob 1+s --udp-fake 1 --auto t --fake -1 --disorder 1+s --udp-fake 1 --auto s --split 1 --oob 1+s --split -1 --udp-fake 1",
+      "sources": [
+        "netfix"
+      ]
+    },
+    {
+      "id": "e886388b023e3d99",
+      "args": "--split 1 --disoob 1 --udp-fake 1 --auto r --split 5 --oob 2 --udp-fake 1 --auto t --fake -1 --tlsrec 1+s --udp-fake 1 --auto s --split 1 --oob 1+s --split -1 --udp-fake 1",
+      "sources": [
+        "netfix"
+      ]
+    },
+    {
+      "id": "23bf67f905c78634",
+      "args": "--split 1 --disorder 1 --tlsrec 1+s --udp-fake 1 --auto r --oob 1 --udp-fake 1 --auto t --fake -1 --tlsrec 1+s --udp-fake 1",
+      "sources": [
+        "netfix"
+      ]
+    },
+    {
+      "id": "d4401b77c2994d59",
+      "args": "--split 1 --disoob 1 --tlsrec 1+s --udp-fake 1 --auto r --oob 1 --udp-fake 1 --auto t --fake -1 --tlsrec 1+s --udp-fake 1",
+      "sources": [
+        "netfix"
+      ]
+    },
+    {
+      "id": "bf6be13b254315e9",
+      "args": "--split 1 --oob 1 --tlsrec 1+s --udp-fake 1 --auto r --oob 1 --udp-fake 1 --auto t --fake -1 --tlsrec 1+s --udp-fake 1",
+      "sources": [
+        "netfix"
+      ]
+    },
+    {
+      "id": "dafc89d5cd511a68",
+      "args": "--split 1 --disorder 1 --oob 1 --udp-fake 1 --auto r --oob 3 --udp-fake 1 --auto t --fake -1 --tlsrec 1+s --udp-fake 1",
+      "sources": [
+        "netfix"
+      ]
+    },
+    {
+      "id": "d2d77f51e01b9e22",
+      "args": "--split 1 --oob 1 --udp-fake 1 --auto r --oob 1 --udp-fake 1 --auto t --fake -1 --tlsrec 1+s --udp-fake 1",
+      "sources": [
+        "netfix"
+      ]
+    },
+    {
+      "id": "9f3b5444c0da3449",
+      "args": "--split 1 --disoob 1 --udp-fake 1 --auto t,r,s --fake -1 --tlsrec 1+s --udp-fake 1",
+      "sources": [
+        "netfix"
+      ]
+    },
+    {
+      "id": "65ca36bea18276b6",
+      "args": "--split 1 --oob 1 --udp-fake 1 --auto t,r,s --fake -1 --tlsrec 1+s --udp-fake 1",
+      "sources": [
+        "netfix"
+      ]
+    },
+    {
+      "id": "623e9f97de65fcc2",
+      "args": "--split 1 --disorder 1 --udp-fake 1 --auto t,r,s --fake -1 --tlsrec 1+s --udp-fake 1",
+      "sources": [
+        "netfix"
+      ]
+    },
+    {
+      "id": "bce97e330d40308a",
+      "args": "--split 1+s --disorder 3+s --udp-fake 1",
+      "sources": [
+        "netfix"
+      ]
+    },
+    {
+      "id": "77c807ee699a8af5",
+      "args": "--proto t,h --fake-sni ya.ru --fake 7 --md5sig --disorder 1 --split 0+s --split 3+s --split 6+s --split 9+s --split 12+s --split 15+s --split 20+s --oob 10000+s --split 30+s --auto n --proto u --udp-fake 5 --auto n",
+      "sources": [
+        "faty"
+      ]
+    },
+    {
+      "id": "9e31eb5bf2670afe",
+      "args": "--proto t,h --disoob 1+s --split 29+s --oob 5+s --fake -1 --md5sig --auto sn --proto u --udp-fake 5 --auto n",
+      "sources": [
+        "faty"
+      ]
+    },
+    {
+      "id": "bffdb8bf0442de85",
+      "args": "--proto t,h --fake-sni www.google.com --disorder 1+s --fake-offset 1 --split 25+s --ttl 5 --auto n --proto u --udp-fake 5 --auto n",
+      "sources": [
+        "faty"
+      ]
+    },
+    {
+      "id": "ecd1068b37da31cb",
+      "args": "--proto t,h --fake-sni www.google.com --disorder 1+s --fake-offset 1 --split 29+s --ttl 5 --auto n --proto u --udp-fake 5 --auto n",
+      "sources": [
+        "faty"
+      ]
+    },
+    {
+      "id": "d181cb034ef5af75",
+      "args": "--proto t,h --split 1 --disoob 1 --auto r --split 5 --oob 1+s --auto t --fake -1 --md5sig --tlsrec 1+s --auto s --split 1 --oob 1+s --split -1 --auto n --proto u --auto n",
+      "sources": [
+        "faty"
+      ]
+    },
+    {
+      "id": "9f2058a1b740bea9",
+      "args": "--proto t,h --split 0 --oob 1 --disorder 1 --tlsrec 1+s --auto r --oob 1 --auto t --fake -1 --md5sig --tlsrec 1+s --auto s --buf-size +500 --fake-sni www.google.com --ttl 3 --auto n --proto u --udp-fake 5 --auto n",
+      "sources": [
+        "faty"
+      ]
+    },
+    {
+      "id": "8d993509b1b35969",
+      "args": "--proto t,h --disorder 1 --split 1 --disoob 1 --auto r --split 5 --oob 1+s --disorder 3+s --split 6+s --disorder 9+s --split 12+s --disorder 15+s --split 20+s --disorder 25+s --split 30+s --disorder 35+s --auto n --proto u --udp-fake 5 --auto n",
+      "sources": [
+        "faty"
+      ]
+    },
+    {
+      "id": "c3d37f9243d47346",
+      "args": "--proto t,h --split 1 --fake -1 --md5sig --buf-size 661 --auto n --proto u --udp-fake 5 --auto n",
+      "sources": [
+        "faty"
+      ]
+    },
+    {
+      "id": "e0af79f695439a18",
+      "args": "--proto t,h --split 0+s --split 3+s --split 6+s --split 9+s --split 12+s --split 15+s --split 20+s --split 30+s --auto n --proto u --udp-fake 5 --auto n",
+      "sources": [
+        "faty"
+      ]
+    },
+    {
+      "id": "445b6335bbc58097",
+      "args": "--proto t,h --disorder 1 --split 0+s --split 3+s --split 6+s --split 9+s --split 12+s --split 15+s --split 20+s --split 30+s --auto n --proto u --udp-fake 5 --auto n",
+      "sources": [
+        "faty"
+      ]
+    },
+    {
+      "id": "454e598ab5bce49b",
+      "args": "--proto t,h --disorder 1 --split 0+s --disorder 3+s --split 6+s --disorder 9+s --split 12+s --disorder 15+s --split 20+s --disorder 25+s --split 30+s --auto n --proto u --udp-fake 5 --auto n",
+      "sources": [
+        "faty"
+      ]
+    },
+    {
+      "id": "1e18bac598e4794b",
+      "args": "--proto t,h --disorder 1 --split 1+s --split 4 --disorder 5+s --disorder 8 --split 10+s --disorder 20+s --auto n --proto u --udp-fake 1 --auto n",
+      "sources": [
+        "faty"
+      ]
+    },
+    {
+      "id": "2890e9445c964c53",
+      "args": "--proto t,h --disorder 7 --split 2 --auto n --proto u --udp-fake 9 --auto n",
+      "sources": [
+        "faty",
+        "webhamster"
+      ]
+    },
+    {
+      "id": "f3ffa5a104364163",
+      "args": "--proto t,h --split 1 --disoob 1 --auto r --split 5 --oob 1+s --auto t --fake -1 --md5sig --tlsrec 1+s --auto s --split 1 --oob 1+s --split -1 --auto n --proto u --udp-fake 1 --auto n",
+      "sources": [
+        "faty"
+      ]
+    },
+    {
+      "id": "c7d3d385d94e078e",
+      "args": "--proto t,h --disoob 1 --tlsrec 25+s --auto n --proto u --udp-fake 7 --auto n",
+      "sources": [
+        "faty",
+        "webhamster"
+      ]
+    },
+    {
+      "id": "11a76f04528c01aa",
+      "args": "--proto t,h --split 1 --disorder 3+s --mod-http h,d --auto t --tlsrec 1+s --tlsrec 3+s --auto n --proto u --udp-fake 1 --auto n",
+      "sources": [
+        "faty",
+        "webhamster"
+      ]
+    },
+    {
+      "id": "58cdb78e9e679828",
+      "args": "--proto t,h --split 1 --disoob 1 --auto rt --fake -1 --md5sig --tlsrec 1+s --auto s,n --proto u --udp-fake 1 --auto n",
+      "sources": [
+        "faty",
+        "webhamster"
+      ]
+    },
+    {
+      "id": "548550c3ed34b65c",
+      "args": "--proto t,h --split 1 --disoob 1 --auto r --split 5 --oob 25000+s --auto t --fake -1 --md5sig --tlsrec 1+s --auto s --split 1 --oob 1+s --split -1 --auto n --buf-size +500 --auto n --proto u --udp-fake 1 --auto n",
+      "sources": [
+        "faty"
+      ]
+    },
+    {
+      "id": "d058c33e781e3674",
+      "args": "--proto t,h --split 1 --disoob 1 --auto r --split 5 --oob 1+s --auto t --fake -1 --md5sig --tlsrec 1+s --auto s --split 1 --oob 1+s --split -1 --buf-size +500 --fake-sni www.google.com --ttl 3 --auto n --proto u --udp-fake 5 --auto n",
+      "sources": [
+        "faty"
+      ]
+    },
+    {
+      "id": "bda7eba00d5301f1",
+      "args": "--proto t,h --split 0 --oob 1 --auto r --oob 1 --auto t --fake -1 --md5sig --tlsrec 1+s --auto s --buf-size +500 --fake-sni www.google.com --auto n --proto u --udp-fake 5 --auto n",
+      "sources": [
+        "faty"
+      ]
+    },
+    {
+      "id": "dbe7f8286f706fb2",
+      "args": "--proto t,h --split 0 --oob 1 --auto r --oob 1 --auto t --fake -1 --md5sig --tlsrec 1+s --auto s,n --proto u --udp-fake 5 --auto n",
+      "sources": [
+        "faty"
+      ]
+    },
+    {
+      "id": "f0d66d063fb0e217",
+      "args": "--proto t,h --split 0 --oob 1 --disorder 1 --tlsrec 1+s --auto r --oob 1 --auto t --fake -1 --md5sig --tlsrec 1+s --auto s,n --proto u --udp-fake 5 --auto n",
+      "sources": [
+        "faty"
+      ]
+    },
+    {
+      "id": "564ae56f66b0bc7a",
+      "args": "--proto t,h --disoob 1+s --split 14+s --split 29+s --split 30+s --oob 5+s --fake -1 --md5sig --auto sn --proto u --udp-fake 5 --auto n",
+      "sources": [
+        "faty"
+      ]
+    },
+    {
+      "id": "f54231e00602147b",
+      "args": "--proto t,h --disorder 1 --disoob 1+s --split 0+s --split 3+s --split 6+s --split 9+s --split 12+s --split 15+s --split 20+s --split 30+s --oob 5+s --fake -1 --md5sig --auto n --proto u --udp-fake 5 --auto n",
+      "sources": [
+        "faty"
+      ]
+    },
+    {
+      "id": "6a410997d602d916",
+      "args": "--proto t,h --disoob 1+s --disorder 9 --split 29+s --oob 5+s --fake -1 --md5sig --disorder 80+s --split 80+s --split 443+s --auto s --split 5+s --disorder 10+s --auto n --proto u --udp-fake 5 --auto n",
+      "sources": [
+        "faty"
+      ]
+    },
+    {
+      "id": "0ff9216c17c7020b",
+      "args": "--proto t,h --drop-sack --split 7+sh --disorder 10+hn --oob 3+sn --disoob 7+s --fake -1 --md5sig --auto s --split 443+s --disorder 80+s --auto n --proto u --udp-fake 5 --auto n",
+      "sources": [
+        "faty"
+      ]
+    },
+    {
+      "id": "5719066a57860e2d",
+      "args": "--proto t,h --split 9+n --disorder 7+h --disoob 9+s --buf-size 3023 --fake -1 --md5sig --fake-sni vk.com --auto s --split 443+s --disorder 80+s --auto n --proto u --udp-fake 5 --auto n",
+      "sources": [
+        "faty"
+      ]
+    },
+    {
+      "id": "dd3a24e0df0f2ef4",
+      "args": "--proto t,h --split 7+n --disorder 7 --disorder 13 --disorder 19+h --buf-size 1292 --timeout 9 --fake -1 --md5sig --fake-sni rutube.ru --auto n --proto u --udp-fake 5 --auto n",
+      "sources": [
+        "faty"
+      ]
+    },
+    {
+      "id": "2f77df821fa29ee6",
+      "args": "--proto t,h --split 9+s --disoob 10+sn --fake -1 --md5sig --auto s --split 443+s --disorder 80+s --auto n --proto u --udp-fake 5 --auto n",
+      "sources": [
+        "faty"
+      ]
+    },
+    {
+      "id": "f52b6314d8d2efc8",
+      "args": "--proto t,h --split 3+hn --disorder 3+sh --disoob 6+hn --buf-size 3464 --fake -1 --md5sig --auto s --split 443+s --disorder 80+s --auto n --proto u --udp-fake 5 --auto n",
+      "sources": [
+        "faty"
+      ]
+    },
+    {
+      "id": "a4456ca2e999c23b",
+      "args": "--proto t,h --drop-sack --split 3+sh --disorder 7+sh --disorder 15+sn --disorder 20+hn --oob 6+sn --disoob 7 --fake -1 --md5sig --auto s --split 443+s --disorder 80+s --auto n --proto u --udp-fake 5 --auto n",
+      "sources": [
+        "faty"
+      ]
+    },
+    {
+      "id": "61f2aeebc7ee3749",
+      "args": "--proto t,h --drop-sack --split 4+hn --disorder 7+hn --oob 6+s --fake -1 --md5sig --fake-sni rutube.ru --auto s --split 443+s --disorder 80+s --auto n --proto u --udp-fake 5 --auto n",
+      "sources": [
+        "faty"
+      ]
+    },
+    {
+      "id": "963f99328ea558a8",
+      "args": "--proto t,h --split 10 --disoob 3+h --fake -1 --md5sig --auto s --split 443+s --disorder 80+s --auto n --proto u --udp-fake 5 --auto n",
+      "sources": [
+        "faty"
+      ]
+    },
+    {
+      "id": "46e3422c4aaf4ab4",
+      "args": "--proto t,h --split 3+s --disoob 3+s --fake -1 --md5sig --fake-sni www.google.com --auto n --proto u --udp-fake 5 --auto n",
+      "sources": [
+        "faty"
+      ]
+    },
+    {
+      "id": "753fa1fb9a3105de",
+      "args": "--proto t,h --split 6+n --disorder 9+n --disorder 18+n --disoob 6+hn --fake -1 --md5sig --auto s --split 443+s --disorder 80+s --auto n --proto u --udp-fake 5 --auto n",
+      "sources": [
+        "faty"
+      ]
+    },
+    {
+      "id": "32e8073a86651a80",
+      "args": "--proto t,h --oob 3+sn --disoob 4+h --buf-size 8999 --fake -1 --md5sig --auto s --split 443+s --disorder 80+s --auto n --proto u --udp-fake 5 --auto n",
+      "sources": [
+        "faty"
+      ]
+    },
+    {
+      "id": "19cca92388b21513",
+      "args": "--proto t,h --split 8+h --disorder 10+hn --fake -1 --md5sig --auto sn --proto u --udp-fake 5 --auto n",
+      "sources": [
+        "faty"
+      ]
+    },
+    {
+      "id": "a00b56249485228d",
+      "args": "--proto t,h --split 5 --disorder 10+sh --fake -1 --md5sig --auto sn --proto u --udp-fake 5 --auto n",
+      "sources": [
+        "faty"
+      ]
+    },
+    {
+      "id": "1159563346eb5161",
+      "args": "--proto t,h --split 4 --disoob 6+n --fake -1 --md5sig --auto sn --proto u --udp-fake 5 --auto n",
+      "sources": [
+        "faty"
+      ]
+    },
+    {
+      "id": "c5598368c5a6a0ac",
+      "args": "--split 1 --disoob 1 --drop-sack --auto r --split 5 --oob 1+s --auto t --fake -1 --tlsrec 1+s --auto s --split 1 --oob 1+s --split -1 --auto n --buf-size +500",
+      "sources": [
+        "4pda"
+      ]
+    },
+    {
+      "id": "7a43e4e6e43ff475",
+      "args": "--oob 1 --oob 25+s --timeout 3 --auto t",
+      "sources": [
+        "4pda",
+        "webhamster"
+      ]
+    },
+    {
+      "id": "311dd824ff59413f",
+      "args": "--proto u --udp-fake 3 --auto n --proto t,h --disorder 1 --split 1+s --disorder 3+s --split 6+s --disorder 9+s --split 12+s --disorder 15+s --split 20+s --disorder 25+s --split 30+s --disorder 35+s",
+      "sources": [
+        "4pda2"
+      ]
+    },
+    {
+      "id": "0e2e5a6fdfdfc793",
+      "args": "--split 1 --disoob 1 --drop-sack --auto r --split 5 --oob 1+s --auto t --fake -1 --tlsrec 1+s --auto s --split 1 --oob 1+s --split -1 --auto n",
+      "sources": [
+        "4pda3"
+      ]
+    },
+    {
+      "id": "05a47860ab09b6aa",
+      "args": "--disorder 1 --split 1+s --split 6+s --split 8+s --split 11+s --split 13+h --split 25+h --split 25+se --split 28+s --udp-fake 1 --fake-sni google.com",
+      "sources": [
+        "4pda5"
+      ]
+    },
+    {
+      "id": "62c84bf0117bd8c4",
+      "args": "--proto t,h --split 1 --disoob 1 --auto r --split 5 --oob 1+s --auto t --fake -1 --md5sig --tlsrec 1+s --auto s --split 1 --oob 1+s --split -1 --buf-size +500 --fake-sni www.google.com --ttl 3 --auto n --proto u --udp-fake 5 --split 443+s --disorder 80+s --disorder 443+s --split 80+s --auto n",
+      "sources": [
+        "webhamster"
+      ]
+    },
+    {
+      "id": "6865af733cce60ae",
+      "args": "--proto t,h --split 0 --oob 1 --disorder 1 --tlsrec 1+s --auto r --oob 1 --auto t --fake -1 --md5sig --tlsrec 1+s --auto s,n --proto u --udp-fake 5 --split 443+s --disorder 80+s --disorder 443+s --split 80+s --auto n",
+      "sources": [
+        "webhamster"
+      ]
+    },
+    {
+      "id": "554a2ca20fcea9cb",
+      "args": "--proto t,h --disorder 1 --split 4 --disorder 8 --split 1+s --disorder 5+s --split 10+s --disorder 20+s --auto n --proto u --udp-fake 1 --auto n",
+      "sources": [
+        "webhamster"
+      ]
+    },
+    {
+      "id": "c38c9eb2fbf35d2c",
+      "args": "--proto t,h --split 10 --disoob 3+h --fake -1 --md5sig --auto sn --proto u --udp-fake 5 --split 443+s --disorder 80+s --auto n",
+      "sources": [
+        "webhamster"
+      ]
+    },
+    {
+      "id": "2087b13d00858989",
+      "args": "--proto t,h --split 9+s --disoob 10+sn --fake -1 --md5sig --auto sn --proto u --udp-fake 5 --split 443+s --disorder 80+s --auto n",
+      "sources": [
+        "webhamster"
+      ]
+    },
+    {
+      "id": "e08e196ceb0f98b3",
+      "args": "--proto t,h --disoob 1+s --split 29+s --oob 5+s --fake -1 --md5sig --auto sn --proto u --udp-fake 5 --split 443+s --disorder 80+s --auto n",
+      "sources": [
+        "webhamster"
+      ]
+    },
+    {
+      "id": "ea676e8ce58f8b46",
+      "args": "--split 1 --disorder 3+s --mod-http h,d --auto torst --tlsrec 1+s",
+      "sources": [
+        "webhamster"
+      ]
+    },
+    {
+      "id": "c2bb4c35c4ff5ae3",
+      "args": "--split 2 --disorder 7",
+      "sources": [
+        "webhamster"
+      ]
+    },
+    {
+      "id": "53c6a5de4369f897",
+      "args": "--split 2 --disoob 3+sni --fake 517 --ttl 5",
+      "sources": [
+        "webhamster"
+      ]
+    },
+    {
+      "id": "c328f6cc5c1d7bfa",
+      "args": "--split 3+s --disorder 20+s",
+      "sources": [
+        "webhamster"
+      ]
+    },
+    {
+      "id": "701656be7e338216",
+      "args": "--split 2 --disorder 3",
+      "sources": [
+        "webhamster"
+      ]
+    },
+    {
+      "id": "41e0e2f68f7eb4d3",
+      "args": "--split 1 --disorder 3+s --mod-http h,d --auto none --fake -1 --tlsrec 3+h",
+      "sources": [
+        "webhamster"
+      ]
+    },
+    {
+      "id": "8ac791d539655090",
+      "args": "--split 1 --disorder 3+s --mod-http h,d --auto none --tlsrec 1+s",
+      "sources": [
+        "webhamster"
+      ]
+    },
+    {
+      "id": "b1505274c2df0279",
+      "args": "--split 2 --disorder 3+s --mod-http h,d --auto none --tlsrec 1+s",
+      "sources": [
+        "webhamster"
+      ]
+    },
+    {
+      "id": "2a0ebff5e98ed700",
+      "args": "--split 3 --disorder 3+s --mod-http h,d --auto none --tlsrec 1+s",
+      "sources": [
+        "webhamster"
+      ]
+    },
+    {
+      "id": "0b425b2129f2d301",
+      "args": "--split 1 --disorder 1+s --mod-http h,d --auto none --tlsrec 1+s",
+      "sources": [
+        "webhamster"
+      ]
+    },
+    {
+      "id": "b72a0c30788a427e",
+      "args": "--split 1 --disorder 2+s --mod-http h,d --auto none --tlsrec 1+s",
+      "sources": [
+        "webhamster"
+      ]
+    },
+    {
+      "id": "06059f9ce2d21e2b",
+      "args": "--split 1 --disorder 3+s --mod-http h,d",
+      "sources": [
+        "webhamster"
+      ]
+    },
+    {
+      "id": "086f5f317ad1b7ca",
+      "args": "--split 1+s --disorder 3+s --mod-http h,d --auto none --tlsrec 1+s",
+      "sources": [
+        "webhamster"
+      ]
+    },
+    {
+      "id": "c4032f19c2b163d4",
+      "args": "--disoob 1 --tlsrec 25+s",
+      "sources": [
+        "webhamster"
+      ]
+    },
+    {
+      "id": "0df9eea49485edf3",
+      "args": "--disorder 1 --split 25+s --disorder 30+s",
+      "sources": [
+        "webhamster"
+      ]
+    },
+    {
+      "id": "31e78f957a055efd",
+      "args": "--disoob 2+sni --fake 517 --ttl 5 --fake-sni translate.google.ru",
+      "sources": [
+        "webhamster"
+      ]
+    },
+    {
+      "id": "09aff5efa44385b7",
+      "args": "--split 1 --disoob 1 --drop-sack --auto r --split 5 --oob 25000+s --auto t --fake -1 --tlsrec 1+s --auto s --split 1 --oob 1+s --split -1 --auto n --buf-size +500",
+      "sources": [
+        "webhamster"
+      ]
+    },
+    {
+      "id": "33504e98da026d84",
+      "args": "--split 1 --oob 1 --auto r --oob 1 --auto t --fake -1 --tlsrec 1+s --auto s",
+      "sources": [
+        "webhamster"
+      ]
+    },
+    {
+      "id": "c2694932cc3bfe4f",
+      "args": "--oob 1 --auto r --oob 1 --auto t --fake -1 --tlsrec 1+s --auto s",
+      "sources": [
+        "telegram"
+      ]
+    },
+    {
+      "id": "c785fec2b851fe36",
+      "args": "--disorder 1 --tlsrec 1+s --udp-fake 1",
+      "sources": [
+        "byebyedpi-site"
+      ]
+    },
+    {
+      "id": "fc5e668ac8334ac3",
+      "args": "--fake -1 --ttl 8 --auto ssl_err --fake -1 --ttl 5 --udp-fake 1",
+      "sources": [
+        "byebyedpi-site"
+      ]
+    },
+    {
+      "id": "6482cf98d95b979c",
+      "args": "--fake -1 --ttl 8 --udp-fake 1",
+      "sources": [
+        "byebyedpi-site"
+      ]
+    },
+    {
+      "id": "ae07ffdbafce5b96",
+      "args": "--split 1+s --disorder 3+s --oob 1+s --udp-fake 1",
+      "sources": [
+        "byebyedpi-site"
+      ]
+    },
+    {
+      "id": "85e0db2669563c95",
+      "args": "--fake -1 --fake-sni 4pda.to --ttl 2",
+      "sources": [
+        "ntc-excerpt"
+      ]
+    },
+    {
+      "id": "7208c0f7aa1e16fe",
+      "args": "--disorder 1 --auto torst --tlsrec 1+s",
+      "sources": [
+        "upstream"
+      ]
+    },
+    {
+      "id": "faeccfbcdd9baa1f",
+      "args": "--fake -1 --ttl 8",
+      "sources": [
+        "upstream"
+      ]
+    },
+    {
+      "id": "3d87181d64d56df9",
+      "args": "--fake -1 --ttl 10 --auto ssl_err --fake -1 --ttl 5",
+      "sources": [
+        "upstream"
+      ]
+    },
+    {
+      "id": "9c4e33861ddb894c",
+      "args": "--proto http,tls --disorder 3 --auto none",
+      "sources": [
+        "upstream"
+      ]
+    }
+  ],
+  "rejected": [
+    {
+      "source": "faty",
+      "raw": "-Kt,h -s1 -q1 -At -T5 -b1000 -f-1 --md5sig -r1+s -As n www.google.com -d 1+s -O 1 -s 29+s -t 5 -An -Ku -a5 -An",
+      "reason": "unexpected text: n"
+    },
+    {
+      "source": "4pda",
+      "raw": "-Ku -l ':\\\\xC2\\\\x00\\\\x00\\\\x00\\\\x01\\\\x14\\\\x2E\\\\xE3\\\\xE3\\\\x5F\\\\x6B\\\\xBB\\\\x23\\\\xA8\\\\xE6\\\\x5D\\\\xA9\\\\x78\\\\x21\\\\xCF\\\\xC2\\\\x72\\\\x4C\\\\x8F\\\\xC4\\\\x5E\\\\x14\\\\x00\\\\x00\\\\x00\\\\x00\\\\xC5\\\\x00\\\\x00\\\\x00\\\\x00\\\\x4C\\\\x00\\\\xA7\\\\x00\\\\x00\\\\x00\\\\x00\\\\x00\\\\x00\\\\x44\\\\x00\\\\x00\\\\x80\\\\x00\\\\x00\\\\x00\\\\x0D\\\\xFC\\\\xFA\\\\x1D\\\\xCD\\\\x73\\\\xBA\\\\x2A\\\\x90\\\\x93\\\\xB3\\\\xEE\\\\xF7\\\\x43\\\\xC5\\\\x85\\\\xDA\\\\xFF\\\\x45\\\\x3C\\\\x00\\\\x00\\\\x00\\\\x00\\\\x00\\\\x00\\\\x7C\\\\x00\\\\x9B\\\\x00\\\\xF6\\\\x00\\\\x00\\\\xDD\\\\x00\\\\x00\\\\x00\\\\x00\\\\x00\\\\x00\\\\x00\\\\x00\\\\x00\\\\x59\\\\xA8\\\\xE4\\\\x00\\\\x00\\\\x00\\\\x00\\\\x00\\\\x00\\\\x00\\\\x00\\\\x7B\\\\x00\\\\x0F\\\\x00\\\\x00\\\\x00\\\\x48\\\\x4E\\\\x00\\\\x00\\\\x00\\\\x06\\\\xF3\\\\x00\\\\x00\\\\x00\\\\x00\\\\xD9\\\\x5A\\\\x00\\\\x00\\\\x00\\\\x00\\\\x00\\\\x00\\\\x00\\\\x00\\\\x00\\\\x00\\\\x00\\\\x00\\\\x00\\\\x00\\\\x00\\\\x00\\\\x00\\\\x00\\\\x00' -a3 -An -Kt,h -o0 -d1 -r1+s -t10 -b1500 -S -s0+s -d3+s -As,n -q1+s -s29+s -o5+s -f3 -S -As,n -d1+s -s3+s -d5+s -s7+s -r2+s -Mh,d -An",
+      "reason": "unknown short option l"
+    },
+    {
+      "source": "4pda3",
+      "raw": "-q --native-frag --wrong-chksum --fake-from-hex 1603030135010001310303424143facf5c983ac8ff20b819cfd634cbf5143c0005b2b8b142a6cd335012c220008969b6b387683dedb4114d466ca90be3212b2bde0c4f56261a9801 --fake-gen 5 --set-ttl 4 --blacklist ..\\\\russia-blacklist.txt --blacklist ..\\\\russia-youtube.txt",
+      "reason": "not a command-only desync option: wrong-chksum"
+    },
+    {
+      "source": "4pda3",
+      "raw": "-s1 -q1 -Y -Ar -s5 -o25000+s -At -f-1 -r1+s -As -s1 -o1+s -s-1 -An -b+500 а вот на 9 андроиде ни в какую не хотит заводится Ютуб перепробовал все команды, и что странно заметил на 10 андроиде в тесте команд много 100% работоспособности, а вот на 9 только несколько 62% и ни один не работает, причем к телевизорам один и тот же провайдер подключен, может кто чего посоветовать?",
+      "reason": "unexpected text: а"
+    },
+    {
+      "source": "webhamster",
+      "raw": "-H list.txt -o 2 --auto none -H list2.txt -r 2 -f -1 -t 5 --auto none -H youtube.txt -o 2 -s -5+se --auto none",
+      "reason": "unknown short option H"
+    },
+    {
+      "source": "upstream",
+      "raw": "------",
+      "reason": "not a command-only desync option: ----"
+    },
+    {
+      "source": "upstream",
+      "raw": "-s, --split <pos_t>",
+      "reason": "non-argument content"
+    },
+    {
+      "source": "upstream",
+      "raw": "-d, --disorder <pos_t>",
+      "reason": "non-argument content"
+    },
+    {
+      "source": "upstream",
+      "raw": "-o, --oob <pos_t>",
+      "reason": "non-argument content"
+    },
+    {
+      "source": "upstream",
+      "raw": "-q, --disoob <pos_t>",
+      "reason": "non-argument content"
+    },
+    {
+      "source": "upstream",
+      "raw": "-f, --fake <pos_t>",
+      "reason": "non-argument content"
+    },
+    {
+      "source": "upstream",
+      "raw": "------",
+      "reason": "not a command-only desync option: ----"
+    },
+    {
+      "source": "upstream",
+      "raw": "------",
+      "reason": "not a command-only desync option: ----"
+    },
+    {
+      "source": "upstream",
+      "raw": "------",
+      "reason": "not a command-only desync option: ----"
+    },
+    {
+      "source": "upstream",
+      "raw": "------",
+      "reason": "not a command-only desync option: ----"
+    },
+    {
+      "source": "upstream",
+      "raw": "------",
+      "reason": "not a command-only desync option: ----"
+    },
+    {
+      "source": "upstream",
+      "raw": "------",
+      "reason": "not a command-only desync option: ----"
+    },
+    {
+      "source": "upstream",
+      "raw": "------",
+      "reason": "not a command-only desync option: ----"
+    },
+    {
+      "source": "upstream",
+      "raw": "------",
+      "reason": "not a command-only desync option: ----"
+    },
+    {
+      "source": "upstream",
+      "raw": "--hosts list.txt --disorder 3 --auto=none",
+      "reason": "not a command-only desync option: hosts"
+    },
+    {
+      "source": "upstream",
+      "raw": "--hosts list.txt --auto=none --disorder 3",
+      "reason": "not a command-only desync option: hosts"
+    },
+    {
+      "source": "upstream",
+      "raw": "--auto=torst --hosts list.txt --disorder 3",
+      "reason": "not a command-only desync option: hosts"
+    },
+    {
+      "source": "upstream",
+      "raw": "--proto=http --fake -1 --fake-data=':GET /...' --auto=none --fake -1",
+      "reason": "not a command-only desync option: fake-data"
+    },
+    {
+      "source": "upstream",
+      "raw": "------",
+      "reason": "not a command-only desync option: ----"
+    },
+    {
+      "source": "upstream",
+      "raw": "------",
+      "reason": "not a command-only desync option: ----"
+    },
+    {
+      "source": "upstream",
+      "raw": "------",
+      "reason": "not a command-only desync option: ----"
+    }
+  ],
+  "sources": [
+    {
+      "id": "byebyedpi",
+      "title": "ByeByeDPI built-in list",
+      "url": "https://github.com/romanvht/ByeByeDPI/blob/master/app/src/main/assets/proxytest_strategies.list",
+      "retrieved": "2026-10-31",
+      "note": ""
+    },
+    {
+      "id": "ewen",
+      "title": "ByeByeDPI-x-tg built-in list",
+      "url": "https://github.com/EwenLoy/ByeByeDPI-x-tg/blob/main/app/src/main/assets/proxytest_strategies.list",
+      "retrieved": "2026-10-31",
+      "note": ""
+    },
+    {
+      "id": "netfix",
+      "title": "NetFix author strategies (discovered via Habr)",
+      "url": "https://github.com/rupleide/NetFixMobile/blob/main/app/src/main/java/com/rupleide/netfix/core/dpibypass/StrategyTester.kt",
+      "retrieved": "2026-10-31",
+      "note": ""
+    },
+    {
+      "id": "faty",
+      "title": "Byedpi-Setup settings",
+      "url": "https://github.com/fatyzzz/Byedpi-Setup/blob/main/assets/settings.txt",
+      "retrieved": "2026-10-31",
+      "note": ""
+    },
+    {
+      "id": "4pda",
+      "title": "4PDA ByeByeDPI page 25",
+      "url": "https://4pda.to/forum/index.php?showtopic=1099318&st=480",
+      "retrieved": "2026-10-31",
+      "note": "Public author posts; runtime effectiveness unverified."
+    },
+    {
+      "id": "4pda2",
+      "title": "4PDA ByeByeDPI page 151",
+      "url": "https://4pda.to/forum/index.php?showtopic=1099318&st=3000",
+      "retrieved": "2026-10-31",
+      "note": "Public author posts; runtime effectiveness unverified."
+    },
+    {
+      "id": "4pda3",
+      "title": "4PDA ByeDPI page 69",
+      "url": "https://4pda.to/forum/index.php?showtopic=1092092&st=1360",
+      "retrieved": "2026-10-31",
+      "note": "Public author posts; runtime effectiveness unverified."
+    },
+    {
+      "id": "4pda4",
+      "title": "4PDA ByeByeDPI page 108",
+      "url": "https://4pda.to/forum/index.php?showtopic=1099318&st=2140",
+      "retrieved": "2026-10-31",
+      "note": "Public author posts; runtime effectiveness unverified."
+    },
+    {
+      "id": "4pda5",
+      "title": "4PDA ByeByeDPI page 153",
+      "url": "https://4pda.to/forum/index.php?showtopic=1099318&st=3040",
+      "retrieved": "2026-10-31",
+      "note": "Public author posts; runtime effectiveness unverified."
+    },
+    {
+      "id": "webhamster",
+      "title": "Webhamster published command collection",
+      "url": "https://webhamster.ru/mytetrashare/index/mtb0/1750407487732ubp4o9x",
+      "retrieved": "2026-10-31",
+      "note": "Public author posts; runtime effectiveness unverified."
+    },
+    {
+      "id": "telegram",
+      "title": "Public Telegram instructions",
+      "url": "https://t.me/s/AL_bloger?q=%23ByeDpi&before=474",
+      "retrieved": "2026-10-31",
+      "note": "Public author posts; runtime effectiveness unverified."
+    },
+    {
+      "id": "byebyedpi-site",
+      "title": "Independent configuration article",
+      "url": "https://byebyedpi.org/config/",
+      "retrieved": "2026-10-31",
+      "note": "Site authorship/official status not verified; commands only, performance claims not adopted."
+    },
+    {
+      "id": "ntc-excerpt",
+      "title": "NTC author post (indexed excerpt)",
+      "url": "https://ntc.rkn.quest/t/byedpi-%D0%BE%D0%B1%D1%81%D1%83%D0%B6%D0%B4%D0%B5%D0%BD%D0%B8%D0%B5/9057?page=23",
+      "retrieved": "2026-10-31",
+      "note": "Exact command from sk9d3 post #452 in search excerpt; full forum fetch blocked."
+    },
+    {
+      "id": "upstream",
+      "title": "ByeDPI 17.3 author documentation",
+      "url": "https://github.com/hufrea/byedpi/blob/ba532298de7b28cfe854aea83d061369d13ca290/README.md",
+      "retrieved": "2026-10-31",
+      "note": ""
+    }
+  ],
+  "notes": [
+    "Startup/SOCKS acceptance is not ISP effectiveness.",
+    "Five fake-SNI substitutions use the service-domain list documented by NetFix; not five independently reported successes.",
+    "Aliases, typography and detached offset suffixes normalized; unrelated operations and external-file arguments excluded."
+  ]
+}

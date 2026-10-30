@@ -99,19 +99,22 @@ class TvActivity : Activity() {
         value >= 1024 -> String.format(Locale.getDefault(),"%.1f КБ",value/1024.0)
         else -> "$value Б"
     }
-    private fun information(): String {
+    private fun information(full: Boolean = false): String {
         val index = TvState.strategyIndex.takeIf { it in TvPolicy.strategies.indices }
         val command = index?.let { TvPolicy.strategies[it].ifEmpty { "Без модификаций (контроль)" } } ?: "Нет активной стратегии"
         val remaining = ((TvState.nextCheckAt-SystemClock.elapsedRealtime())/1000).coerceAtLeast(0)
         val next = if (TvState.nextCheckAt > 0) "через ${remaining/60} мин ${remaining%60} с" else "выполняется / не назначена"
-        val saved = prefs.getInt("good",-1).takeIf { it in TvPolicy.strategies.indices }?.let { "№${it+1}" } ?: "нет"
+        val saved = (TvPolicy.indexOfId(prefs.getString("good_id",null)) ?: prefs.getInt("good",-1).takeIf { it in 0..7 })?.let { "№${it+1}" } ?: "нет"
         val boot = when {
             !prefs.getBoolean("boot",true) -> "выключен"
             !prefs.getBoolean("enabled",false) -> "разрешён, но VPN вручную выключен"
             else -> "включён"
         }
-        return "Этап: ${TvState.phase}\n${TvState.status}\n\n"+
-            "Стратегия: ${index?.let { "№${it+1} из ${TvPolicy.strategies.size}" } ?: "не запущена"}\n$command\n"+
+        val recent = TvState.results.entries.sortedByDescending { TvState.resultTimes[it.key] ?: 0L }
+            .let { if (full) it else it.take(8) }.sortedBy { it.key }
+        val resultText = recent.joinToString("\n") { "№${it.key+1}: ${if (full) it.value else it.value.take(260)}" }.ifEmpty { "ещё нет" }
+        return "База: ${TvPolicy.strategies.size} вариантов · ${StrategyCatalog.version}\n${StrategyCatalog.engine}\nЭтап: ${TvState.phase}\n${TvState.status}\n\n"+
+            "Стратегия: ${index?.let { "№${it+1} из ${TvPolicy.strategies.size}" } ?: "не запущена"}\n$command\nИсточник: ${index?.let { StrategyCatalog.origins[it] } ?: "нет"}\nПозиция расширенного подбора: ${TvState.scanCursor+1}/${TvPolicy.strategies.size} (блок до 12)\n"+
             "Диагностика стратегии ${if (TvState.probeIndex >= 0) "№${TvState.probeIndex+1}" else "(предыдущий запуск)"}: ${TvState.probeDetail}\nСледующая проверка: $next\n"+
             "Последняя проверка: ${time(TvState.lastCheckAt)}\nПоследний успех: ${time(prefs.getLong("last_success",0))}; сохранено: $saved\n\n"+
             "Служба: ${if (TvState.running) "работает" else "остановлена"}; движок: ${if (TvState.engineReady) "готов" else "не готов"}\n"+
@@ -124,7 +127,7 @@ class TvActivity : Activity() {
             "Фоновое восстановление: ${if (MaintenanceJob.backgroundAllowed(this)) "разрешено" else "нужно разрешить фоновую работу"}; постоянный VPN: ${TvState.alwaysOn}\n"+
             "Устройство: ${Build.MANUFACTURER} ${Build.MODEL}; Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})\n"+
             "YouTube: ${TvVpnService.installed(this).joinToString().ifEmpty { "официальный клиент не найден" }}\n\n"+
-            "Результаты стратегий за текущий запуск службы:\n${TvState.results.entries.sortedBy { it.key }.joinToString("\n") { "№${it.key+1}: ${it.value}" }.ifEmpty { "ещё нет" }}\n\n"+
+            "${if (full) "Все результаты за запуск" else "Последние 8 результатов (все — в полном отчёте)"}:\n$resultText\n\n"+
             "Успешные проверки узлов не гарантируют воспроизведение каждого ролика. Счётчики относятся к YouTube в текущем туннеле; сбрасываются при смене стратегии."
     }
     private fun render() {
@@ -211,7 +214,7 @@ class TvActivity : Activity() {
         catch (_: ActivityNotFoundException) { Toast.makeText(this,"Настройки VPN скрыты прошивкой",Toast.LENGTH_LONG).show() }
     }
     private fun showReport() {
-        val report = "DPI Pilot TV ${BuildConfig.VERSION_NAME}\n${information()}\n\nЖурнал:\n${TvState.report}"
+        val report = "DPI Pilot TV ${BuildConfig.VERSION_NAME}\n${information(true)}\n\nЖурнал:\n${TvState.report}"
         AlertDialog.Builder(this).setTitle("Полный отчёт").setMessage(report)
             .setNeutralButton("Скопировать") { _,_ ->
                 (getSystemService(CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("DPI Pilot TV",report))
@@ -220,8 +223,8 @@ class TvActivity : Activity() {
     }
     private fun serviceMenu() {
         AlertDialog.Builder(this).setTitle("Действия")
-            .setItems(arrayOf("Полный отчёт","Разрешение VPN / включить","Фоновая работа","Настройки VPN")) { _,which ->
-                when (which) { 0 -> showReport(); 1 -> configure(); 2 -> requestBackground(); 3 -> vpnSettings() }
+            .setItems(arrayOf("Полный отчёт","Разрешение VPN / включить","Фоновая работа","Настройки VPN","Источники базы стратегий")) { _,which ->
+                when (which) { 0 -> showReport(); 1 -> configure(); 2 -> requestBackground(); 3 -> vpnSettings(); 4 -> AlertDialog.Builder(this).setTitle("Источники · ${StrategyCatalog.version}").setMessage(StrategyCatalog.sources.joinToString("\n\n")).setPositiveButton("Закрыть",null).show() }
             }.setNegativeButton("Закрыть",null).show()
     }
     override fun onKeyDown(keyCode: Int,event: KeyEvent): Boolean {

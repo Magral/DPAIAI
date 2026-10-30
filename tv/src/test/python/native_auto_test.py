@@ -1,10 +1,8 @@
 """Actual native engine test: upstream RST must switch group and replay the request."""
-import pathlib,subprocess,tempfile,socket,struct,threading,time,re
+import pathlib,subprocess,tempfile,socket,struct,threading,time,re,json
 root=pathlib.Path(__file__).resolve().parents[4]
-source=root/'app/src/main/cpp/byedpi'
-policy=(root/'tv/src/main/java/io/github/magral/dpipilot/tv/TvPolicy.kt').read_text()
-strategy_block=policy.split('val strategies = listOf(',1)[1].split(')\n',1)[0]
-profile=re.findall(r'"([^"]*)"',strategy_block)[-1]
+source=root/'tv/src/main/cpp/engine'
+profile=json.loads((root/'tv/strategies/catalog.json').read_text())['strategies'][7]['args']
 assert '--auto torst,ssl_err' in profile
 
 

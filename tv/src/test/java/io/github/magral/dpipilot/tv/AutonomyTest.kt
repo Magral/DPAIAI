@@ -14,7 +14,7 @@ class AutonomyTest {
         assertEquals(TvPolicy.adaptiveIndex,TvPolicy.candidates(emptyList(),null,emptySet()).first())
     }
     @Test fun onlyConfirmedSelectionEntersThreeItemBackupHistory() {
-        val old = TvPolicy.history("2,2,invalid,-1,3,100,4,5")
+        val old = TvPolicy.history("2,2,invalid,-1,3,${Int.MAX_VALUE},4,5")
         assertEquals(listOf(2,3,4),old)
         assertEquals(listOf(3,2,4),TvPolicy.remember(old,3))
         assertEquals(old,TvPolicy.history(old.joinToString(",")))

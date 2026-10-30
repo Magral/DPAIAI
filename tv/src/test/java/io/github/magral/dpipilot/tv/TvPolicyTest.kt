@@ -12,7 +12,7 @@ class TvPolicyTest {
         val replacement = TvPolicy.order(3,true)
         assertNotEquals(3,replacement.first())
         assertEquals(3,replacement.last())
-        assertEquals(TvPolicy.strategies.indices.toList(),TvPolicy.order(100,false))
+        assertEquals(TvPolicy.strategies.indices.toList(),TvPolicy.order(Int.MAX_VALUE,false))
     }
     @Test fun rejectedOrBlockedResponsesNeverCountAsWorkingContent() {
         assertTrue(TvPolicy.accepts("youtube",204,"",0))

@@ -1,1 +1,1 @@
-TV 0.3.1: background scout without tunnel churn, aligned TLS deadlines, all-host diagnostics and traffic-preserving selection.
+TV 0.4.0: pinned ByeDPI 17.3, audited multi-source strategy catalog, stable IDs and resumable background scan windows.

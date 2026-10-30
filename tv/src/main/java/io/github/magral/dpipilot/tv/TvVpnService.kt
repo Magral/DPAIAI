@@ -77,7 +77,7 @@ class TvVpnService : VpnService() {
         requested.set(true)
         if (intent?.action == "different") different.set(true)
         if (controller == null) {
-            TvState.results.clear()
+            TvState.results.clear(); TvState.resultTimes.clear()
             val reason = when (intent?.action) {
                 "boot" -> "загрузка системы"
                 "update" -> "обновление приложения"
@@ -218,14 +218,16 @@ class TvVpnService : VpnService() {
             currentCoroutineContext().ensureActive()
             TvState.lastCheckAt = System.currentTimeMillis()
             TvState.probeDetail = result.detail
+            TvState.resultTimes[index] = System.currentTimeMillis()
             TvState.results[index] = (if (result.ok) "OK: " else "Частично/отказ: ")+result.detail
             prefs.edit().putLong("last_check_at",TvState.lastCheckAt).putString("last_probe",result.detail).apply()
             result
         } finally { session.cancel() }
     }
     private fun confirm(index: Int) {
-        val known = TvPolicy.history(prefs.getString("history.$profile",null).orEmpty())
-        prefs.edit().putInt("good",index)
+        val known = TvPolicy.savedHistory(prefs.getString("history_ids.$profile",null),prefs.getString("history.$profile",null).orEmpty())
+        prefs.edit().putInt("good",index).putString("good_id",StrategyCatalog.ids[index])
+            .putString("history_ids.$profile",TvPolicy.remember(known,index).joinToString(",") { StrategyCatalog.ids[it] })
             .putString("history.$profile",TvPolicy.remember(known,index).joinToString(","))
             .putLong("last_success",System.currentTimeMillis()).apply()
         TvState.verified = true
@@ -309,8 +311,8 @@ class TvVpnService : VpnService() {
             val currentProfile = profileKey(network)
             if (profile != currentProfile) { blocked.clear(); profile = currentProfile }
             blocked.entries.removeAll { it.value <= SystemClock.elapsedRealtime() }
-            val old = prefs.getInt("good",-1).takeIf { it in TvPolicy.strategies.indices }
-            val known = TvPolicy.history(prefs.getString("history.$profile",null) ?: old?.toString().orEmpty())
+            val old = TvPolicy.indexOfId(prefs.getString("good_id",null)) ?: prefs.getInt("good",-1).takeIf { it in 0..7 }
+            val known = TvPolicy.savedHistory(prefs.getString("history_ids.$profile",null),prefs.getString("history.$profile",null) ?: old?.toString().orEmpty())
             // Establish once at startup. Every alternative is tested in :scout while this tunnel stays up.
             if (tun == null || !TvState.engineReady || networkId != network.toString()) {
                 release()
@@ -343,7 +345,11 @@ class TvVpnService : VpnService() {
             var confirmed: Int? = null
             var trial: Int? = null
             var bestScore = -1
-            for (index in TvPolicy.candidates(known,active,blocked.keys).filter { it != active }) {
+            val cursor = TvPolicy.indexOfId(prefs.getString("scan.next_id.$profile",null)) ?: 0
+            TvState.scanCursor = cursor
+            val window = TvPolicy.scanWindow(known,active,blocked.keys,cursor)
+            TvState.update(this,"База ${TvPolicy.strategies.size}: фоновый блок до ${window.size} вариантов; позиция ${cursor+1}")
+            for (index in window) {
                 currentCoroutineContext().ensureActive()
                 if (physical() != network) { requested.set(true); break }
                 force = manual || ((stalled || active in blocked) && !playback.recent(SystemClock.elapsedRealtime()))
@@ -358,13 +364,22 @@ class TvVpnService : VpnService() {
                     if (result.ok) { confirmed = index; break }
                 } catch (e: TimeoutCancellationException) {
                     currentCoroutineContext().ensureActive()
+                    TvState.resultTimes[index] = System.currentTimeMillis()
                     TvState.results[index] = "FAIL: таймаут тестового движка"
                     TvState.update(this,"Фоновая стратегия №${index+1}: таймаут; активный VPN сохранён")
                 } catch (e: CancellationException) { throw e }
                 catch (e: Exception) {
+                    TvState.resultTimes[index] = System.currentTimeMillis()
                     TvState.results[index] = "FAIL: ${e.javaClass.simpleName}: ${e.message?.take(120)}"
                     TvState.update(this,"Фоновая стратегия №${index+1}: ${TvState.results[index]}")
-                } finally { next.close(); scoutLease = null }
+                } finally {
+                    next.close(); scoutLease = null
+                    if (currentCoroutineContext().isActive) {
+                        val nextIndex = (index+1)%TvPolicy.strategies.size
+                        prefs.edit().putString("scan.next_id.$profile",StrategyCatalog.ids[nextIndex]).apply()
+                        TvState.scanCursor = nextIndex
+                    }
+                }
             }
             if (physical() != network) { requested.set(true); continue }
             manual = different.getAndSet(false) || manual
