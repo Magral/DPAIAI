@@ -52,7 +52,7 @@ class MobileMonitor(private val context: Context,private val scope: CoroutineSco
                     val current = probe(target,active)
                     if (MobileStrategyPolicy.profile(context) != networkProfile) continue
                     val force = stalled; stalled = false
-                    if (eligible(current) && !force) {
+                    if (eligible(target,current) && !force) {
                         MobileStrategyPolicy.state = summary(target,current); failures = 0
                         delay(300000); continue
                     }
@@ -67,12 +67,12 @@ class MobileMonitor(private val context: Context,private val scope: CoroutineSco
                         val result = try { MobileCandidate.run(context,target,command) } catch (e: TimeoutCancellationException) { currentCoroutineContext().ensureActive(); JSONObject() }
                         if (MobileStrategyPolicy.profile(context) != networkProfile) break
                         MobileStrategyPolicy.advance(context,target,command)
-                        if (!eligible(result)) { denied[command] = SystemClock.elapsedRealtime()+1800000; continue }
+                        if (!eligible(target,result)) { denied[command] = SystemClock.elapsedRealtime()+1800000; continue }
                         if (!force && usefulAt > 0 && SystemClock.elapsedRealtime()-usefulAt < 90000) break
                         val previous = active
                         replace(command)
                         val verified = probe(target,command)
-                        if (eligible(verified)) {
+                        if (eligible(target,verified)) {
                             active = command; MobileStrategyPolicy.apply(prefs,target,active); MobileStrategyPolicy.remember(context,target,active)
                             changed = true; MobileStrategyPolicy.state = summary(target,verified); break
                         }
@@ -94,7 +94,7 @@ class MobileMonitor(private val context: Context,private val scope: CoroutineSco
         val reports = linkedMapOf<String,JSONObject>()
         fun publish(message: String = "") {
             MobileStrategyPolicy.state = ServiceTargets.individual.joinToString("; ") { target ->
-                reports[target.id]?.let { "${target.name}: ${it.optInt("success")}/${it.optInt("total")}" } ?: "${target.name}: ожидает проверки"
+                reports[target.id]?.let { "${target.name}: ${ProbeAssessment.evaluate(target.id,it).text()}" } ?: "${target.name}: ожидает проверки"
             } + if (message.isEmpty()) " · общий VPN" else "\n$message"
             MobileStrategyPolicy.lastProbe = JSONObject().put("mode",MobilePlan.BOTH).put("strategies",JSONObject(active))
                 .put("services",JSONObject(reports as Map<*,*>)).put("state",MobileStrategyPolicy.state).toString()
@@ -114,7 +114,7 @@ class MobileMonitor(private val context: Context,private val scope: CoroutineSco
                     }
                     if (MobileStrategyPolicy.profile(context) != profile) continue
                     for (target in ServiceTargets.individual) {
-                        if (reports[target.id]?.let { eligible(it) } == true) continue
+                        if (reports[target.id]?.let { eligible(target.id,it) } == true) continue
                         for (command in MobileStrategyPolicy.window(context,target)) {
                             val key = "${target.id}:$command"
                             if (command == MobilePlan.command(active,target.id) || (denied[key] ?: 0) > SystemClock.elapsedRealtime()) continue
@@ -125,19 +125,13 @@ class MobileMonitor(private val context: Context,private val scope: CoroutineSco
                                 catch (e: TimeoutCancellationException) { currentCoroutineContext().ensureActive(); JSONObject() }
                             MobileStrategyPolicy.advance(context,target.id,command)
                             if (MobileStrategyPolicy.profile(context) != profile) break
-                            if (!eligible(result)) { denied[key] = SystemClock.elapsedRealtime()+1800000; continue }
+                            if (!eligible(target.id,result)) { denied[key] = SystemClock.elapsedRealtime()+1800000; continue }
                             // Test real domain routing before replacing the live native process.
                             val combined = try { MobileCandidate.run(context,MobilePlan.BOTH,proposal) { publish("Совместная проверка: $it") } }
                                 catch (e: TimeoutCancellationException) { currentCoroutineContext().ensureActive(); JSONObject() }
-                            fun resultFor(id: String): JSONObject {
-                                val hosts = ServiceTargets.target(id).endpoints.map { it.host }.toSet()
-                                val rows = combined.optJSONArray("rows") ?: return JSONObject()
-                                val own = (0 until rows.length()).map { rows.getJSONObject(it) }.filter { it.optString("host") in hosts }
-                                return JSONObject().put("success",own.count { it.optBoolean("ok") }).put("total",if (own.size == 6) 6 else 0)
-                            }
                             val other = ServiceTargets.individual.first { it.id != target.id }
-                            val protectOther = reports[other.id]?.let { eligible(it) } == true
-                            if (!eligible(resultFor(target.id)) || (protectOther && !eligible(resultFor(other.id)))) {
+                            val protectOther = reports[other.id]?.let { eligible(other.id,it) } == true
+                            if (!eligible(target.id,combined) || (protectOther && !eligible(other.id,combined))) {
                                 denied[key] = SystemClock.elapsedRealtime()+1800000; continue
                             }
                             if (MobileStrategyPolicy.profile(context) != profile) break
@@ -147,7 +141,7 @@ class MobileMonitor(private val context: Context,private val scope: CoroutineSco
                                 replace(proposal)
                                 val verified = probe(target.id,command)
                                 val otherVerified = if (protectOther) probe(other.id,MobilePlan.command(proposal,other.id)) else null
-                                if (eligible(verified) && (otherVerified == null || eligible(otherVerified)) && MobileStrategyPolicy.profile(context) == profile) {
+                                if (eligible(target.id,verified) && (otherVerified == null || eligible(other.id,otherVerified)) && MobileStrategyPolicy.profile(context) == profile) {
                                     active = proposal
                                     MobileStrategyPolicy.apply(prefs,MobilePlan.BOTH,active); MobileStrategyPolicy.remember(context,target.id,command)
                                     reports[target.id] = verified
@@ -161,8 +155,8 @@ class MobileMonitor(private val context: Context,private val scope: CoroutineSco
                             denied[key] = SystemClock.elapsedRealtime()+1800000; publish("Кандидат не подтвердился; прежняя пара восстановлена")
                         }
                     }
-                    val healthy = ServiceTargets.individual.all { reports[it.id]?.let { row -> eligible(row) } == true }
-                    publish(if (healthy) "Проверки обоих сервисов пройдены; аккаунт и видео проверяются в клиентах" else "Повтор проверки и поиска через минуту")
+                    val healthy = ServiceTargets.individual.all { reports[it.id]?.let { row -> eligible(it.id,row) } == true }
+                    publish(if (healthy) "Основные публичные проверки пройдены; видео и аккаунт не проверялись" else "Повтор проверки и поиска через минуту")
                     delay(if (healthy) 300000 else 60000)
                 } catch (e: CancellationException) { throw e }
                 catch (e: Exception) { publish("Ошибка контроля: ${e.javaClass.simpleName}: ${e.message?.take(100)}; повтор через минуту"); delay(60000) }
@@ -173,12 +167,12 @@ class MobileMonitor(private val context: Context,private val scope: CoroutineSco
         val current = ServiceProbe.Session(); session = current
         val pending = async(Dispatchers.IO) { ServiceProbe.check(target,command,1080,current) { MobileStrategyPolicy.state = "${ServiceTargets.target(target).name}: $it" } }
         try {
-            val result = try { withTimeout(240000) { pending.await() } } catch (e: TimeoutCancellationException) { currentCoroutineContext().ensureActive(); JSONObject().put("success",0).put("total",6).put("error","probe_timeout") }
+            val result = try { withTimeout(240000) { pending.await() } } catch (e: TimeoutCancellationException) { currentCoroutineContext().ensureActive(); JSONObject().put("success",0).put("total",ServiceTargets.target(target).endpoints.size*2).put("error","probe_timeout") }
             MobileStrategyPolicy.lastProbe = result.toString(); result
         } finally { current.cancel(); session = null }
     }
-    private fun eligible(result: JSONObject) = TuningScore.eligible(result.optInt("success"),result.optInt("total"))
+    private fun eligible(target: String,result: JSONObject) = ProbeAssessment.evaluate(target,result).eligible
     private fun summary(target: String,result: JSONObject): String =
-        "${ServiceTargets.target(target).name}: узлы ${result.optInt("success")}/${result.optInt("total")}; публичные ответы ${result.optInt("publicSuccess")}/${result.optInt("publicTotal")}. Аккаунт/лента/видео не проверялись"
+        "${ServiceTargets.target(target).name}: ${ProbeAssessment.evaluate(target,result).text()}. Аккаунт/лента/видео не проверялись"
     suspend fun stop() { session?.cancel(); task?.cancelAndJoin(); sample?.cancelAndJoin(); task = null; sample = null }
 }

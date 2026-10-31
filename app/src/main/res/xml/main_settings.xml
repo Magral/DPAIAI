@@ -23,6 +23,12 @@
             android:defaultValue="vpn"
             app:useSimpleSummaryProvider="true" />
 
+        <SwitchPreference
+            android:key="mobile_network_dns"
+            android:title="DNS текущей сети для Instagram / YouTube"
+            android:summary="Как на ТВ: DNS Wi-Fi или мобильной сети. Выключите для использования DNS, указанного ниже."
+            android:defaultValue="true" />
+
         <com.takisoft.preferencex.EditTextPreference
             android:key="dns_ip"
             android:title="@string/dbs_ip_setting"

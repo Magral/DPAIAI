@@ -25,7 +25,7 @@ object MobileStrategyPolicy {
     }
     fun ordered(ids: List<String>,preferred: List<String>,commands: List<String>,saved: String?,cursor: Int,limit: Int = 12): List<Int> {
         require(ids.size == commands.size && commands.isNotEmpty())
-        val priority = (listOfNotNull(saved)+listOf(CatalogProtocol.id(""))+preferred.map { CatalogProtocol.id(it) }+ids.getOrNull(7).orEmpty())
+        val priority = (listOfNotNull(saved)+preferred.map { CatalogProtocol.id(it) }+listOf(CatalogProtocol.id(""))+ids.getOrNull(7).orEmpty())
             .mapNotNull { ids.indexOf(it).takeIf { n -> n >= 0 } }.distinct()
         val start = cursor.coerceAtLeast(0)%commands.size
         val rest = commands.indices.map { (start+it)%commands.size }.filter { it !in priority }

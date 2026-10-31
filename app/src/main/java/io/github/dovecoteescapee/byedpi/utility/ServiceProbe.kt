@@ -77,10 +77,13 @@ object ServiceProbe {
                 if (ok) success++ else failed.add(spec.host)
                 if (content) publicSuccess++
                 onProgress("$prefix: ${if (ok) "OK" else "FAIL"}; $detail")
-                rows.put(JSONObject().put("host",spec.host).put("kind",spec.kind).put("ok",ok).put("public",content).put("detail",detail).put("stage",stage).put("skipped",skip).put("round",round+1))
+                rows.put(JSONObject().put("host",spec.host).put("kind",spec.kind).put("required",spec.required).put("ok",ok).put("public",content).put("detail",detail).put("stage",stage).put("skipped",skip).put("round",round+1))
             }
         }
-        return JSONObject().put("success",success).put("total",rows.length()).put("publicSuccess",publicSuccess).put("publicTotal",publicTotal)
+        val result = JSONObject().put("success",success).put("total",rows.length()).put("publicSuccess",publicSuccess).put("publicTotal",publicTotal)
             .put("elapsed",(System.nanoTime()-start)/1000000).put("rows",rows)
+        val assessment = ProbeAssessment.evaluate(id,result)
+        return result.put("requiredSuccess",assessment.requiredSuccess).put("requiredTotal",assessment.requiredTotal)
+            .put("extraSuccess",assessment.extraSuccess).put("extraTotal",assessment.extraTotal).put("publicEndpointsPassed",assessment.eligible)
     }
 }

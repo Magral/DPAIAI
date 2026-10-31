@@ -35,6 +35,7 @@ class MobilePlanTest {
     @Test fun exportExactProductionArgvForNativeRoutingIntegration() {
         val fixtures = JSONObject()
             .put("http",JSONArray(MobilePlan.arguments(MobilePlan.create("--mod-http h --auto torst,ssl_err --mod-http h","--mod-http r"),1080).toList()))
+            .put("tv36",JSONArray(MobilePlan.arguments(MobilePlan.create("--tlsrec 1",ServiceTargets.youtubeStartup),1080).toList()))
             .put("tls",JSONArray(MobilePlan.arguments(MobilePlan.create("--tlsrec 1",""),1080).toList()))
         assertEquals(3,MobilePlan.arguments(MobilePlan.create("",""),1080).count { it == "--auto" })
         System.getenv("RUNNER_TEMP")?.let { File(it,"mobile-dual-fixtures.json").writeText(fixtures.toString()) }

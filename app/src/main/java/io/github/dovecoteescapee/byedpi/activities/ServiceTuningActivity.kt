@@ -22,7 +22,7 @@ class ServiceTuningActivity : AppCompatActivity() {
     private var stopReason = "нажата кнопка остановки"
     private val refreshUi = object : Runnable {
         override fun run() {
-            base.text = "DPI Pilot ${io.github.dovecoteescapee.byedpi.BuildConfig.VERSION_NAME} · База ${RuntimeCatalog.commands.size} · ${RuntimeCatalog.version}\n${MobileCatalogUpdater.status}\nФоновый контроль VPN: ${MobileStrategyPolicy.state}"
+            base.text = "DPI Pilot ${io.github.dovecoteescapee.byedpi.BuildConfig.VERSION_NAME} · База ${RuntimeCatalog.commands.size} · ${RuntimeCatalog.version}\n${MobileCatalogUpdater.status}\nФоновый контроль VPN: ${MobileStrategyPolicy.state}\n${MobileNetwork.summary(this@ServiceTuningActivity)}"
             stageView.text = stage + if (job?.isActive == true && stageAt > 0) " · ожидание ${(SystemClock.elapsedRealtime()-stageAt)/1000} с" else ""
             handler.postDelayed(this,1000)
         }
@@ -102,15 +102,17 @@ class ServiceTuningActivity : AppCompatActivity() {
                             output.append(" узлы ${result.optInt("success")}/${result.optInt("total")}; публичные ответы ${result.optInt("publicSuccess")}/${result.optInt("publicTotal")}")
                             result.optString("error").takeIf { it.isNotEmpty() }?.let { output.append("; ошибка: $it") }
                             record("${service.id} · Strategy: ${command.ifEmpty { "control" }}\n$result"); saveReport()
-                            val passed = TuningScore.eligible(result.optInt("success"),result.optInt("total"))
-                            if (passed && (target.id == MobilePlan.BOTH || (command.isEmpty() && result.optInt("publicTotal") > 0 && result.optInt("publicSuccess") == result.optInt("publicTotal")))) break
+                            val assessment = ProbeAssessment.evaluate(service.id,result)
+                            val passed = assessment.eligible
+                            output.append("; "+assessment.text())
+                            if (passed && assessment.complete && (target.id == MobilePlan.BOTH || (command.isEmpty() && result.optInt("publicTotal") > 0 && result.optInt("publicSuccess") == result.optInt("publicTotal")))) break
                         }
-                        val best = results.filter { (_,r) -> TuningScore.eligible(r.optInt("success"),r.optInt("total")) }
-                            .sortedWith(compareByDescending<Pair<String,JSONObject>> { it.second.optInt("publicSuccess") }.thenBy { it.second.optLong("elapsed",Long.MAX_VALUE) }).firstOrNull()
-                        if (best == null) output.append("\n${service.name}: полные проверки не пройдены; прежняя стратегия сохранена.")
+                        val best = results.filter { (_,r) -> ProbeAssessment.evaluate(service.id,r).eligible }
+                            .sortedWith(compareByDescending<Pair<String,JSONObject>> { ProbeAssessment.evaluate(service.id,it.second).extraSuccess }.thenByDescending { it.second.optInt("publicSuccess") }.thenBy { it.second.optLong("elapsed",Long.MAX_VALUE) }).firstOrNull()
+                        if (best == null) output.append("\n${service.name}: основные проверки не пройдены; прежняя стратегия сохранена.")
                         else {
                             MobileStrategyPolicy.remember(this@ServiceTuningActivity,service.id,best.first)
-                            output.append("\n${service.name}: стратегия сохранена отдельно.")
+                            output.append("\n${service.name}: кандидат сохранён: основные публичные узлы доступны. Видео и аккаунт не проверялись.")
                         }
                     }
                     if (target.id == MobilePlan.BOTH) {
@@ -119,7 +121,7 @@ class ServiceTuningActivity : AppCompatActivity() {
                         val combined = MobileCandidate.run(this@ServiceTuningActivity,MobilePlan.BOTH,plan,::progress)
                         if (MobileStrategyPolicy.profile(this@ServiceTuningActivity) != profile) error("Сеть изменилась")
                         record("Совместная конфигурация: ${MobilePlan.describe(plan)}\n$combined")
-                        output.append("\nСовместная проверка: ${combined.optInt("success")}/${combined.optInt("total")}.\n"+MobilePlan.describe(plan))
+                        output.append("\nСовместная проверка: ${ProbeAssessment.evaluate(MobilePlan.BOTH,combined).text()}.\n"+MobilePlan.describe(plan))
                     }
                     output.append("\nПримените результат и включите VPN. В общем режиме работают оба приложения; аккаунт, лента и видео проверяются в самих клиентах.")
                     progress("Подбор завершён"); record(output.text.toString())

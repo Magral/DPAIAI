@@ -18,6 +18,9 @@ import io.github.dovecoteescapee.byedpi.utility.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -32,6 +35,7 @@ class ByeDpiVpnService : LifecycleVpnService() {
     private var mobileLease: MobileEngineLease? = null
     private var mobileCommand = ""
     private var mobileMonitor: MobileMonitor? = null
+    private var networkJob: Job? = null
 
     companion object {
         private val TAG: String = ByeDpiVpnService::class.java.simpleName
@@ -94,6 +98,23 @@ class ByeDpiVpnService : LifecycleVpnService() {
                 mobileMonitor = MobileMonitor(this,lifecycleScope) { command ->
                     mutex.withLock { replaceMobile(command) }
                 }.also { it.start() }
+                networkJob = lifecycleScope.launch {
+                    var signature = MobileNetwork.signature(this@ByeDpiVpnService)
+                    while (isActive) {
+                        delay(5000)
+                        val next = MobileNetwork.signature(this@ByeDpiVpnService)
+                        if (next.isEmpty() || next == signature) continue
+                        try {
+                            mutex.withLock { stopTun2Socks(); startTun2Socks() }
+                            signature = next
+                            MobileStrategyPolicy.state = "Физическая сеть изменилась; VPN и DNS обновлены"
+                        } catch (e: CancellationException) { throw e }
+                        catch (e: Exception) {
+                            lifecycleScope.launch { updateStatus(ServiceStatus.Failed); stop() }
+                            return@launch
+                        }
+                    }
+                }
             }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to start VPN", e)
@@ -121,6 +142,7 @@ class ByeDpiVpnService : LifecycleVpnService() {
         mutex.withLock {
             stopping = true
             try {
+                networkJob?.cancel(); networkJob = null
                 mobileMonitor?.stop(); mobileMonitor = null
                 stopTun2Socks()
                 stopProxy()
@@ -212,14 +234,15 @@ class ByeDpiVpnService : LifecycleVpnService() {
 
         val sharedPreferences = getPreferences()
         val port = sharedPreferences.getString("byedpi_proxy_port", null)?.toInt() ?: 1080
-        val dns = sharedPreferences.getStringNotNull("dns_ip", "1.1.1.1")
+        val modern = MobileStrategyPolicy.modern(sharedPreferences)
+        val network = MobileNetwork.physical(this)
+        val dns = MobileNetwork.dns(this,network,modern && sharedPreferences.getBoolean("mobile_network_dns",true),sharedPreferences.getStringNotNull("dns_ip", "1.1.1.1"))
         val ipv6 = sharedPreferences.getBoolean("ipv6_enable", false)
 
         val tun2socksConfig = """
         | misc:
         |   task-stack-size: 81920
         | socks5:
-        |   mtu: 8500
         |   address: 127.0.0.1
         |   port: $port
         |   udp: udp
@@ -234,10 +257,11 @@ class ByeDpiVpnService : LifecycleVpnService() {
             throw e
         }
 
-        val fd = createBuilder(dns, ipv6).establish()
+        val fd = createBuilder(dns, ipv6,network).establish()
             ?: throw IllegalStateException("VPN connection failed")
 
         this.tunFd = fd
+        MobileNetwork.tunnel = "VPN: MTU 1500 · DNS: ${dns.joinToString().ifEmpty { "не задан" }}"
 
         TProxyService.TProxyStartService(configPath.absolutePath, fd.fd)
 
@@ -257,6 +281,7 @@ class ByeDpiVpnService : LifecycleVpnService() {
 
         tunFd?.close() ?: Log.w(TAG, "VPN not running")
         tunFd = null
+        MobileNetwork.tunnel = "VPN выключен"
 
         Log.i(TAG, "Tun2socks stopped")
     }
@@ -302,10 +327,11 @@ class ByeDpiVpnService : LifecycleVpnService() {
             ByeDpiVpnService::class.java,
         )
 
-    private fun createBuilder(dns: String, ipv6: Boolean): Builder {
+    private fun createBuilder(dns: List<String>, ipv6: Boolean,network: android.net.Network?): Builder {
         Log.d(TAG, "DNS: $dns")
         val builder = Builder()
-        builder.setSession("ByeDPI")
+        builder.setSession("DPI Pilot").setMtu(1500)
+        if (Build.VERSION.SDK_INT >= 22 && network != null) builder.setUnderlyingNetworks(arrayOf(network))
         builder.setConfigureIntent(
             PendingIntent.getActivity(
                 this,
@@ -323,9 +349,7 @@ class ByeDpiVpnService : LifecycleVpnService() {
                 .addRoute("::", 0)
         }
 
-        if (dns.isNotBlank()) {
-            builder.addDnsServer(dns)
-        }
+        for (server in dns) builder.addDnsServer(server)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             builder.setMetered(false)
         }

@@ -58,9 +58,9 @@ object MobilePlan {
     fun saved(prefs: SharedPreferences): String {
         val active = prefs.getString("mobile_command","").orEmpty()
         fun savedFor(id: String,fallback: String): String = prefs.getString("tuned_$id",null)?.takeIf { CatalogProtocol.validCommand(it) }
-            ?: runCatching { if (dual(active)) command(active,id) else active.takeIf { prefs.getString("mobile_target",null) == id && CatalogProtocol.validCommand(it) } }.getOrNull()
+            ?: runCatching { if (dual(active)) { if (id == "youtube") null else command(active,id) } else active.takeIf { prefs.getString("mobile_target",null) == id && CatalogProtocol.validCommand(it) } }.getOrNull()
             ?: fallback
-        val instagram = savedFor("instagram","--split 1"); val youtube = savedFor("youtube","--disorder 1")
+        val instagram = savedFor("instagram","--split 1"); val youtube = savedFor("youtube",ServiceTargets.youtubeStartup)
         return runCatching { create(instagram,youtube) }.getOrElse {
             runCatching { create(instagram,"--disorder 1") }.getOrElse { create("--split 1","--disorder 1") }
         }
