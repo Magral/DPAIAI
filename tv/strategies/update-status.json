@@ -1,0 +1,81 @@
+{
+  "period": "2026-10",
+  "checked_at": "2026-10-31T03:55:36.350490+00:00",
+  "source_commit": "bbc7004c7b3d9a1bf9f00372d9989c1eda68dc20",
+  "sequence": 1793418944,
+  "strategies": 294,
+  "sources_fetched": 6,
+  "envelope_sha256": "b05c8a4e8600cfed9f4732a0f73927e62848abe1bf765374e75627e0474b0669",
+  "sources": [
+    {
+      "id": "byebyedpi",
+      "status": "fetched",
+      "new": 0
+    },
+    {
+      "id": "ewen",
+      "status": "fetched",
+      "new": 0
+    },
+    {
+      "id": "netfix",
+      "status": "fetched",
+      "new": 0
+    },
+    {
+      "id": "faty",
+      "status": "fetched",
+      "new": 0
+    },
+    {
+      "id": "4pda",
+      "status": "fetch failed; snapshot retained",
+      "new": 0
+    },
+    {
+      "id": "4pda2",
+      "status": "fetch failed; snapshot retained",
+      "new": 0
+    },
+    {
+      "id": "4pda3",
+      "status": "fetch failed; snapshot retained",
+      "new": 0
+    },
+    {
+      "id": "4pda4",
+      "status": "fetch failed; snapshot retained",
+      "new": 0
+    },
+    {
+      "id": "4pda5",
+      "status": "fetch failed; snapshot retained",
+      "new": 0
+    },
+    {
+      "id": "webhamster",
+      "status": "fetched",
+      "new": 0
+    },
+    {
+      "id": "telegram",
+      "status": "no complete commands; snapshot retained",
+      "new": 0
+    },
+    {
+      "id": "byebyedpi-site",
+      "status": "fetch failed; snapshot retained",
+      "new": 0
+    },
+    {
+      "id": "ntc-excerpt",
+      "status": "fetch failed; snapshot retained",
+      "new": 0
+    },
+    {
+      "id": "upstream",
+      "status": "fetched",
+      "new": 0
+    }
+  ]
+}
