@@ -49,7 +49,7 @@ async function connect(launch = false) {
       port=null; if(timer) clearInterval(timer); timer=null; offline(reason);
     });
     port.postMessage({command:'hello',launch});
-    timer = setInterval(()=>{try {port?.postMessage({command:'status'});}catch{}},10000);
+    timer = setInterval(()=>{try {port?.postMessage({command:'status'});}catch{}},2000);
   } catch(error) { port=null; offline(String(error.message)); }
 }
 chrome.runtime.onInstalled.addListener(async()=>{ await clearOwn(); await connect(false); });

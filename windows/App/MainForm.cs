@@ -17,11 +17,11 @@ internal sealed class MainForm : Form
     private readonly Label phase=new(){AutoSize=true,Font=new Font("Segoe UI",13,FontStyle.Bold),MaximumSize=new Size(1000,0)};
     private readonly TextBox information=new(){Multiline=true,ReadOnly=true,ScrollBars=ScrollBars.Vertical,Dock=DockStyle.Fill,Font=new Font("Consolas",10)};
     private readonly Button toggle=new(){AutoSize=true};
-    private readonly bool background;
     private bool exiting;
     public MainForm(SettingsStore settings,CatalogStore catalog,string executable,bool background)
     {
-        this.settings=settings;this.catalog=catalog;this.background=background;
+        this.settings=settings;this.catalog=catalog;
+        pilot=new(settings,catalog,executable);
         Text="DPI Pilot · YouTube для Chrome · 0.1.0";MinimumSize=new(760,620);Size=new(1020,790);StartPosition=FormStartPosition.CenterScreen;
         AutoScaleMode=AutoScaleMode.Dpi;Font=new("Segoe UI",11);
         var layout=new TableLayoutPanel{Dock=DockStyle.Fill,ColumnCount=1,RowCount=7,Padding=new(20)};
@@ -45,7 +45,6 @@ internal sealed class MainForm : Form
         install.Controls.Add(autorun);layout.Controls.Add(install);
         layout.Controls.Add(new Label{AutoSize=true,Text="Закрытие окна сворачивает приложение в трей. Полный выход — через меню значка рядом с часами.",Padding=new(0,4,0,10)});
         layout.Controls.Add(information);Controls.Add(layout);
-        pilot=new(settings,catalog,executable);
         var menu=new ContextMenuStrip();menu.Items.Add("Открыть",null,(_,_)=>ShowPanel());menu.Items.Add("Выход",null,async(_,_)=>await ExitAsync());
         tray=new(){Icon=SystemIcons.Application,Text="DPI Pilot · YouTube",Visible=true,ContextMenuStrip=menu};tray.DoubleClick+=(_,_)=>ShowPanel();
         timer.Tick+=(_,_)=>Render();timer.Start();

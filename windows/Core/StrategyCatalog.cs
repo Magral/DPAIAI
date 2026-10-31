@@ -62,7 +62,8 @@ public static partial class CatalogProtocol
         byte[] data = Convert.FromBase64String(wrapper.RootElement.GetProperty("payload").GetString()!);
         byte[] signature = Convert.FromBase64String(wrapper.RootElement.GetProperty("signature").GetString()!);
         if (data.Length is 0 or > 2*1024*1024 || signature.Length is < 256 or > 1024) throw new InvalidDataException("Catalog size");
-        if (!publicKey.VerifyData([.. Encoding.UTF8.GetBytes(Prefix), .. data], signature, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1)) throw new CryptographicException("Catalog signature");
+        byte[] signedData = [.. Encoding.UTF8.GetBytes(Prefix), .. data];
+        if (!publicKey.VerifyData(signedData, signature, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1)) throw new CryptographicException("Catalog signature");
         using var document = JsonDocument.Parse(data); var root = document.RootElement;
         if (root.GetProperty("schema").GetInt32() != 1 || root.GetProperty("engine_commit").GetString() != Engine) throw new InvalidDataException("Catalog engine/schema");
         long sequence = root.GetProperty("sequence").GetInt64(); if (sequence <= 0 || sequence < minimum) throw new InvalidDataException("Catalog rollback");
@@ -97,6 +98,7 @@ public sealed class CatalogStore
         if (Convert.ToHexString(certificate.GetCertHash(HashAlgorithmName.SHA256)).ToLowerInvariant() != CatalogProtocol.CertificatePin) throw new CryptographicException("Permanent certificate mismatch");
         key = certificate.GetRSAPublicKey() ?? throw new CryptographicException("RSA certificate required");
         snapshot = Filter(CatalogProtocol.Verify(embedded, key, 0));
+        if(settings.Value.CatalogSequence < snapshot.Sequence) settings.Change(s => {s.CatalogSequence=snapshot.Sequence;s.CatalogDigest=Digest(embedded);s.CatalogChecked=default;});
         string path = Path.Combine(settings.DirectoryPath,"catalog-v1.json");
         if (File.Exists(path)) try
         {

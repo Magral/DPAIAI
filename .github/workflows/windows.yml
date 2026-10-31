@@ -63,6 +63,18 @@ jobs:
           & $compiler windows/setup.iss
           if ($LASTEXITCODE -ne 0) { throw "Installer compilation failed" }
           Get-FileHash windows/release/* -Algorithm SHA256 | Format-List
+      - name: Test standalone installer and embedded runtime without installed application dependencies
+        shell: pwsh
+        run: |
+          $installer = (Get-ChildItem windows/release/*Setup.exe).FullName
+          $testInstall = Join-Path $env:RUNNER_TEMP "DpiPilot-installed"
+          $install = Start-Process -FilePath $installer -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART',"/DIR=`"$testInstall`"") -PassThru -Wait
+          if ($install.ExitCode -ne 0) { throw "Silent per-user installer failed" }
+          $env:DPI_PILOT_TEST_RESULT = Join-Path $env:RUNNER_TEMP "package-result.txt"
+          $check = Start-Process -FilePath (Join-Path $testInstall "DPI-Pilot-YouTube.exe") -ArgumentList '--package-check' -PassThru -Wait
+          if ($check.ExitCode -ne 0) { Get-Content $env:DPI_PILOT_TEST_RESULT; throw "Installed package check failed" }
+          Get-Content $env:DPI_PILOT_TEST_RESULT
+          if (!(Test-Path (Join-Path $testInstall "extension/manifest.json"))) { throw "Chrome extension missing from installer" }
       - uses: actions/upload-artifact@v4
         with:
           name: DPI-Pilot-YouTube-Windows-installer
