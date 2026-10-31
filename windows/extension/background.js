@@ -29,7 +29,9 @@ async function publish(message) {
       state.extension = 'YouTube — локальный обработчик; остальные адреса — DIRECT';
     }
   }
-  await chrome.storage.local.set({want:!!(state.running && state.enabled),state});
+  const old=await chrome.storage.local.get("want");
+  const want=state.running ? !!state.enabled : (typeof state.desiredEnabled === "boolean" ? state.desiredEnabled : !!old.want);
+  await chrome.storage.local.set({want,state});
   await chrome.action.setBadgeText({text:applied ? 'ON' : ''});
   await chrome.action.setBadgeBackgroundColor({color:'#197753'});
 }

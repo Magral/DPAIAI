@@ -33,4 +33,4 @@ Root: HKCU; Subkey: "Software\Google\Chrome\NativeMessagingHosts\io.github.magra
 [Run]
 Filename: "{app}\DPI-Pilot-YouTube.exe"; Description: "Запустить DPI Pilot и установить расширение Chrome"; Flags: nowait postinstall skipifsilent
 [UninstallRun]
-Filename: "{app}\DPI-Pilot-YouTube.exe"; Parameters: "--uninstall"; Flags: runhidden waituntilterminated
+Filename: "{app}\DPI-Pilot-YouTube.exe"; Parameters: "--uninstall"; Flags: runhidden waituntilterminated; RunOnceId: "DpiPilotUnregister"

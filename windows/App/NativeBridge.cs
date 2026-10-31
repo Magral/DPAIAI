@@ -28,6 +28,11 @@ internal static class NativeBridge
     }
     public static async Task WriteAsync(Stream output,byte[] data,CancellationToken cancellation)
     { byte[] header=new byte[4]; BinaryPrimitives.WriteUInt32LittleEndian(header,(uint)data.Length); await output.WriteAsync(header,cancellation); await output.WriteAsync(data,cancellation); await output.FlushAsync(cancellation); }
+    private static bool SavedIntent()
+    {
+        try {using var json=JsonDocument.Parse(File.ReadAllText(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"DPI-Pilot-YouTube","settings.json")));return json.RootElement.GetProperty("Enabled").GetBoolean();}
+        catch(Exception){return false;}
+    }
     public static async Task RunHostAsync()
     {
         using var input=Console.OpenStandardInput(); using var output=Console.OpenStandardOutput();
@@ -51,7 +56,7 @@ internal static class NativeBridge
                 response=await ReadAsync(pipe,CancellationToken.None) ?? throw new EndOfStreamException();
             }
             catch(Exception e) when(e is IOException or TimeoutException or UnauthorizedAccessException)
-            { offline=true; response=JsonSerializer.SerializeToUtf8Bytes(new {running=false,enabled=false,phase="Windows-компонент не запущен",routingAllowed=false,routingReason="Нажмите «Включить» или откройте DPI Pilot"}); }
+            { offline=true; response=JsonSerializer.SerializeToUtf8Bytes(new {running=false,enabled=false,desiredEnabled=SavedIntent(),phase="Windows-компонент не запущен",routingAllowed=false,routingReason="Нажмите «Включить» или откройте DPI Pilot"}); }
             await WriteAsync(output,response,CancellationToken.None);
             if(offline)return;
         }

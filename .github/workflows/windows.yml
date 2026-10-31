@@ -75,6 +75,9 @@ jobs:
           if ($check.ExitCode -ne 0) { Get-Content $env:DPI_PILOT_TEST_RESULT; throw "Installed package check failed" }
           Get-Content $env:DPI_PILOT_TEST_RESULT
           if (!(Test-Path (Join-Path $testInstall "extension/manifest.json"))) { throw "Chrome extension missing from installer" }
+      - name: Test installed native messaging and background UI lifetime
+        shell: pwsh
+        run: windows/build/native_smoke.ps1 -Executable (Join-Path $env:RUNNER_TEMP 'DpiPilot-installed/DPI-Pilot-YouTube.exe')
       - uses: actions/upload-artifact@v4
         with:
           name: DPI-Pilot-YouTube-Windows-installer

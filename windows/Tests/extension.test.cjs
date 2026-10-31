@@ -14,7 +14,8 @@ async function environment(mode='system',level='controllable_by_this_extension')
 }
 (async()=>{
  let e=await environment();await e.publish({running:true,enabled:true,routingAllowed:true,pac});assert.equal(e.calls[0][0],'set');assert.equal(e.calls[0][1].scope,'regular_only');
- await e.publish({running:false,enabled:false});assert.equal(e.calls.at(-1)[0],'clear');assert.equal(e.store.want,false);
+ await e.publish({running:false,enabled:false,desiredEnabled:true});assert.equal(e.calls.at(-1)[0],'clear');assert.equal(e.store.want,true);
+ await e.publish({running:false,enabled:false,desiredEnabled:false});assert.equal(e.store.want,false);
  for(const mode of ['fixed_servers','pac_script','auto_detect']){e=await environment(mode);await e.publish({running:true,enabled:true,routingAllowed:true,pac});assert.equal(e.calls.length,0);}
  e=await environment('system','controlled_by_other_extensions');await e.publish({running:true,enabled:true,routingAllowed:true,pac});assert.equal(e.calls.length,0);
  e=await environment();await e.publish({running:true,enabled:true,routingAllowed:false,routingReason:'existing system proxy',pac});assert.equal(e.calls.length,0);

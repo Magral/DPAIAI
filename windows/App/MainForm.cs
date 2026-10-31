@@ -18,6 +18,7 @@ internal sealed class MainForm : Form
     private readonly TextBox information=new(){Multiline=true,ReadOnly=true,ScrollBars=ScrollBars.Vertical,Dock=DockStyle.Fill,Font=new Font("Consolas",10)};
     private readonly Button toggle=new(){AutoSize=true};
     private bool exiting;
+    private long extensionSeen;
     public MainForm(SettingsStore settings,CatalogStore catalog,string executable,bool background)
     {
         this.settings=settings;this.catalog=catalog;
@@ -56,6 +57,7 @@ internal sealed class MainForm : Form
     public void ShowPanel(){Show();WindowState=FormWindowState.Normal;Activate();}
     private async Task<object> CommandAsync(string name)
     {
+        Interlocked.Exchange(ref extensionSeen,Environment.TickCount64);
         switch(name)
         {
             case "enable":await pilot.StartAsync();break;
@@ -71,11 +73,12 @@ internal sealed class MainForm : Form
     private void Render()
     {
         heading.Text=pilot.Enabled ? "YouTube · обработка включена" : "YouTube · обход выключен";
-        phase.Text=pilot.Phase;toggle.Text=pilot.Enabled?"Выключить обход":"Включить обход";
+        phase.Text=pilot.Enabled && (Interlocked.Read(ref extensionSeen)==0 || Environment.TickCount64-Interlocked.Read(ref extensionSeen)>20000) ? "Компонент включён; подключите расширение в обычном Chrome" : pilot.Phase;toggle.Text=pilot.Enabled?"Выключить обход":"Включить обход";
         information.Text=Report();
     }
     private string Report()=>
         "DPI Pilot Windows 0.1.0 · Chrome extension\r\n"+
+        "Расширение: "+(Interlocked.Read(ref extensionSeen)>0 && Environment.TickCount64-Interlocked.Read(ref extensionSeen)<20000 ? "связь есть (статус маршрута — на значке Chrome)" : "нет связи; проверьте одноразовую установку")+"\r\n"+
         "Маршрутизация: "+safety.Reason+"\r\n"+
         "Стратегия: "+pilot.ActiveDescription.Replace("\n","\r\n")+"\r\n\r\n"+
         $"База: {catalog.Snapshot.Entries.Count} совместимых с Windows вариантов · {catalog.Snapshot.Version}\r\n{catalog.Status}\r\n"+

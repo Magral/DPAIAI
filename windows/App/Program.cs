@@ -55,6 +55,7 @@ internal static class Program
     }
     private static void Uninstall()
     {
+        try {new SettingsStore(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"DPI-Pilot-YouTube")).Change(s=>s.Enabled=false);}catch(IOException){ }
         try {
             using var pipe=new System.IO.Pipes.NamedPipeClientStream(".",NativeBridge.PipeName,System.IO.Pipes.PipeDirection.InOut);
             pipe.Connect(1000);

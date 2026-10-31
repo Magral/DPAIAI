@@ -20,3 +20,10 @@ local.properties
 *.p12
 *.pfx
 keystore.properties
+
+# Windows output (recreated by the platform workflow)
+windows/**/bin/
+windows/**/obj/
+windows/Resources/*
+windows/publish/
+windows/release/
