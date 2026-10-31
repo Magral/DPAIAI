@@ -1,1 +1,1 @@
-TV 0.5.0: bounded media delivery probes, comparative quality selection, confirmed stalls, supervised trial/rollback, per-network reputation and autonomy/export diagnostics.
+TV 0.5.0: bounded media delivery probes, comparative quality selection, confirmed stalls, supervised trial/rollback, per-network reputation and autonomy/export diagnostics. Do not attribute physical-link loss or undersized public samples to strategy failure.

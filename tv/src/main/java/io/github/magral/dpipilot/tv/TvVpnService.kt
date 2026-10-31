@@ -187,6 +187,11 @@ class TvVpnService : VpnService() {
         TvState.sentPackets = stats[0]; TvState.sentBytes = stats[1]
         TvState.receivedPackets = stats[2]; TvState.receivedBytes = stats[3]
         TvState.trafficAt = System.currentTimeMillis()
+        if (physical()?.toString() != networkId) {
+            traffic.reset(); playback.reset(); observedAt = 0
+            TvState.stallDetail = "Физическая сеть отсутствует или меняется; это не отказ стратегии"
+            return
+        }
         activeIndex?.let { index ->
             if (observedAt > 0 && now-observedAt in 1000L..15000L && stats[3] >= observedRx)
                 reputation.observe(index,(now-observedAt)/1000,stats[3]-observedRx >= 32*1024)

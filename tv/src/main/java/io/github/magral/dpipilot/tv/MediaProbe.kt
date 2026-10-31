@@ -93,6 +93,9 @@ object MediaProbe {
                     invalidate()
                     return MediaResult(MediaStatus.UNAVAILABLE,bytes=read,detail="Видеоссылка отклонена сервисом (HTTP ${response.status}); обновится в следующей проверке")
                 }
+                val total = response.headers["content-range"]?.substringAfterLast('/')?.toLongOrNull()
+                if (response.status == 206 && total != null && total < chunk)
+                    return MediaResult(MediaStatus.UNAVAILABLE,bytes=read,detail="Публичный видеообразец меньше тестового фрагмента; стратегия не признана неисправной")
                 if (!MediaLinks.validRange(response,start,chunk)) return MediaResult(MediaStatus.FAILED,bytes=read,detail="Видеофрагмент не доставлен полностью или неверный HTTP Range/type")
                 rates.add(chunk.toLong()*8/transfer.elapsedMs.coerceAtLeast(1)); latencies.add(transfer.firstByteMs)
             }
