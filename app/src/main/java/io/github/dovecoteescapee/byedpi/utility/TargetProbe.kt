@@ -7,16 +7,18 @@ import javax.net.ssl.SSLSocketFactory
 
 object TargetProbe {
     // Explicit SOCKS5 negotiation gives exact failure stages and reply codes on Android.
-    internal fun socket(host: String, port: Int, proxyPort: Int = 19080, readTimeout: Int = 5000, onSocket: (Socket) -> Unit = {}): Socket {
+    internal fun socket(host: String, port: Int, proxyPort: Int = 19080, readTimeout: Int = 5000, onSocket: (Socket) -> Unit = {}, onStage: (String) -> Unit = {}): Socket {
         val tcp = Socket(Proxy.NO_PROXY)
         var stage = "local proxy connect"
         try {
             onSocket(tcp)
+            onStage(stage)
             tcp.connect(InetSocketAddress("127.0.0.1",proxyPort),1000)
             tcp.soTimeout = readTimeout
             val input = DataInputStream(tcp.inputStream)
             val output = tcp.outputStream
             stage = "SOCKS authentication"
+            onStage(stage)
             output.write(byteArrayOf(5,1,0)); output.flush()
             check(input.readUnsignedByte() == 5 && input.readUnsignedByte() == 0) { "SOCKS method rejected" }
             val numeric = host.split('.').takeIf { it.size == 4 && it.all { part -> (part.toIntOrNull() ?: -1) in 0..255 } }
@@ -25,6 +27,7 @@ object TargetProbe {
                     require(name.size in 1..255); byteArrayOf(3,name.size.toByte())+name
                 }
             stage = "SOCKS upstream connect"
+            onStage(stage)
             output.write(byteArrayOf(5,1,0)+address+byteArrayOf((port ushr 8).toByte(),port.toByte())); output.flush()
             check(input.readUnsignedByte() == 5) { "Invalid SOCKS version" }
             val reply = input.readUnsignedByte()

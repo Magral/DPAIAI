@@ -51,6 +51,33 @@ class MobileCatalogTest {
         val late = java.net.Socket()
         try { session.register(late); fail("Stopped probe accepted socket") } catch (_: java.util.concurrent.CancellationException) { assertTrue(late.isClosed) }
     }
+    @Test fun deadlineRejectsLateSocketAndClosesAnExistingOne() {
+        val guard = ProbeDeadline(60000)
+        val first = java.net.Socket(); guard.register(first)
+        guard.expire(); assertTrue(first.isClosed); assertTrue(guard.timedOut)
+        val late = java.net.Socket()
+        try { guard.register(late); fail("Expired deadline accepted a socket") }
+        catch (_: java.net.SocketTimeoutException) { assertTrue(late.isClosed) }
+        guard.close()
+    }
+    @Test fun silentSocksPeerCannotHoldFirstCandidateUntilReadTimeout() {
+        java.net.ServerSocket(0,1,java.net.InetAddress.getByName("127.0.0.1")).use { server ->
+            val accepted = java.util.concurrent.CompletableFuture<java.net.Socket>()
+            val peer = Thread { runCatching { server.accept().also { accepted.complete(it) } } }
+            peer.isDaemon = true; peer.start()
+            val stages = mutableListOf<String>()
+            val start = System.nanoTime()
+            ProbeDeadline(500).use { guard ->
+                try {
+                    TargetProbe.socket("www.youtube.com",443,server.localPort,10000,guard::register,stages::add).close()
+                    fail("Silent SOCKS endpoint passed")
+                } catch (_: java.io.IOException) { assertTrue(guard.timedOut) }
+            }
+            accepted.get(2,java.util.concurrent.TimeUnit.SECONDS).close(); peer.join(2000)
+            assertTrue(stages.contains("SOCKS authentication"))
+            assertTrue("Hard deadline did not interrupt the read",(System.nanoTime()-start)/1000000 < 5000)
+        }
+    }
     @Test fun realSignedChannelUsesSamePinnedEngineAndProtectsRollback() {
         val directory = System.getenv("CATALOG_TEST_FIXTURE")?.let { File(it) } ?: return
         val key = File(directory,"certificate.der").inputStream().use { CertificateFactory.getInstance("X.509").generateCertificate(it).publicKey }
