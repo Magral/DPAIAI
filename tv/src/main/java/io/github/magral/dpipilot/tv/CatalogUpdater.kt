@@ -58,7 +58,10 @@ object CatalogUpdater {
                 RuntimeCatalog.install(update)
                 prefs.edit().putLong("catalog_sequence",update.sequence).apply()
             }
-        }.onFailure { status = "Сохранённая база не прошла проверку; используется встроенная" }
+        }.onFailure {
+            status = "Сохранённая база не прошла проверку; используется встроенная"
+            prefs.edit().putLong("catalog_checked",0).putLong("catalog_attempt",0).apply()
+        }
     }
     fun due(now: Long,lastSuccess: Long,lastAttempt: Long): Boolean {
         fun elapsed(since: Long,period: Long) = since <= 0 || now < since || now-since >= period

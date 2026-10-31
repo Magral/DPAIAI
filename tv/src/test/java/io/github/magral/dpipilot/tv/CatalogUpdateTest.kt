@@ -36,6 +36,17 @@ class CatalogUpdateTest {
         }
         assertTrue(StrategyCatalog.commands.all { CatalogProtocol.validCommand(it) })
     }
+    @Test fun actualPublishedFeedMatchesPermanentCertificateAndProductionProtocol() {
+        val directory = System.getenv("CATALOG_TEST_FIXTURE")?.let { java.io.File(it) } ?: return
+        val cert = java.security.cert.CertificateFactory.getInstance("X.509").generateCertificate(java.io.File(directory,"certificate.der").inputStream())
+        val data = java.io.File(directory,"previous.json").readBytes()
+        val signature = java.io.File(directory,"previous.sig").readBytes()
+        val update = CatalogProtocol.verify(data,signature,cert.publicKey,0)
+        assertTrue(update.entries.size >= StrategyCatalog.commands.size)
+        val merged = RuntimeCatalog.merge(RuntimeCatalog.Snapshot(StrategyCatalog.commands.indices.map { CatalogEntry(StrategyCatalog.ids[it],StrategyCatalog.commands[it],StrategyCatalog.origins[it]) },StrategyCatalog.version,StrategyCatalog.sources),update)
+        assertEquals(StrategyCatalog.ids,merged.ids.take(StrategyCatalog.ids.size))
+        assertEquals(update.entries.map { it.id }.toSet(),merged.ids.toSet())
+    }
     @Test fun downloadedOrderCannotChangeExistingIndicesOrInFlightSnapshots() {
         val initial = RuntimeCatalog.Snapshot(listOf(CatalogEntry("a","--split 1","old"),CatalogEntry("b","--split 2","old")),"old",emptyList())
         val update = CatalogUpdate(1,"new",listOf(initial.entries[1],CatalogEntry("c","--split 3","new")),emptyList())

@@ -119,7 +119,7 @@ class TvActivity : Activity() {
         val recent = TvState.results.entries.sortedByDescending { TvState.resultTimes[it.key] ?: 0L }
             .let { if (full) it else it.take(8) }.sortedBy { it.key }
         val resultText = recent.joinToString("\n") { "№${it.key+1}: ${if (full) it.value else it.value.take(260)}" }.ifEmpty { "ещё нет" }
-        return "Обновления базы: ${CatalogUpdater.status}\nПроверена: ${time(prefs.getLong("catalog_checked",0))}; загружена: ${time(prefs.getLong("catalog_updated",0))}\n\nБаза: ${TvPolicy.strategies.size} вариантов · ${RuntimeCatalog.version}\n${StrategyCatalog.engine}\nЭтап: ${TvState.phase}\n${TvState.status}\n\n"+
+        return "Обновления базы: ${CatalogUpdater.status}\nПопытка: ${time(prefs.getLong("catalog_attempt",0))}; проверена: ${time(prefs.getLong("catalog_checked",0))}; загружена: ${time(prefs.getLong("catalog_updated",0))}\n\nБаза: ${TvPolicy.strategies.size} вариантов · ${RuntimeCatalog.version}\n${StrategyCatalog.engine}\nЭтап: ${TvState.phase}\n${TvState.status}\n\n"+
             "Стратегия: ${index?.let { "№${it+1} из ${TvPolicy.strategies.size}" } ?: "не запущена"}\n$command\nИсточник: ${index?.let { RuntimeCatalog.origins[it] } ?: "нет"}\nПозиция расширенного подбора: ${TvState.scanCursor+1}/${TvPolicy.strategies.size} (блок до 12)\n"+
             "Диагностика стратегии ${if (TvState.probeIndex >= 0) "№${TvState.probeIndex+1}" else "(предыдущий запуск)"}: ${TvState.probeDetail}\nСледующая проверка: $next\n"+
             "Медиатест: ${TvState.mediaDetail}\n${TvState.trialDetail}\nНаблюдение: ${TvState.stallDetail}\n\n"+

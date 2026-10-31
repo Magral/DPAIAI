@@ -101,6 +101,7 @@ def main():
                 if e['id']!=hashlib.sha256(e['args'].encode()).hexdigest()[:16]:raise ValueError('previous ID')
                 entries.setdefault(e['id'],e)
         exe=tmp/'engine';compile_engine(exe)
+        native_attempts=0
         # Every retained entry must still start with this exact pinned engine.
         for e in entries.values():
             if normalize(e['args'])!=e['args'] or not safe(e['args']):raise ValueError('unsafe retained entry')
@@ -125,6 +126,8 @@ def main():
                             if source['id'] not in entries[ident]['sources']:entries[ident]['sources'].append(source['id'])
                             continue
                         if len(entries)>=2000:raise ValueError('catalog limit')
+                        if native_attempts>=500:raise ValueError('daily native-check budget; retry next run')
+                        native_attempts+=1
                         ok,error=starts(exe,command)
                         if not ok:raise ValueError('native: '+error)
                         entries[ident]={'id':ident,'args':command,'sources':[source['id']]};record['new']+=1

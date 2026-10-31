@@ -1,1 +1,1 @@
-TV 0.5.1: bounded media delivery probes, comparative quality selection, confirmed stalls, supervised trial/rollback, per-network reputation and autonomy/export diagnostics. Do not attribute physical-link loss or undersized public samples to strategy failure.
+TV 0.6.0: daily signed source collection and authenticated data-only catalog updates; preserve active VPN and stable strategy IDs; verify live publication with production Kotlin verifier before signing APK.
