@@ -14,7 +14,7 @@ object TvProbe {
         Spec("youtube","www.youtube.com","/generate_204"),
         Spec("image","i.ytimg.com","/vi/jNQXAC9IVRw/hqdefault.jpg"),
         Spec("media","redirector.googlevideo.com","/"))
-    data class Result(val ok: Boolean,val detail: String,val score: Int = 0)
+    data class Result(val ok: Boolean,val detail: String,val score: Int = 0,val quality: ProbeQuality = ProbeQuality(ok,score,0,MediaResult(MediaStatus.UNAVAILABLE)))
     class Session {
         private val socket = java.util.concurrent.atomic.AtomicReference<java.net.Socket?>()
         private val stopped = java.util.concurrent.atomic.AtomicBoolean(false)
@@ -25,7 +25,8 @@ object TvProbe {
         fun cancel() { stopped.set(true); runCatching { socket.get()?.close() } }
         fun cancelled(): Boolean = stopped.get()
     }
-    fun check(port: Int,index: Int,session: Session,progress: (String) -> Unit = {}): Result {
+    fun check(port: Int,index: Int,session: Session,budget: ProbeBudget? = null,measureMedia: Boolean = true,progress: (String) -> Unit = {}): Result {
+        val started = System.nanoTime()
         var count = 0
         var score = 0
         val rows = mutableListOf<String>()
@@ -46,7 +47,14 @@ object TvProbe {
             // Diagnose all three hosts even when the first fails. Repeat only a fully successful round.
             if (round == 1 && score != 3) break
         }
-        return Result(score == 6,"$score/$count успешных; "+rows.joinToString(" | "),score)
+        val latency = ((System.nanoTime()-started)/1000000/count.coerceAtLeast(1)).coerceAtLeast(1)
+        val media = if (score == 6 && measureMedia && budget != null && budget.prepare(System.currentTimeMillis())) {
+            progress("Проверка доставки двух видеофрагментов…")
+            MediaProbe.check(ProbeHttp(port,TvPolicy.probeReadTimeout(index),session,budget::charge),System.currentTimeMillis())
+        } else MediaResult(MediaStatus.UNAVAILABLE,detail=if (!measureMedia) "Быстрая проверка узлов; медиатест в финальном сравнении" else "Медиатест пропущен: узлы недоступны или исчерпан лимит")
+        progress(media.detail)
+        val quality = ProbeQuality(score == 6,score,latency,media)
+        return Result(quality.eligible,"$score/$count узлов; средняя задержка $latency мс; ${media.detail}; "+rows.joinToString(" | "),score,quality)
     }
     private fun request(spec: Spec,port: Int,timeout: Int,session: Session): String? = TargetProbe.socket(spec.host,443,port,12000,session::register).use { raw ->
         ((SSLSocketFactory.getDefault() as SSLSocketFactory).createSocket(raw,spec.host,443,true) as SSLSocket).use tlsBlock@{ tls ->

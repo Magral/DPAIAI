@@ -85,6 +85,9 @@ class TvActivity : Activity() {
         val settings = row()
         button(settings,"Фоновая работа") { requestBackground() }
         button(settings,"Настройки VPN") { vpnSettings() }
+        val diagnostics = row()
+        button(diagnostics,"Проверка автозапуска") { showAudit() }
+        button(diagnostics,"Экспорт отчёта") { exportReport() }
         text("После первого разрешения VPN служба работает без открытого окна. Для автозапуска оставьте VPN включённым. После явного выключения он останется выключенным и при перезагрузке. Системный постоянный VPN настраивается отдельно.",18f)
         text("Журнал событий · сохраняется после перезапуска",23f)
         journal = text("",18f).apply { typeface = Typeface.MONOSPACE; isFocusable = true }
@@ -116,6 +119,8 @@ class TvActivity : Activity() {
         return "База: ${TvPolicy.strategies.size} вариантов · ${StrategyCatalog.version}\n${StrategyCatalog.engine}\nЭтап: ${TvState.phase}\n${TvState.status}\n\n"+
             "Стратегия: ${index?.let { "№${it+1} из ${TvPolicy.strategies.size}" } ?: "не запущена"}\n$command\nИсточник: ${index?.let { StrategyCatalog.origins[it] } ?: "нет"}\nПозиция расширенного подбора: ${TvState.scanCursor+1}/${TvPolicy.strategies.size} (блок до 12)\n"+
             "Диагностика стратегии ${if (TvState.probeIndex >= 0) "№${TvState.probeIndex+1}" else "(предыдущий запуск)"}: ${TvState.probeDetail}\nСледующая проверка: $next\n"+
+            "Медиатест: ${TvState.mediaDetail}\n${TvState.trialDetail}\nНаблюдение: ${TvState.stallDetail}\n\n"+
+            "Качество профиля сети:\n${TvState.qualityHistory}\n\n"+
             "Последняя проверка: ${time(TvState.lastCheckAt)}\nПоследний успех: ${time(prefs.getLong("last_success",0))}; сохранено: $saved\n\n"+
             "Служба: ${if (TvState.running) "работает" else "остановлена"}; движок: ${if (TvState.engineReady) "готов" else "не готов"}\n"+
             "Интерфейс VPN: ${if (TvState.vpnEstablished) "создан" else "не создан"}; разрешение: ${if (VpnService.prepare(this) == null) "есть" else "нужно подтвердить"}\n"+
@@ -135,7 +140,8 @@ class TvActivity : Activity() {
         status.text = when {
             !enabled -> "VPN выключен"
             VpnService.prepare(this) != null -> "Нужно подтвердить разрешение VPN"
-            TvState.vpnEstablished && TvState.verified -> "VPN включён · проверки YouTube пройдены"
+            TvState.vpnEstablished && TvState.verified && TvState.mediaVerified -> "VPN включён · видеофрагменты доставлены"
+            TvState.vpnEstablished && TvState.verified -> "VPN включён · узлы доступны, медиадоставка не подтверждена"
             TvState.vpnEstablished -> "VPN включён · доступ YouTube проверяется"
             TvState.running -> "VPN ещё не создан · ${TvState.phase}"
             else -> "VPN не запущен · смотрите причину ниже"
@@ -213,13 +219,30 @@ class TvActivity : Activity() {
         try { startActivity(Intent(Settings.ACTION_VPN_SETTINGS)) }
         catch (_: ActivityNotFoundException) { Toast.makeText(this,"Настройки VPN скрыты прошивкой",Toast.LENGTH_LONG).show() }
     }
+    private fun reportText(): String = "DPI Pilot TV ${BuildConfig.VERSION_NAME}\n${information(true)}\n\n${AutonomyAudit.report(this)}\n\nЖурнал:\n${TvState.report}"
+    private fun showAudit() {
+        AlertDialog.Builder(this).setTitle("Проверка автономности").setMessage(AutonomyAudit.report(this))
+            .setPositiveButton("Закрыть",null).show()
+    }
+    private fun exportReport() {
+        try {
+            java.io.File(cacheDir,"pending-report.txt").writeText(reportText())
+            startActivityForResult(Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
+                addCategory(Intent.CATEGORY_OPENABLE); type = "text/plain"
+                putExtra(Intent.EXTRA_TITLE,"DPI-Pilot-TV-${BuildConfig.VERSION_NAME}-report.txt")
+            },12)
+        } catch (_: ActivityNotFoundException) {
+            Toast.makeText(this,"В прошивке нет выбора файла. Откройте полный отчёт и скопируйте его.",Toast.LENGTH_LONG).show()
+            showReport()
+        } catch (_: Exception) { Toast.makeText(this,"Не удалось подготовить отчёт",Toast.LENGTH_LONG).show() }
+    }
     private fun showReport() {
-        val report = "DPI Pilot TV ${BuildConfig.VERSION_NAME}\n${information(true)}\n\nЖурнал:\n${TvState.report}"
+        val report = reportText()
         AlertDialog.Builder(this).setTitle("Полный отчёт").setMessage(report)
             .setNeutralButton("Скопировать") { _,_ ->
                 (getSystemService(CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("DPI Pilot TV",report))
                 Toast.makeText(this,"Отчёт скопирован",Toast.LENGTH_SHORT).show()
-            }.setPositiveButton("Закрыть",null).show()
+            }.setNegativeButton("Сохранить файл") { _,_ -> exportReport() }.setPositiveButton("Закрыть",null).show()
     }
     private fun serviceMenu() {
         AlertDialog.Builder(this).setTitle("Действия")
@@ -234,6 +257,18 @@ class TvActivity : Activity() {
     @Deprecated("Deprecated in Java")
     override fun onActivityResult(requestCode: Int,resultCode: Int,data: Intent?) {
         super.onActivityResult(requestCode,resultCode,data)
+        if (requestCode == 12 && resultCode == RESULT_OK) {
+            val uri = data?.data ?: return
+            val source = java.io.File(cacheDir,"pending-report.txt")
+            Thread {
+                val saved = runCatching {
+                    contentResolver.openOutputStream(uri,"wt")?.use { out -> source.inputStream().use { it.copyTo(out) } }
+                        ?: error("No output stream")
+                }.isSuccess
+                source.delete()
+                runOnUiThread { Toast.makeText(this,if (saved) "Отчёт сохранён" else "Не удалось записать отчёт",Toast.LENGTH_LONG).show() }
+            }.start()
+        }
         if (requestCode == 10) {
             if (resultCode == RESULT_OK) enable() else TvState.update(this,"Пользователь не подтвердил разрешение VPN")
         }

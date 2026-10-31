@@ -24,8 +24,8 @@ android {
         applicationId = "io.github.magral.dpipilot.tv"
         minSdk = 21
         targetSdk = 34
-        versionCode = 7
-        versionName = "0.4.1"
+        versionCode = 8
+        versionName = "0.5.0"
         ndk { abiFilters.addAll(listOf("armeabi-v7a","arm64-v8a","x86","x86_64")) }
     }
     buildFeatures { buildConfig = true }
@@ -68,4 +68,5 @@ dependencies {
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
     testImplementation("junit:junit:4.13.2")
+    testImplementation("org.json:json:20240303")
 }

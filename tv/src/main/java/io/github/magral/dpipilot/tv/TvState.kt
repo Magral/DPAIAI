@@ -11,6 +11,7 @@ object TvState {
     @Volatile var alwaysOn = false
     @Volatile var vpnEstablished = false
     @Volatile var verified = false
+    @Volatile var mediaVerified = false
     @Volatile var status = "Нажмите «Включить авторежим»"
     @Volatile var report = ""
     @Volatile var lastBeat = 0L
@@ -18,6 +19,10 @@ object TvState {
     @Volatile var strategyIndex = -1
     @Volatile var phase = "Остановлено"
     @Volatile var network = "ещё не определена"
+    @Volatile var qualityHistory = "История качества ещё не накоплена"
+    @Volatile var mediaDetail = "Медиатест не выполнялся"
+    @Volatile var trialDetail = "Пробное переключение не выполняется"
+    @Volatile var stallDetail = "Признаков зависания нет"
     @Volatile var scanCursor = 0
     @Volatile var probeIndex = -1
     @Volatile var probeDetail = "ещё не выполнялись"

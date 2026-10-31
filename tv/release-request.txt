@@ -1,1 +1,1 @@
-TV 0.4.1: pinned ByeDPI 17.3, audited multi-source strategy catalog, stable IDs and resumable background scan windows. Updated UDP association guard for connected sockets. DNS plain-forward group precedes imported UDP-fake options.
+TV 0.5.0: bounded media delivery probes, comparative quality selection, confirmed stalls, supervised trial/rollback, per-network reputation and autonomy/export diagnostics.

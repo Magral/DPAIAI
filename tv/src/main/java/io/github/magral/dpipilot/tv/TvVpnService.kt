@@ -15,6 +15,7 @@ import java.io.File
 import java.net.Inet4Address
 import java.util.concurrent.atomic.AtomicBoolean
 import java.security.MessageDigest
+import org.json.JSONObject
 
 class TvVpnService : VpnService() {
     private val scope = CoroutineScope(SupervisorJob()+Dispatchers.IO)
@@ -36,6 +37,12 @@ class TvVpnService : VpnService() {
     private val blocked = mutableMapOf<Int,Long>()
     private var profile = ""
     private var lastReceived = 0L
+    private var observedAt = 0L
+    private var observedRx = 0L
+    private var historyFlushAt = 0L
+    private var trial: Trial? = null
+    private val reputation by lazy { QualityStore(prefs) }
+    private val mediaBudget by lazy { ProbeBudget(prefs.getLong("media_budget_start",0),prefs.getLong("media_budget_spent",0)) }
     private val cm get() = getSystemService(CONNECTIVITY_SERVICE) as ConnectivityManager
     private val prefs get() = TvState.prefs(this)
     companion object {
@@ -162,6 +169,7 @@ class TvVpnService : VpnService() {
         monitor = object : ConnectivityManager.NetworkCallback() {
             override fun onAvailable(network: Network) { requested.set(true) }
             override fun onLost(network: Network) { requested.set(true) }
+            override fun onLinkPropertiesChanged(network: Network,properties: LinkProperties) { requested.set(true) }
         }
         cm.registerNetworkCallback(NetworkRequest.Builder().addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
             .addCapability(NetworkCapabilities.NET_CAPABILITY_NOT_VPN).build(),monitor!!)
@@ -179,12 +187,20 @@ class TvVpnService : VpnService() {
         TvState.sentPackets = stats[0]; TvState.sentBytes = stats[1]
         TvState.receivedPackets = stats[2]; TvState.receivedBytes = stats[3]
         TvState.trafficAt = System.currentTimeMillis()
+        activeIndex?.let { index ->
+            if (observedAt > 0 && now-observedAt in 1000L..15000L && stats[3] >= observedRx)
+                reputation.observe(index,(now-observedAt)/1000,stats[3]-observedRx >= 32*1024)
+        }
+        observedAt = now; observedRx = stats[3]
+        if (now-historyFlushAt >= 300000L) { reputation.flush(); historyFlushAt = now }
         playback.observe(now,stats[3])
-        if (stats[3] >= lastReceived && stats[3]-lastReceived >= 1024*1024) activeIndex?.let { blocked.remove(it) }
+        if (stats[3] >= lastReceived && stats[3]-lastReceived >= 1024*1024) activeIndex?.let { if (blocked.remove(it) != null) persistQuarantine() }
         lastReceived = stats[3]
-        if (traffic.stalled(TrafficWatchdog.Sample(now,stats[0],stats[1],stats[3])) &&
+        val stalledNow = traffic.stalled(TrafficWatchdog.Sample(now,stats[0],stats[1],stats[3]))
+        TvState.stallDetail = traffic.reason
+        if (stalledNow &&
             (activeIndex?.let { it !in blocked } == true) && !playback.recent(now)) {
-            activeIndex?.let { blocked[it] = now+15*60*1000L }
+            activeIndex?.let { quarantine(it,15*60*1000L); reputation.failed(it,stall=true) }
             TvState.update(this,"Повторные запросы YouTube без данных; запрошен фоновый подбор")
             stallRequested.set(true); requested.set(true)
         }
@@ -198,7 +214,7 @@ class TvVpnService : VpnService() {
         }
         TvState.nextCheckAt = 0
     }
-    private suspend fun healthy(index: Int,port: Int = 19080): TvProbe.Result = coroutineScope {
+    private suspend fun healthy(index: Int,port: Int = 19080,measureMedia: Boolean = true): TvProbe.Result = withTimeout(180000) { coroutineScope {
         TvState.phase = if (port == 19081) "Фоновая проверка стратегии №${index+1}" else "Проверка текущей стратегии №${index+1}"
         TvState.probeIndex = index
         TvState.nextCheckAt = 0
@@ -206,31 +222,42 @@ class TvVpnService : VpnService() {
         val session = TvProbe.Session()
         try {
             val pending = async(Dispatchers.IO) {
-                TvProbe.check(port,index,session) { row ->
+                TvProbe.check(port,index,session,mediaBudget,measureMedia) { row ->
                     TvState.probeDetail = "№${index+1}: $row"
                     TvState.update(this@TvVpnService,"Тест №${index+1}: $row")
                 }
             }
             while (!pending.isCompleted) {
-                TvState.beat(this@TvVpnService); sampleTraffic(); delay(250)
+                TvState.beat(this@TvVpnService); sampleTraffic()
+                if (port == 19080 && trial?.rollback(SystemClock.elapsedRealtime(),false,stallRequested.get()) == true) {
+                    session.cancel(); pending.cancel(); pending.join()
+                    return@coroutineScope TvProbe.Result(false,"Пробная стратегия зависла; запрошен быстрый откат")
+                }
+                delay(250)
             }
             val result = pending.await()
             currentCoroutineContext().ensureActive()
             TvState.lastCheckAt = System.currentTimeMillis()
             TvState.probeDetail = result.detail
+            TvState.mediaDetail = "Стратегия №${index+1}: ${result.quality.media.detail}"
             TvState.resultTimes[index] = System.currentTimeMillis()
             TvState.results[index] = (if (result.ok) "OK: " else "Частично/отказ: ")+result.detail
             prefs.edit().putLong("last_check_at",TvState.lastCheckAt).putString("last_probe",result.detail).apply()
             result
-        } finally { session.cancel() }
-    }
-    private fun confirm(index: Int) {
+        } finally {
+            session.cancel()
+            prefs.edit().putLong("media_budget_start",mediaBudget.start).putLong("media_budget_spent",mediaBudget.spent).apply()
+        }
+    } }
+    private fun confirm(index: Int,quality: ProbeQuality) {
         val known = TvPolicy.savedHistory(prefs.getString("history_ids.$profile",null),prefs.getString("history.$profile",null).orEmpty())
         prefs.edit().putInt("good",index).putString("good_id",StrategyCatalog.ids[index])
             .putString("history_ids.$profile",TvPolicy.remember(known,index).joinToString(",") { StrategyCatalog.ids[it] })
             .putString("history.$profile",TvPolicy.remember(known,index).joinToString(","))
             .putLong("last_success",System.currentTimeMillis()).apply()
         TvState.verified = true
+        TvState.mediaVerified = quality.media.status == MediaStatus.PASSED
+        reputation.approved(index,quality,System.currentTimeMillis())
     }
     private suspend fun open(index: Int) {
         TvState.phase = "Запуск движка"
@@ -250,6 +277,7 @@ class TvVpnService : VpnService() {
         TvState.phase = "Закрытие предыдущего туннеля"
         TvState.vpnEstablished = false
         TvState.verified = false
+        TvState.mediaVerified = false
         TvState.engineReady = false
         TvState.strategyIndex = -1
         TvState.sentBytes = 0; TvState.receivedBytes = 0
@@ -264,8 +292,76 @@ class TvVpnService : VpnService() {
             scoutLease?.close(); scoutLease = null
             lease?.close(); lease = null
             activeIndex = null
-            traffic.reset(); playback.reset(); sampleAt = 0; lastReceived = 0
+            reputation.flush()
+            traffic.reset(); playback.reset(); sampleAt = 0; lastReceived = 0; observedAt = 0; observedRx = 0
         }
+    }
+    private fun persistQuarantine() {
+        val now = SystemClock.elapsedRealtime(); val wall = System.currentTimeMillis()
+        val root = JSONObject()
+        for ((index,end) in blocked) if (end > now) root.put(StrategyCatalog.ids[index],wall+(end-now).coerceAtMost(1800000L))
+        prefs.edit().putString("quarantine.$profile",root.toString()).apply()
+    }
+    private fun quarantine(index: Int,millis: Long = 1800000L) {
+        blocked[index] = SystemClock.elapsedRealtime()+millis
+        persistQuarantine()
+    }
+    private fun loadQuarantine() {
+        blocked.clear()
+        val root = runCatching { JSONObject(prefs.getString("quarantine.$profile","{}").orEmpty()) }.getOrDefault(JSONObject())
+        val wall = System.currentTimeMillis(); val now = SystemClock.elapsedRealtime()
+        val keys = root.keys()
+        while (keys.hasNext()) {
+            val id = keys.next(); val index = TvPolicy.indexOfId(id) ?: continue
+            val left = root.optLong(id)-wall
+            if (left > 0) blocked[index] = now+left.coerceAtMost(1800000L)
+        }
+    }
+    private fun clearTrial() {
+        trial = null; prefs.edit().remove("trial.$profile").apply()
+        TvState.trialDetail = "Пробное переключение не выполняется"
+    }
+    private fun beginTrial(previous: Int,candidate: Int,baseline: ProbeQuality,restorable: Boolean) {
+        trial = Trial(previous,candidate,SystemClock.elapsedRealtime(),restorable,baseline)
+        prefs.edit().putString("trial.$profile",JSONObject().put("previous",StrategyCatalog.ids[previous])
+            .put("candidate",StrategyCatalog.ids[candidate]).put("time",System.currentTimeMillis()).put("restore",restorable).toString()).commit()
+        TvState.trialDetail = "Испытание №${candidate+1} до 2 минут; резерв №${previous+1}"
+    }
+    private suspend fun rollback(network: Network): Boolean {
+        val pending = trial ?: return false
+        if (!pending.restorable) return false
+        clearTrial(); blocked.remove(pending.previous); quarantine(pending.candidate); reputation.failed(pending.candidate,rollback=true)
+        TvState.update(this,"Откат №${pending.candidate+1} → №${pending.previous+1}; новый вариант исключён на 30 минут")
+        release(); open(pending.previous); establish(network); networkId = network.toString()
+        val result = healthy(pending.previous)
+        if (physical() != network) { requested.set(true); return true }
+        if (result.ok) confirm(pending.previous,result.quality)
+        TvState.trialDetail = "Выполнен откат к №${pending.previous+1}; причина и проверки — в журнале"
+        waitForCheck(60000)
+        return true
+    }
+    private suspend fun reviewTrial(result: TvProbe.Result,network: Network,stalled: Boolean,manual: Boolean = false): Boolean {
+        val pending = trial ?: return false
+        var latest = result
+        if (pending.candidate != activeIndex) { clearTrial(); return false }
+        if (pending.rollback(SystemClock.elapsedRealtime(),false,stalled)) return rollback(network)
+        if (pending.restorable && QualityPolicy.regression(pending.baseline,result.quality)) {
+            delay(1500)
+            val repeat = healthy(pending.candidate)
+            latest = repeat
+            if (physical() != network) { requested.set(true); return true }
+            if (pending.rollback(SystemClock.elapsedRealtime(),QualityPolicy.regression(pending.baseline,repeat.quality),false)) return rollback(network)
+        }
+        if (!pending.expired(SystemClock.elapsedRealtime()) && !manual) {
+            TvState.trialDetail = "Наблюдаю пробную №${pending.candidate+1}; при ухудшении вернусь к №${pending.previous+1}"
+            waitForCheck((120000L-(SystemClock.elapsedRealtime()-pending.started)).coerceIn(1000L,120000L))
+            return true
+        }
+        clearTrial()
+        if (latest.ok && !manual) confirm(pending.candidate,latest.quality) else if (!latest.ok) reputation.failed(pending.candidate)
+        TvState.update(this,"Испытание №${pending.candidate+1} завершено: ${if (latest.ok) "пробы пройдены; полезный обмен учтён отдельно" else "успех не подтверждён"}")
+        if (latest.ok && !manual) { waitForCheck(300000); return true }
+        return false
     }
     private fun establish(network: Network) {
         TvState.phase = "Создание VPN-интерфейса"
@@ -309,14 +405,35 @@ class TvVpnService : VpnService() {
             val link = cm.getLinkProperties(network)
             TvState.network = "$transport · ${link?.interfaceName ?: "?"} · DNS: ${link?.dnsServers?.mapNotNull { it.hostAddress }?.joinToString() ?: "нет"}"
             val currentProfile = profileKey(network)
-            if (profile != currentProfile) { blocked.clear(); profile = currentProfile }
+            val profileChanged = profile != currentProfile
+            var recovered: Int? = null
+            if (profileChanged) {
+                if (trial != null) TvState.trialDetail = "Испытание прошлого профиля прервано сменой сети"
+                trial = null; profile = currentProfile; reputation.network(profile); MediaProbe.invalidate(); loadQuarantine()
+                val pending = runCatching { JSONObject(prefs.getString("trial.$profile",null).orEmpty()) }.getOrNull()
+                if (pending != null) {
+                    if (pending.optBoolean("restore") && System.currentTimeMillis()-pending.optLong("time") in 0L..600000L) {
+                        recovered = TvPolicy.indexOfId(pending.optString("previous"))
+                        TvPolicy.indexOfId(pending.optString("candidate"))?.let { quarantine(it); reputation.failed(it,rollback=true) }
+                        TvState.update(this,"Незавершённое испытание после перезапуска: восстановление прежнего варианта")
+                    }
+                    prefs.edit().remove("trial.$profile").apply()
+                }
+            }
             blocked.entries.removeAll { it.value <= SystemClock.elapsedRealtime() }
             val old = TvPolicy.indexOfId(prefs.getString("good_id",null)) ?: prefs.getInt("good",-1).takeIf { it in 0..7 }
-            val known = TvPolicy.savedHistory(prefs.getString("history_ids.$profile",null),prefs.getString("history.$profile",null) ?: old?.toString().orEmpty())
+            val known = reputation.preferred(TvPolicy.savedHistory(prefs.getString("history_ids.$profile",null),prefs.getString("history.$profile",null) ?: old?.toString().orEmpty()))
             // Establish once at startup. Every alternative is tested in :scout while this tunnel stays up.
-            if (tun == null || !TvState.engineReady || networkId != network.toString()) {
+            if (tun == null || !TvState.engineReady || networkId != network.toString() || profileChanged) {
+                val interrupted = trial
+                if (!TvState.engineReady && interrupted != null && interrupted.restorable && !profileChanged) {
+                    recovered = interrupted.previous
+                    quarantine(interrupted.candidate); reputation.failed(interrupted.candidate,rollback=true)
+                    clearTrial()
+                    TvState.update(this,"Движок пробного варианта завершился: восстанавливаю прежнюю стратегию")
+                }
                 release()
-                val initial = known.firstOrNull() ?: TvPolicy.adaptiveIndex
+                val initial = recovered ?: known.firstOrNull { it !in blocked } ?: TvPolicy.adaptiveIndex
                 open(initial); establish(network); networkId = network.toString()
                 TvState.update(this,"Включена стратегия №${initial+1}; предварительный режим до проверки")
             }
@@ -324,18 +441,24 @@ class TvVpnService : VpnService() {
             var manual = different.getAndSet(false)
             var stalled = stallRequested.getAndSet(false)
             var force = manual || ((stalled || active in blocked) && !playback.recent(SystemClock.elapsedRealtime()))
+            if (trial?.rollback(SystemClock.elapsedRealtime(),false,stalled) == true && rollback(network)) continue
             val current = healthy(active)
             if (physical() != network) { requested.set(true); continue }
             stalled = stallRequested.getAndSet(false) || stalled
             force = manual || ((stalled || active in blocked) && !playback.recent(SystemClock.elapsedRealtime()))
+            if (reviewTrial(current,network,stalled,manual)) continue
+            val optimize = current.ok && !force && !playback.recent(SystemClock.elapsedRealtime()) &&
+                System.currentTimeMillis()-prefs.getLong("optimized.$profile",0) >= 6*60*60*1000L
             if (current.ok) {
-                confirm(active); failures = 0
-                if (!force) {
+                confirm(active,current.quality); failures = 0
+                if (!force && !optimize) {
                     TvState.update(this,"Проверки текущей стратегии №${active+1} пройдены; VPN не пересоздавался")
                     waitForCheck(300000); continue
                 }
             } else {
+                reputation.failed(active)
                 TvState.verified = false
+                TvState.mediaVerified = false
                 TvState.update(this,"Проверки текущей стратегии: ${current.score} успешных; VPN оставлен включённым")
                 if (!force && playback.recent(SystemClock.elapsedRealtime())) {
                     TvState.update(this,"YouTube получает данные: сохраняю текущий туннель несмотря на отказ диагностики")
@@ -343,7 +466,9 @@ class TvVpnService : VpnService() {
                 }
             }
             var confirmed: Int? = null
-            var trial: Int? = null
+            val candidates = mutableListOf<Pair<Int,TvProbe.Result>>()
+            var attempted = 0
+            var trialCandidate: Int? = null
             var bestScore = -1
             val cursor = TvPolicy.indexOfId(prefs.getString("scan.next_id.$profile",null)) ?: 0
             TvState.scanCursor = cursor
@@ -355,13 +480,16 @@ class TvVpnService : VpnService() {
                 force = manual || ((stalled || active in blocked) && !playback.recent(SystemClock.elapsedRealtime()))
                 if (!force && playback.recent(SystemClock.elapsedRealtime())) break
                 TvState.update(this,"Фоновый тест №${index+1}; активна №${active+1}, VPN не отключается")
+                attempted++
                 val next = EngineLease(this,scout = true)
                 scoutLease = next
                 try {
                     next.open(index)
-                    val result = healthy(index,19081)
-                    if (result.score > bestScore) { bestScore = result.score; trial = index }
-                    if (result.ok) { confirmed = index; break }
+                    var result = healthy(index,19081,measureMedia=false)
+                    if (result.ok && candidates.size < 3) result = healthy(index,19081,measureMedia=true)
+                    if (result.score > bestScore) { bestScore = result.score; trialCandidate = index }
+                    if (result.ok) candidates.add(index to result)
+                    if (candidates.size >= 3) break
                 } catch (e: TimeoutCancellationException) {
                     currentCoroutineContext().ensureActive()
                     TvState.resultTimes[index] = System.currentTimeMillis()
@@ -385,18 +513,28 @@ class TvVpnService : VpnService() {
             manual = different.getAndSet(false) || manual
             stalled = stallRequested.getAndSet(false) || stalled
             force = manual || ((stalled || active in blocked) && !playback.recent(SystemClock.elapsedRealtime()))
-            val replacement = SelectionPolicy.replacement(active,confirmed,trial,force,playback.recent(SystemClock.elapsedRealtime()))
+            if (optimize && attempted > 0) prefs.edit().putLong("optimized.$profile",System.currentTimeMillis()).apply()
+            val best = candidates.maxByOrNull { it.second.quality.value() }
+            confirmed = best?.takeIf { QualityPolicy.better(it.second.quality,current.quality,force) }?.first
+            val replacement = SelectionPolicy.replacement(active,confirmed,trialCandidate,force,playback.recent(SystemClock.elapsedRealtime()))
             if (replacement != null) {
-                if (force) blocked[active] = SystemClock.elapsedRealtime()+15*60*1000L
+                val wasStalled = (stalled || active in blocked) && !playback.recent(SystemClock.elapsedRealtime())
+                if (force) quarantine(active,15*60*1000L)
+                beginTrial(active,replacement,current.quality,!wasStalled && (current.ok || playback.recent(SystemClock.elapsedRealtime())))
                 TvState.update(this,"Переключение №${active+1} → №${replacement+1}: ${if (confirmed != null) "запасной вариант прошёл тесты" else "пробная смена после зависания/ручного запроса; успех не подтверждён"}")
                 release(); open(replacement); establish(network); networkId = network.toString()
                 val result = healthy(replacement)
                 if (physical() != network) { requested.set(true); continue }
+                if (reviewTrial(result,network,stallRequested.get())) continue
                 if (result.ok) {
-                    confirm(replacement); failures = 0
+                    confirm(replacement,result.quality); failures = 0
                     TvState.update(this,"Стратегия №${replacement+1} проверена и сохранена")
                     waitForCheck(300000); continue
                 }
+            }
+            if (current.ok && replacement == null) {
+                TvState.update(this,"Сравнение завершено: значимого улучшения нет; рабочая №${active+1} сохранена")
+                waitForCheck(300000); continue
             }
             failures++
             TvState.update(this,"VPN сохранён без перебора туннелей; доступ YouTube полностью не подтверждён. Повтор через ${TvPolicy.backoffMillis(failures)/60000} мин.")
@@ -412,6 +550,7 @@ class TvVpnService : VpnService() {
     override fun onDestroy() {
         monitor?.let { runCatching { cm.unregisterNetworkCallback(it) } }
         screen?.let { runCatching { unregisterReceiver(it) } }
+        if (!prefs.getBoolean("enabled",false) && profile.isNotEmpty()) clearTrial()
         scope.cancel()
         TvState.vpnEstablished = false
         TvState.verified = false
