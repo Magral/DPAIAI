@@ -7,6 +7,8 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 class MobileEngineLease(private val context: Context,private val failed: () -> Unit = {}) {
     private val closing = AtomicBoolean(false)
+    private val reported = AtomicBoolean(false)
+    private fun notifyFailure() { if (!closing.get() && reported.compareAndSet(false,true)) failed() }
     private val connected = CompletableDeferred<IBinder>()
     private val ready = CompletableDeferred<Boolean>()
     private val died = CompletableDeferred<Unit>()
@@ -16,11 +18,11 @@ class MobileEngineLease(private val context: Context,private val failed: () -> U
     private val connection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName,service: IBinder) {
             binder = service
-            try { service.linkToDeath({ died.complete(Unit); if (!closing.get()) failed() },0); connected.complete(service) }
+            try { service.linkToDeath({ died.complete(Unit); notifyFailure() },0); connected.complete(service) }
             catch (e: RemoteException) { connected.completeExceptionally(e) }
         }
         override fun onServiceDisconnected(name: ComponentName) {
-            died.complete(Unit); if (!closing.get()) failed()
+            died.complete(Unit); notifyFailure()
             ready.completeExceptionally(IllegalStateException("Engine stopped"))
         }
     }

@@ -1,1 +1,2 @@
 Mobile 0.6.0: Instagram-first per-service selection; signed catalog refresh; separate modern engine/JNI; background transport/traffic control with guarded replacement. Permanent phone signing identity.
+Native process failure is reported once; intentional unbind never triggers service failure.
