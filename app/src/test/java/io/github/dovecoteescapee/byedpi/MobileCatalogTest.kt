@@ -39,6 +39,13 @@ class MobileCatalogTest {
         assertFalse(ServiceProbe.publicResponse("image",206,"image/jpeg","<html>blocked</html>".toByteArray()))
         assertTrue(ServiceProbe.publicResponse("image",206,"image/jpeg",byteArrayOf(255.toByte(),216.toByte(),255.toByte())+ByteArray(100)))
     }
+    @Test fun idleOrHealthyTrafficDoesNotLookLikeDemandWithoutReplies() {
+        assertFalse(TuningScore.lackOfReplies(3,512,500))
+        assertFalse(TuningScore.lackOfReplies(30,20000,2000000))
+        assertFalse(TuningScore.lackOfReplies(-1,20000,0))
+        assertTrue(TuningScore.lackOfReplies(25,5000,0))
+        assertTrue(TuningScore.lackOfReplies(10,20000,300))
+    }
     @Test fun stoppingAProbeClosesSocketAndRejectsLateRegistration() {
         val session = ServiceProbe.Session(); val first = java.net.Socket(); session.register(first); session.cancel(); assertTrue(first.isClosed)
         val late = java.net.Socket()

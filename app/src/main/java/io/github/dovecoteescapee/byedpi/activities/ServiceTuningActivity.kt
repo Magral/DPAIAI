@@ -18,7 +18,7 @@ class ServiceTuningActivity : AppCompatActivity() {
     private lateinit var base: TextView
     private val refreshUi = object : Runnable {
         override fun run() {
-            base.text = "База ${RuntimeCatalog.commands.size} · ${RuntimeCatalog.version}\n${MobileCatalogUpdater.status}\n${MobileStrategyPolicy.state}"
+            base.text = "DPI Pilot ${io.github.dovecoteescapee.byedpi.BuildConfig.VERSION_NAME} · База ${RuntimeCatalog.commands.size} · ${RuntimeCatalog.version}\n${MobileCatalogUpdater.status}\n${MobileStrategyPolicy.state}"
             handler.postDelayed(this,2000)
         }
     }

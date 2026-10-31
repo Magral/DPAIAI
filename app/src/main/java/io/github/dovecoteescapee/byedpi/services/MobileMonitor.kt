@@ -20,19 +20,19 @@ class MobileMonitor(private val context: Context,private val scope: CoroutineSco
         val prefs = context.getPreferences(); val target = prefs.getString("mobile_target","instagram") ?: "instagram"
         var active = prefs.getString("mobile_command","") ?: ""
         sample = scope.launch {
-            var at = SystemClock.elapsedRealtime(); var rx = 0L; var tx = 0L; var bad = 0
+            var at = SystemClock.elapsedRealtime(); var rx = 0L; var tx = 0L; var packets = 0L; var bad = 0
             var recentAt = at; var recentBytes = 0L
             while (isActive) {
                 delay(5000)
                 val now = SystemClock.elapsedRealtime(); val stats = runCatching { TProxyService.TProxyGetStats() }.getOrNull() ?: continue
                 if (stats.size < 4) continue
-                if (!MobileStrategyPolicy.connected(context) || stats[3] < rx || now-at > 90000) { at = now; rx = stats[3]; tx = stats[1]; bad = 0; usefulAt = 0 }
+                if (!MobileStrategyPolicy.connected(context) || stats[3] < rx || now-at > 90000) { at = now; rx = stats[3]; tx = stats[1]; packets = stats[0]; bad = 0; usefulAt = 0 }
                 if (stats[3]-recentBytes >= 256*1024 && now-recentAt <= 30000) { usefulAt = now; recentAt = now; recentBytes = stats[3] }
                 else if (now-recentAt > 30000 || stats[3] < recentBytes) { recentAt = now; recentBytes = stats[3] }
                 if (now-at >= 45000) {
-                    bad = if (stats[1]-tx >= 16*1024 && stats[3]-rx < 64*1024) bad+1 else 0
+                    bad = if (TuningScore.lackOfReplies(stats[0]-packets,stats[1]-tx,stats[3]-rx)) bad+1 else 0
                     if (bad >= 2 && now-usefulAt > 90000) { stalled = true; bad = 0 }
-                    at = now; rx = stats[3]; tx = stats[1]
+                    at = now; rx = stats[3]; tx = stats[1]; packets = stats[0]
                 }
             }
         }
@@ -41,6 +41,10 @@ class MobileMonitor(private val context: Context,private val scope: CoroutineSco
             while (isActive) {
             try {
                 while (isActive) {
+                    if (!MobileStrategyPolicy.modern(prefs) || prefs.getString("mobile_command",null) != active || prefs.getString("mobile_target",null) != target) {
+                        MobileStrategyPolicy.state = "Ручные настройки изменены; автоконтроль приостановлен до перезапуска VPN"
+                        return@launch
+                    }
                     if (!MobileStrategyPolicy.connected(context)) { MobileStrategyPolicy.state = "Нет физической сети; стратегия сохранена"; delay(15000); continue }
                     MobileStrategyPolicy.state = "Проверяется ${ServiceTargets.target(target).name}"
                     val networkProfile = MobileStrategyPolicy.profile(context)
