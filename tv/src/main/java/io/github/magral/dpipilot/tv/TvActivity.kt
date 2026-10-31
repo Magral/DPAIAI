@@ -122,7 +122,7 @@ class TvActivity : Activity() {
         return "Обновления базы: ${CatalogUpdater.status}\nПопытка: ${time(prefs.getLong("catalog_attempt",0))}; проверена: ${time(prefs.getLong("catalog_checked",0))}; загружена: ${time(prefs.getLong("catalog_updated",0))}\n\nБаза: ${TvPolicy.strategies.size} вариантов · ${RuntimeCatalog.version}\n${StrategyCatalog.engine}\nЭтап: ${TvState.phase}\n${TvState.status}\n\n"+
             "Стратегия: ${index?.let { "№${it+1} из ${TvPolicy.strategies.size}" } ?: "не запущена"}\n$command\nИсточник: ${index?.let { RuntimeCatalog.origins[it] } ?: "нет"}\nПозиция расширенного подбора: ${TvState.scanCursor+1}/${TvPolicy.strategies.size} (блок до 12)\n"+
             "Диагностика стратегии ${if (TvState.probeIndex >= 0) "№${TvState.probeIndex+1}" else "(предыдущий запуск)"}: ${TvState.probeDetail}\nСледующая проверка: $next\n"+
-            "Медиатест: ${TvState.mediaDetail}\n${TvState.trialDetail}\nНаблюдение: ${TvState.stallDetail}\n\n"+
+            "${TvState.trialDetail}\nНаблюдение: ${TvState.stallDetail}\n\n"+
             "Качество профиля сети:\n${TvState.qualityHistory}\n\n"+
             "Последняя проверка: ${time(TvState.lastCheckAt)}\nПоследний успех: ${time(prefs.getLong("last_success",0))}; сохранено: $saved\n\n"+
             "Служба: ${if (TvState.running) "работает" else "остановлена"}; движок: ${if (TvState.engineReady) "готов" else "не готов"}\n"+
@@ -143,8 +143,7 @@ class TvActivity : Activity() {
         status.text = when {
             !enabled -> "VPN выключен"
             VpnService.prepare(this) != null -> "Нужно подтвердить разрешение VPN"
-            TvState.vpnEstablished && TvState.verified && TvState.mediaVerified -> "VPN включён · видеофрагменты доставлены"
-            TvState.vpnEstablished && TvState.verified -> "VPN включён · узлы доступны, медиадоставка не подтверждена"
+            TvState.vpnEstablished && TvState.verified -> "VPN включён · проверки YouTube пройдены"
             TvState.vpnEstablished -> "VPN включён · доступ YouTube проверяется"
             TvState.running -> "VPN ещё не создан · ${TvState.phase}"
             else -> "VPN не запущен · смотрите причину ниже"

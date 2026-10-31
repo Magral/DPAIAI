@@ -21,4 +21,6 @@ with zipfile.ZipFile(apk) as archive:
     dex = b''.join(archive.read(name) for name in archive.namelist() if name.endswith('.dex'))
     for cls in [b'Lio/github/magral/dpipilot/tv/TvActivity;',b'Lio/github/dovecoteescapee/byedpi/core/TProxyService;']:
         assert cls in dex, 'Missing TV/JNI entry point'
+    for removed in [b'Lio/github/magral/dpipilot/tv/MediaProbe;',b'Lio/github/magral/dpipilot/tv/ProbeHttp;',b'ytInitialPlayerResponse']:
+        assert removed not in dex, 'Obsolete synthetic media path remains in APK'
 print('TV application ID, launcher, boot receiver, engine process and all four native ABIs verified')

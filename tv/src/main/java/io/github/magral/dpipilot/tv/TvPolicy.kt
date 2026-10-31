@@ -41,6 +41,16 @@ object TvPolicy {
         failures == 3 -> 300_000L
         else -> 600_000L
     }
+    fun acceptsPreview(status: Int,type: String,bytes: ByteArray): Boolean {
+        if (!accepts("image",status,type,bytes.size) || bytes.size < 16) return false
+        fun prefix(vararg expected: Int) = expected.indices.all { (bytes[it].toInt() and 255) == expected[it] }
+        return when (type.substringBefore(';').trim().lowercase(java.util.Locale.ROOT)) {
+            "image/jpeg" -> prefix(255,216,255)
+            "image/png" -> prefix(137,80,78,71,13,10,26,10)
+            "image/webp" -> bytes.copyOfRange(0,4).toString(Charsets.US_ASCII) == "RIFF" && bytes.copyOfRange(8,12).toString(Charsets.US_ASCII) == "WEBP"
+            else -> false
+        }
+    }
     fun accepts(kind: String,status: Int,contentType: String,bodyBytes: Int): Boolean = when (kind) {
         "youtube" -> status == 204
         "image" -> status in listOf(200,206) && contentType.startsWith("image/",true) && bodyBytes > 0

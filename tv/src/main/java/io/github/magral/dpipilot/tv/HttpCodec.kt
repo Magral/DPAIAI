@@ -1,13 +1,9 @@
 package io.github.magral.dpipilot.tv
 
-import android.os.Build
-import io.github.dovecoteescapee.byedpi.utility.TargetProbe
 import java.io.*
-import java.net.URI
 import java.util.Locale
-import javax.net.ssl.*
 
-/** Bounded HTTP/1.1, identity encoding only. Never logs a signed URL or follows an arbitrary host. */
+/** Bounded HTTP/1.1 parser for the YouTube reachability checks. */
 object HttpCodec {
     data class Response(val status: Int,val headers: Map<String,String>,val body: ByteArray,val capped: Boolean = false)
     fun read(input: InputStream,limit: Int,onBytes: (Int)->Unit = {},interims: Int = 0): Response {
@@ -73,40 +69,5 @@ object HttpCodec {
             }
         }
         return Response(status,headers,out.toByteArray(),out.size() == limit)
-    }
-}
-
-class ProbeHttp(private val port: Int,private val timeout: Int,private val session: TvProbe.Session,private val onBytes: (Int)->Unit = {}) {
-    data class Transfer(val response: HttpCodec.Response,val firstByteMs: Long,val elapsedMs: Long)
-    fun get(uri: URI,limit: Int,range: LongRange? = null,redirects: Int = 0): Transfer {
-        require(MediaLinks.allowedRequest(uri)) { "HTTP target rejected" }
-        if (session.cancelled()) throw java.util.concurrent.CancellationException()
-        val start = System.nanoTime()
-        val raw = TargetProbe.socket(uri.host,443,port,12000,session::register)
-        raw.use {
-            val tls = (SSLSocketFactory.getDefault() as SSLSocketFactory).createSocket(raw,uri.host,443,true) as SSLSocket
-            tls.use {
-                tls.soTimeout = timeout
-                if (Build.VERSION.SDK_INT >= 24) tls.sslParameters = tls.sslParameters.apply { endpointIdentificationAlgorithm = "HTTPS" }
-                tls.startHandshake()
-                if (Build.VERSION.SDK_INT < 24 && !HttpsURLConnection.getDefaultHostnameVerifier().verify(uri.host,tls.session)) throw IOException("TLS hostname mismatch")
-                val path = uri.rawPath.ifEmpty { "/" }+(uri.rawQuery?.let { "?$it" } ?: "")
-                val request = "GET $path HTTP/1.1\r\nHost: ${uri.host}\r\nUser-Agent: Mozilla/5.0\r\nAccept-Encoding: identity\r\nAccept: */*\r\n"+
-                    (range?.let { "Range: bytes=${it.first}-${it.last}\r\n" } ?: "")+"Connection: close\r\n\r\n"
-                tls.outputStream.write(request.toByteArray(Charsets.US_ASCII)); tls.outputStream.flush()
-                val input = PushbackInputStream(BufferedInputStream(tls.inputStream),1)
-                val first = input.read(); if (first < 0) throw EOFException("No HTTP response")
-                val latency = ((System.nanoTime()-start)/1000000).coerceAtLeast(1)
-                input.unread(first)
-                val response = HttpCodec.read(input,limit,onBytes)
-                if (response.status in listOf(301,302,303,307,308)) {
-                    if (redirects >= 3) throw IOException("Too many redirects")
-                    val next = uri.resolve(response.headers["location"] ?: throw IOException("Redirect without location"))
-                    if (!MediaLinks.allowedRequest(next)) throw IOException("Redirect target rejected")
-                    return get(next,limit,range,redirects+1)
-                }
-                return Transfer(response,latency,((System.nanoTime()-start)/1000000).coerceAtLeast(1))
-            }
-        }
     }
 }

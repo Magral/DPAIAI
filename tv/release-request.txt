@@ -1,1 +1,1 @@
-TV 0.6.0: daily signed source collection and authenticated data-only catalog updates; preserve active VPN and stable strategy IDs; verify live publication with production Kotlin verifier before signing APK.
+TV 0.6.1: remove unreliable synthetic video probe and every media eligibility/ranking/status dependency; retain real YouTube traffic watchdog and rollback; validate preview HTTP framing and image signatures.
