@@ -17,7 +17,7 @@ internal sealed class MainForm : Form
     private readonly Label phase=new(){AutoSize=true,Font=new Font("Segoe UI",13,FontStyle.Bold),MaximumSize=new Size(1000,0)};
     private readonly TextBox information=new(){Multiline=true,ReadOnly=true,ScrollBars=ScrollBars.Vertical,Dock=DockStyle.Fill,Font=new Font("Consolas",10)};
     private readonly Button toggle=new(){AutoSize=true};
-    private bool exiting;
+    private bool exiting,cleaned;
     private long extensionSeen;
     public MainForm(SettingsStore settings,CatalogStore catalog,string executable,bool background)
     {
@@ -106,5 +106,5 @@ internal sealed class MainForm : Form
         await pilot.StopAsync();lifetime.Cancel();await pilot.DisposeAsync();exiting=true;tray.Visible=false;Close();
     }
     protected override void Dispose(bool disposing)
-    {if(disposing){timer.Dispose();tray.Dispose();safety.Dispose();lifetime.Cancel();lifetime.Dispose();}base.Dispose(disposing);}
+    {if(disposing && !cleaned){cleaned=true;timer.Dispose();tray.Dispose();safety.Dispose();lifetime.Cancel();lifetime.Dispose();}base.Dispose(disposing);}
 }
