@@ -2,7 +2,7 @@ package io.github.magral.dpipilot.tv
 
 /** Bounded fallback order; the saved strategy is committed only after all probes pass. */
 object TvPolicy {
-    val strategies = StrategyCatalog.commands
+    val strategies get() = RuntimeCatalog.commands
     fun order(saved: Int?,forceDifferent: Boolean): List<Int> {
         val good = saved?.takeIf { it in strategies.indices }
         val rest = strategies.indices.filter { it != good }
@@ -17,7 +17,7 @@ object TvPolicy {
         val base = (known+listOf(adaptiveIndex)+strategies.indices).filter { it in strategies.indices }.distinct()
         return base.filter { it != failed && it !in blocked } + base.filter { it == failed && it !in blocked }
     }
-    fun indexOfId(id: String?): Int? = id?.let { StrategyCatalog.ids.indexOf(it).takeIf { n -> n >= 0 } }
+    fun indexOfId(id: String?): Int? = id?.let { RuntimeCatalog.ids.indexOf(it).takeIf { n -> n >= 0 } }
     fun savedHistory(ids: String?,legacy: String): List<Int> = if (ids == null) history(legacy).filter { it <= 7 }
         else ids.split(',').mapNotNull { indexOfId(it) }.distinct().take(3)
     fun scanWindow(known: List<Int>,active: Int,blocked: Set<Int>,cursor: Int,limit: Int = 12): List<Int> {

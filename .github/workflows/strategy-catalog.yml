@@ -1,0 +1,74 @@
+name: Update signed strategy catalog
+on:
+  schedule:
+    - cron: '23 3 * * *'
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/strategy-catalog.yml'
+      - 'tv/strategies/refresh_catalog.py'
+      - 'tv/strategies/refresh_request.txt'
+permissions:
+  contents: write
+concurrency:
+  group: signed-strategy-catalog
+  cancel-in-progress: false
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Restore permanent signing key
+        env:
+          DPI_PILOT_SIGNING: ${{ secrets.DPI_PILOT_SIGNING }}
+        run: python3 scripts/restore-signing.py
+      - name: Test safe source extraction and resource bounds
+        run: python3 tv/strategies/test_refresh.py
+      - name: Collect sources, validate every entry, sign exact payload
+        run: python3 tv/strategies/refresh_catalog.py
+      - name: Remove private key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/dpipilot-release.p12"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: signed-catalog-and-source-report
+          path: catalog-release/*
+          retention-days: 30
+      - name: Publish independent data channel
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const {owner,repo} = context.repo;
+            const {data: head} = await github.rest.git.getRef({owner,repo,ref:'heads/main'});
+            if (head.object.sha !== context.sha) throw new Error('Source changed; rerun from current main');
+            const tag = 'strategy-catalog';
+            let release;
+            try { release = (await github.rest.repos.getReleaseByTag({owner,repo,tag})).data; }
+            catch (e) {
+              if (e.status !== 404) throw e;
+              release = (await github.rest.repos.createRelease({owner,repo,tag_name:tag,target_commitish:context.sha,
+                name:'DPI Pilot TV — подписанная база стратегий',draft:true,prerelease:false,make_latest:'false'})).data;
+            }
+            const summary = JSON.parse(fs.readFileSync('catalog-release/summary.json'));
+            const assets = (await github.rest.repos.listReleaseAssets({owner,repo,release_id:release.id})).data;
+            for (const name of ['catalog-v1.json','refresh-report.json']) {
+              const data = fs.readFileSync('catalog-release/'+name);
+              const temporary = name+'.'+summary.sequence;
+              const uploaded = (await github.rest.repos.uploadReleaseAsset({owner,repo,release_id:release.id,
+                name:temporary,data,headers:{'content-type':'application/json','content-length':data.length}})).data;
+              for (const existing of assets.filter(a => a.name === name))
+                await github.rest.repos.deleteReleaseAsset({owner,repo,asset_id:existing.id});
+              await github.rest.repos.updateReleaseAsset({owner,repo,asset_id:uploaded.id,name});
+            }
+            await github.rest.repos.updateRelease({owner,repo,release_id:release.id,draft:false,make_latest:'false',
+              body:'Данные для автоматического обновления TV-приложения 0.6.0+. Не APK.\n\nЕжедневный сбор известных источников: GitHub, форумы, сайты и публичные инструкции. Отказ источника не удаляет предыдущие варианты. Строгая фильтрация параметров, проверка запуска каждой команды на закреплённом движке ByeDPI 17.3, подпись постоянным ключом. Проверка запуска не доказывает эффективность у провайдера.\n\nПубликация: '+summary.sequence+'; вариантов: '+summary.strategies+'; источников с командами получено: '+summary.sources_fetched+'.\nОтчёт сборщика: refresh-report.json. Последний полный отчёт и подписанные данные также сохраняются в Actions на 30 дней.\nSource: '+context.sha});
+            core.notice('Published signed catalog '+summary.sequence);

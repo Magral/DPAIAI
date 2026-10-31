@@ -15,11 +15,11 @@ open class TvEngineService(private val proxyPort: Int = 19080) : Service() {
     private val control = Messenger(Handler(Looper.getMainLooper()) { message ->
         if (!used) {
             used = true
-            val index = message.data.getInt("candidate",-1)
+            val command = message.data.getString("command")
             val reply = message.replyTo
-            if (index !in TvPolicy.strategies.indices) { stopSelf(); return@Handler true }
+            if (command == null || !CatalogProtocol.validCommand(command)) { stopSelf(); return@Handler true }
             Thread {
-                runCatching { runBlocking { ByeDpiProxy().startProxy(ByeDpiProxyCmdPreferences("--ip 127.0.0.1 --port $proxyPort --proto udp --pf 53 --auto none ${TvPolicy.strategies[index]}")) } }
+                runCatching { runBlocking { ByeDpiProxy().startProxy(ByeDpiProxyCmdPreferences("--ip 127.0.0.1 --port $proxyPort --proto udp --pf 53 --auto none $command")) } }
             }.start()
             Thread {
                 var ready = false

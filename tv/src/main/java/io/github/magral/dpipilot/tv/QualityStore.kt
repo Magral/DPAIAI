@@ -19,7 +19,7 @@ class QualityStore(private val prefs: SharedPreferences) {
                 r.optLong("useful").coerceAtLeast(0),r.optLong("active").coerceAtLeast(0),r.optLong("kbps").coerceAtLeast(0),r.optLong("latency").coerceAtLeast(0),r.optLong("seen").coerceAtLeast(0))
         }
     }
-    private fun record(index: Int) = records.getOrPut(StrategyCatalog.ids[index]) { QualityRecord() }
+    private fun record(index: Int) = records.getOrPut(RuntimeCatalog.ids[index]) { QualityRecord() }
     fun approved(index: Int,quality: ProbeQuality,now: Long) {
         val r = record(index); r.successes++; r.lastSeen = now; r.latencyMs = quality.latencyMs
         if (quality.media.status == MediaStatus.PASSED) r.minKbps = quality.media.minKbps

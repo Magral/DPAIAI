@@ -20,7 +20,7 @@ import org.json.JSONObject
 class TvVpnService : VpnService() {
     private val scope = CoroutineScope(SupervisorJob()+Dispatchers.IO)
     private var controller: Job? = null
-    private var lease: EngineLease? = null
+        private var lease: EngineLease? = null
     private var scoutLease: EngineLease? = null
     private var tun: ParcelFileDescriptor? = null
     private var config: File? = null
@@ -58,6 +58,7 @@ class TvVpnService : VpnService() {
     override fun onStartCommand(intent: Intent?,flags: Int,startId: Int): Int {
         foreground()
         TvState.restore(this)
+        CatalogUpdater.load(this)
         TvState.alwaysOn = Build.VERSION.SDK_INT >= 29 && isAlwaysOn
         if (intent?.action == "stop") {
             if (TvState.alwaysOn) {
@@ -84,6 +85,12 @@ class TvVpnService : VpnService() {
         requested.set(true)
         if (intent?.action == "different") different.set(true)
         if (controller == null) {
+            scope.launch {
+                while (isActive) {
+                    CatalogUpdater.refresh(this@TvVpnService)
+                    delay(15*60*1000L)
+                }
+            }
             TvState.results.clear(); TvState.resultTimes.clear()
             val reason = when (intent?.action) {
                 "boot" -> "загрузка системы"
@@ -256,8 +263,8 @@ class TvVpnService : VpnService() {
     } }
     private fun confirm(index: Int,quality: ProbeQuality) {
         val known = TvPolicy.savedHistory(prefs.getString("history_ids.$profile",null),prefs.getString("history.$profile",null).orEmpty())
-        prefs.edit().putInt("good",index).putString("good_id",StrategyCatalog.ids[index])
-            .putString("history_ids.$profile",TvPolicy.remember(known,index).joinToString(",") { StrategyCatalog.ids[it] })
+        prefs.edit().putInt("good",index).putString("good_id",RuntimeCatalog.ids[index])
+            .putString("history_ids.$profile",TvPolicy.remember(known,index).joinToString(",") { RuntimeCatalog.ids[it] })
             .putString("history.$profile",TvPolicy.remember(known,index).joinToString(","))
             .putLong("last_success",System.currentTimeMillis()).apply()
         TvState.verified = true
@@ -304,7 +311,7 @@ class TvVpnService : VpnService() {
     private fun persistQuarantine() {
         val now = SystemClock.elapsedRealtime(); val wall = System.currentTimeMillis()
         val root = JSONObject()
-        for ((index,end) in blocked) if (end > now) root.put(StrategyCatalog.ids[index],wall+(end-now).coerceAtMost(1800000L))
+        for ((index,end) in blocked) if (end > now) root.put(RuntimeCatalog.ids[index],wall+(end-now).coerceAtMost(1800000L))
         prefs.edit().putString("quarantine.$profile",root.toString()).apply()
     }
     private fun quarantine(index: Int,millis: Long = 1800000L) {
@@ -328,8 +335,8 @@ class TvVpnService : VpnService() {
     }
     private fun beginTrial(previous: Int,candidate: Int,baseline: ProbeQuality,restorable: Boolean) {
         trial = Trial(previous,candidate,SystemClock.elapsedRealtime(),restorable,baseline)
-        prefs.edit().putString("trial.$profile",JSONObject().put("previous",StrategyCatalog.ids[previous])
-            .put("candidate",StrategyCatalog.ids[candidate]).put("time",System.currentTimeMillis()).put("restore",restorable).toString()).commit()
+        prefs.edit().putString("trial.$profile",JSONObject().put("previous",RuntimeCatalog.ids[previous])
+            .put("candidate",RuntimeCatalog.ids[candidate]).put("time",System.currentTimeMillis()).put("restore",restorable).toString()).commit()
         TvState.trialDetail = "Испытание №${candidate+1} до 2 минут; резерв №${previous+1}"
     }
     private suspend fun rollback(network: Network): Boolean {
@@ -509,7 +516,7 @@ class TvVpnService : VpnService() {
                     next.close(); scoutLease = null
                     if (currentCoroutineContext().isActive) {
                         val nextIndex = (index+1)%TvPolicy.strategies.size
-                        prefs.edit().putString("scan.next_id.$profile",StrategyCatalog.ids[nextIndex]).apply()
+                        prefs.edit().putString("scan.next_id.$profile",RuntimeCatalog.ids[nextIndex]).apply()
                         TvState.scanCursor = nextIndex
                     }
                 }

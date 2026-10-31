@@ -31,7 +31,7 @@ internal class EngineLease(private val context: Context,private val scout: Boole
         }
         withTimeout(10000) {
             val remote = Messenger(connected.await())
-            remote.send(Message.obtain().apply { replyTo = this@EngineLease.callback; data = Bundle().apply { putInt("candidate",index) } })
+            remote.send(Message.obtain().apply { replyTo = this@EngineLease.callback; data = Bundle().apply { putString("command",TvPolicy.strategies[index]) } })
             check(ready.await()) { "Engine did not start" }
         }
     }

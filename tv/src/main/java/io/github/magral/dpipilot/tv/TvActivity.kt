@@ -37,6 +37,7 @@ class TvActivity : Activity() {
     override fun onCreate(state: Bundle?) {
         super.onCreate(state)
         TvState.restore(this)
+        CatalogUpdater.load(this)
         val box = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(36),dp(20),dp(36),dp(30))
@@ -88,6 +89,8 @@ class TvActivity : Activity() {
         val diagnostics = row()
         button(diagnostics,"Проверка автозапуска") { showAudit() }
         button(diagnostics,"Экспорт отчёта") { exportReport() }
+        val updates = row()
+        button(updates,"Обновить базу стратегий") { Thread { CatalogUpdater.refresh(applicationContext,true) }.start() }
         text("После первого разрешения VPN служба работает без открытого окна. Для автозапуска оставьте VPN включённым. После явного выключения он останется выключенным и при перезагрузке. Системный постоянный VPN настраивается отдельно.",18f)
         text("Журнал событий · сохраняется после перезапуска",23f)
         journal = text("",18f).apply { typeface = Typeface.MONOSPACE; isFocusable = true }
@@ -116,8 +119,8 @@ class TvActivity : Activity() {
         val recent = TvState.results.entries.sortedByDescending { TvState.resultTimes[it.key] ?: 0L }
             .let { if (full) it else it.take(8) }.sortedBy { it.key }
         val resultText = recent.joinToString("\n") { "№${it.key+1}: ${if (full) it.value else it.value.take(260)}" }.ifEmpty { "ещё нет" }
-        return "База: ${TvPolicy.strategies.size} вариантов · ${StrategyCatalog.version}\n${StrategyCatalog.engine}\nЭтап: ${TvState.phase}\n${TvState.status}\n\n"+
-            "Стратегия: ${index?.let { "№${it+1} из ${TvPolicy.strategies.size}" } ?: "не запущена"}\n$command\nИсточник: ${index?.let { StrategyCatalog.origins[it] } ?: "нет"}\nПозиция расширенного подбора: ${TvState.scanCursor+1}/${TvPolicy.strategies.size} (блок до 12)\n"+
+        return "Обновления базы: ${CatalogUpdater.status}\nПроверена: ${time(prefs.getLong("catalog_checked",0))}; загружена: ${time(prefs.getLong("catalog_updated",0))}\n\nБаза: ${TvPolicy.strategies.size} вариантов · ${RuntimeCatalog.version}\n${StrategyCatalog.engine}\nЭтап: ${TvState.phase}\n${TvState.status}\n\n"+
+            "Стратегия: ${index?.let { "№${it+1} из ${TvPolicy.strategies.size}" } ?: "не запущена"}\n$command\nИсточник: ${index?.let { RuntimeCatalog.origins[it] } ?: "нет"}\nПозиция расширенного подбора: ${TvState.scanCursor+1}/${TvPolicy.strategies.size} (блок до 12)\n"+
             "Диагностика стратегии ${if (TvState.probeIndex >= 0) "№${TvState.probeIndex+1}" else "(предыдущий запуск)"}: ${TvState.probeDetail}\nСледующая проверка: $next\n"+
             "Медиатест: ${TvState.mediaDetail}\n${TvState.trialDetail}\nНаблюдение: ${TvState.stallDetail}\n\n"+
             "Качество профиля сети:\n${TvState.qualityHistory}\n\n"+
@@ -247,7 +250,7 @@ class TvActivity : Activity() {
     private fun serviceMenu() {
         AlertDialog.Builder(this).setTitle("Действия")
             .setItems(arrayOf("Полный отчёт","Разрешение VPN / включить","Фоновая работа","Настройки VPN","Источники базы стратегий")) { _,which ->
-                when (which) { 0 -> showReport(); 1 -> configure(); 2 -> requestBackground(); 3 -> vpnSettings(); 4 -> AlertDialog.Builder(this).setTitle("Источники · ${StrategyCatalog.version}").setMessage(StrategyCatalog.sources.joinToString("\n\n")).setPositiveButton("Закрыть",null).show() }
+                when (which) { 0 -> showReport(); 1 -> configure(); 2 -> requestBackground(); 3 -> vpnSettings(); 4 -> AlertDialog.Builder(this).setTitle("Источники · ${RuntimeCatalog.version}").setMessage(RuntimeCatalog.sources.joinToString("\n\n")).setPositiveButton("Закрыть",null).show() }
             }.setNegativeButton("Закрыть",null).show()
     }
     override fun onKeyDown(keyCode: Int,event: KeyEvent): Boolean {
