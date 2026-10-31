@@ -9,6 +9,19 @@ using System.Text.Json;
 using Microsoft.Win32;
 
 static void Assert(bool condition,string message){if(!condition)throw new Exception(message);}
+string RegistrySnapshot()
+{
+    if(!OperatingSystem.IsWindows())return "";
+    using var key=Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Internet Settings");
+    using var connection=Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Internet Settings\Connections");
+    using var winhttp=Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Internet Settings\Connections");
+    var values=new Dictionary<string,string?>();
+    foreach(var name in new[]{"ProxyEnable","ProxyServer","AutoConfigURL","AutoDetect"})values[name]=key?.GetValue(name)?.ToString();
+    foreach(var name in new[]{"DefaultConnectionSettings","SavedLegacySettings"})values[name]=connection?.GetValue(name) is byte[] bytes ? Convert.ToHexString(bytes) : null;
+    values["WinHttpSettings"]=winhttp?.GetValue("WinHttpSettings") is byte[] body ? Convert.ToHexString(body) : null;
+    return JsonSerializer.Serialize(values);
+}
+string registryBefore=RegistrySnapshot();
 string resources=Path.GetFullPath(args[0]);string native=Path.Combine(resources,"ciadpi.exe");
 using var cert=X509Certificate2.CreateFromPem(File.ReadAllText(Path.Combine(resources,"catalog-cert.pem")));
 using var publicKey=cert.GetRSAPublicKey()!;
@@ -67,7 +80,7 @@ await using(var gateway=new LocalGateway(0,0,new string('a',40),(host,port,token
     {
         string directory=Path.Combine(Path.GetTempPath(),"DpiPilot-Chrome-test-"+Guid.NewGuid());
         var info=new ProcessStartInfo(chrome!){UseShellExecute=false,CreateNoWindow=true,RedirectStandardOutput=true,RedirectStandardError=true};
-        foreach(string flag in new[]{"--headless=new","--disable-gpu","--no-first-run","--no-default-browser-check","--disable-background-networking","--disable-component-update","--disable-sync","--user-data-dir="+directory,"--proxy-pac-url="+gateway.PacUrl,"--dump-dom"})info.ArgumentList.Add(flag);
+        foreach(string flag in new[]{"--headless=new","--disable-gpu","--no-first-run","--no-default-browser-check","--disable-background-networking","--disable-component-update","--disable-sync","--disable-features=HttpsUpgrades,HttpsFirstBalancedModeAutoEnable","--user-data-dir="+directory,"--proxy-pac-url="+gateway.PacUrl,"--dump-dom"})info.ArgumentList.Add(flag);
         if(extra!="")info.ArgumentList.Add(extra);info.ArgumentList.Add(url);
         using var process=Process.Start(info)!;var output=process.StandardOutput.ReadToEndAsync();_=process.StandardError.ReadToEndAsync();
         try{await process.WaitForExitAsync(new CancellationTokenSource(TimeSpan.FromSeconds(35)).Token);return await output;}
@@ -75,7 +88,7 @@ await using(var gateway=new LocalGateway(0,0,new string('a',40),(host,port,token
     }
     // Browser-side DNS maps an unrelated site to a local test endpoint; it must never enter the proxy.
     var direct=new TcpListener(IPAddress.Loopback,0);direct.Start();int directPort=((IPEndPoint)direct.LocalEndpoint).Port;
-    var directTask=Task.Run(async()=>{using var client=await direct.AcceptTcpClientAsync(lifetime.Token);var stream=client.GetStream();byte[] request=new byte[4096];await stream.ReadAsync(request,lifetime.Token);byte[] response=Encoding.ASCII.GetBytes("HTTP/1.1 200 OK\r\nContent-Length: 18\r\nConnection: close\r\n\r\nDIRECT-GAME-MARKER");await stream.WriteAsync(response,lifetime.Token);});
+    var directTask=Task.Run(async()=>{using var client=await direct.AcceptTcpClientAsync(lifetime.Token);var stream=client.GetStream();byte[] request=new byte[4096];int received=await stream.ReadAsync(request,lifetime.Token);Assert(received>0,"Empty browser request");byte[] response=Encoding.ASCII.GetBytes("HTTP/1.1 200 OK\r\nContent-Length: 18\r\nConnection: close\r\n\r\nDIRECT-GAME-MARKER");await stream.WriteAsync(response,lifetime.Token);});
     string directHtml=await Chrome($"http://isolated.direct.test:{directPort}/","--host-resolver-rules=MAP isolated.direct.test 127.0.0.1");
     Assert(directHtml.Contains("DIRECT-GAME-MARKER"),"Chrome unrelated URL did not remain DIRECT");Assert(routed==0,"Chrome proxied unrelated URL");await directTask;direct.Stop();
     _=await Chrome("https://www.youtube.com");Assert(routed>0,"Chrome YouTube URL did not use selective proxy");
@@ -83,4 +96,6 @@ await using(var gateway=new LocalGateway(0,0,new string('a',40),(host,port,token
 Console.WriteLine("Actual Google Chrome: YouTube entered loopback broker; unrelated site stayed DIRECT; broker rejected non-YouTube hosts");
 if(OperatingSystem.IsWindows())
 {using var internet=Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Internet Settings");Console.WriteLine("Read-only registry snapshot available: "+(internet is not null));}
+Assert(registryBefore==RegistrySnapshot(),"System WinINet/WinHTTP proxy configuration changed");
+Console.WriteLine("System WinINet/WinHTTP proxy configuration unchanged");
 Console.WriteLine("ALL WINDOWS CORE / ROUTING TESTS PASSED");

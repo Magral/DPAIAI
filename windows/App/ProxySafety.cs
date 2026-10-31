@@ -10,8 +10,9 @@ internal sealed class ProxySafety : IDisposable
     public string Reason { get; private set; } = "Проверяется исходная конфигурация прокси Windows";
     private int pending;
     private long checkedAt;
+    private long generation;
     public ProxySafety() { NetworkChange.NetworkAddressChanged += Changed; Check(); }
-    private void Changed(object? sender,EventArgs args) { Interlocked.Exchange(ref checkedAt,0); Allowed=false; Check(); }
+    private void Changed(object? sender,EventArgs args) { Interlocked.Increment(ref generation); Interlocked.Exchange(ref checkedAt,0); Allowed=false; Check(); }
     public void Check()
     {
         if (!WinHttpGetIEProxyConfigForCurrentUser(out var config)) { Allowed=false; Reason="Не удалось прочитать системную конфигурацию; настройки Chrome не меняются"; return; }
@@ -26,14 +27,16 @@ internal sealed class ProxySafety : IDisposable
         if (Environment.TickCount64-Interlocked.Read(ref checkedAt) < 15*60*1000 && Interlocked.Read(ref checkedAt)>0) return;
         if (Interlocked.Exchange(ref pending,1)!=0) return;
         Allowed=false; Reason="Проверяется отсутствие сетевого автопрокси WPAD…";
+        long version=Interlocked.Read(ref generation);
         _=Task.Run(()=>
         {
             IntPtr url=IntPtr.Zero;
             try
             {
                 bool found=WinHttpDetectAutoProxyConfigUrl(3,out url); int error=Marshal.GetLastWin32Error();
+                if(version!=Interlocked.Read(ref generation))return;
                 Allowed=!found && error==12180;
-                Reason=Allowed ? "Системный автопрокси не обнаружен; другие адреса DIRECT" : "Обнаружен WPAD или его состояние неизвестно; настройки Chrome не меняются";
+                Reason=Allowed ? "Системный автопрокси не обнаружен; другие адреса DIRECT" : "Обнаружен WPAD или состояние неизвестно (код "+error+"); настройки Chrome не меняются";
                 Interlocked.Exchange(ref checkedAt,Environment.TickCount64);
             }
             finally { if(url!=IntPtr.Zero) GlobalFree(url); Interlocked.Exchange(ref pending,0); }

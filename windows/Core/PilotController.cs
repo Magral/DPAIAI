@@ -147,19 +147,25 @@ public sealed class PilotController : IAsyncDisposable
                             lock(routeGate) active = candidate;
                             var trial = candidate; candidate = null;
                             Phase = "Пробная стратегия; наблюдение за новыми соединениями до 2 минут";
-                            Log(Phase); bool rollback = false; long trialAt = Environment.TickCount64;
+                            Log(Phase); bool rollback = false,trialFailed = false; long trialAt = Environment.TickCount64;
                             for (int t=0;t<12;t++)
                             {
                                 await Task.Delay(10000,cancellation);
-                                if (!trial.Alive || (stalled && Environment.TickCount64-trialAt >= 45000)) { rollback = current.Ok && !wasStalled; break; }
+                                if (!trial.Alive || (stalled && Environment.TickCount64-trialAt >= 45000)) { trialFailed=true; rollback = current.Ok && !wasStalled && previous.Alive; break; }
                                 if (t == 2)
                                 {
                                     var check = await Probe.CheckAsync(trial,cancellation);
-                                    if (!check.Ok) { var repeat = await Probe.CheckAsync(trial,cancellation); if (!repeat.Ok) { rollback = current.Ok && !wasStalled; break; } }
+                                    if (!check.Ok) { var repeat = await Probe.CheckAsync(trial,cancellation); if (!repeat.Ok) { trialFailed=true; rollback = current.Ok && !wasStalled && previous.Alive; break; } }
                                 }
                             }
                             if (rollback)
                             { lock(routeGate) active = previous; trial.Dispose(); blocked[strategy.Id]=DateTimeOffset.UtcNow.AddMinutes(30); Phase="Откат к предыдущей стратегии"; Log(Phase); }
+                            else if(trialFailed)
+                            {
+                                lock(routeGate) active=previous.Alive ? previous : null;
+                                trial.Dispose(); blocked[strategy.Id]=DateTimeOffset.UtcNow.AddMinutes(30);requested=true;
+                                Phase="Пробная стратегия не подтверждена; сохранена прежняя или ожидается новый подбор";Log(Phase);
+                            }
                             else { previous.Retire(); Remember(profile,strategy); Phase="Включено · стратегия проверена"; Log(Phase); changed=true; }
                             break;
                         }
