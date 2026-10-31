@@ -8,6 +8,14 @@ val releaseStore = providers.environmentVariable("ANDROID_KEYSTORE_PATH")
 val releasePassword = providers.environmentVariable("ANDROID_KEYSTORE_PASSWORD")
 val releaseSigningReady = releaseStore.isPresent && releasePassword.isPresent
 
+val sharedCatalog = layout.buildDirectory.dir("generated/catalog")
+val copyCatalog by tasks.registering(Sync::class) {
+    from("../tv/src/main/java/io/github/magral/dpipilot/tv") {
+        include("CatalogProtocol.kt","StrategyCatalog.kt","HttpCodec.kt")
+        filter { line -> line.replace("package io.github.magral.dpipilot.tv","package io.github.dovecoteescapee.byedpi.catalog") }
+    }
+    into(sharedCatalog)
+}
 android {
     namespace = "io.github.dovecoteescapee.byedpi"
     compileSdk = 34
@@ -17,8 +25,8 @@ android {
         applicationId = "io.github.magral.dpipilot"
         minSdk = 21
         targetSdk = 34
-        versionCode = 8
-        versionName = "0.5.0"
+        versionCode = 9
+        versionName = "0.6.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -30,6 +38,7 @@ android {
         }
     }
 
+    sourceSets.getByName("main").java.srcDir(sharedCatalog)
     buildFeatures {
         buildConfig = true
     }
@@ -96,6 +105,7 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.4")
     implementation("androidx.lifecycle:lifecycle-service:2.8.4")
     testImplementation("junit:junit:4.13.2")
+    testImplementation("org.json:json:20240303")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.6.1")
 }
@@ -135,3 +145,5 @@ tasks.configureEach {
     }
 }
 
+
+tasks.named("preBuild") { dependsOn(copyCatalog) }

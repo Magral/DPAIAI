@@ -1,14 +1,16 @@
 package io.github.dovecoteescapee.byedpi.utility
 
-/** Probe lists are versioned with the app. They are evidence of transport reachability only. */
+/** Only public transport evidence, never an account/feed/Reels availability claim. */
 object ServiceTargets {
-    data class Target(val id: String, val name: String, val hosts: List<String>, val strategies: List<String>, val note: String)
+    data class Endpoint(val host: String,val kind: String,val path: String = "/")
+    data class Target(val id: String,val name: String,val endpoints: List<Endpoint>,val preferred: List<String>,val packages: Set<String>,val note: String)
     val targets = listOf(
-        Target("youtube", "YouTube", listOf("www.youtube.com", "i.ytimg.com", "youtubei.googleapis.com"),
-            listOf("", "--disorder 1", "--split 1", "--disorder 1 --tlsrec 1+s", "--tlsrec 1+s"),
-            "Проверяются сайт, API и изображения. Видеопоток googlevideo и QUIC требуют проверки воспроизведением в YouTube."),
-        Target("instagram", "Instagram", listOf("www.instagram.com", "i.instagram.com", "static.cdninstagram.com"),
-            listOf("", "--split 1", "--tlsrec 1+s", "--disorder 1 --tlsrec 1+s", "--disorder 1"),
-            "Проверяются сайт, API и CDN. Вход в аккаунт, лента, Reels и загрузка файлов здесь не проверяются.")
+        Target("instagram","Instagram",listOf(Endpoint("www.instagram.com","instagram"),Endpoint("i.instagram.com","tls"),Endpoint("static.cdninstagram.com","tls")),
+            listOf("--split 1","--tlsrec 1+s","--disorder 1 --tlsrec 1+s","--disorder 1"),setOf("com.instagram.android","com.instagram.lite"),
+            "Приоритет — Instagram. Проверяются HTTPS сайта и TLS к API/CDN, затем наблюдается реальный трафик выбранного клиента. Вход, лента, Reels и Direct без аккаунта не проверяются. HTTP 403/429 показываются отдельно и не доказывают отказ обхода."),
+        Target("youtube","YouTube",listOf(Endpoint("www.youtube.com","youtube","/generate_204"),Endpoint("i.ytimg.com","image","/vi/jNQXAC9IVRw/hqdefault.jpg"),Endpoint("redirector.googlevideo.com","tls")),
+            listOf("--disorder 1","--split 1","--disorder 1 --tlsrec 1+s","--tlsrec 1+s"),setOf("com.google.android.youtube","com.google.android.youtube.tv"),
+            "Проверяются YouTube, превью и TLS к CDN. Воспроизведение проверяется в самом клиенте; тест прямой публичной видеоссылки не используется.")
     )
+    fun target(id: String) = targets.first { it.id == id }
 }

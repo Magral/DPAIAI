@@ -55,5 +55,13 @@
         android:layout_below="@id/target_apps_button"
         android:layout_marginHorizontal="20dp"
         android:textAllCaps="false"
-        android:text="Подобрать для YouTube / Instagram" />
+        android:text="Instagram / YouTube: подбор и база" />
+    <com.google.android.material.textview.MaterialTextView
+        android:id="@+id/mobile_catalog_status"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_below="@id/service_tuning_button"
+        android:layout_marginHorizontal="20dp"
+        android:layout_marginTop="12dp"
+        android:textSize="14sp" />
 </RelativeLayout>

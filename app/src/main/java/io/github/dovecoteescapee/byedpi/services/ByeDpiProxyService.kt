@@ -23,6 +23,7 @@ class ByeDpiProxyService : LifecycleService() {
     private var proxy = ByeDpiProxy()
     private var proxyJob: Job? = null
     private val mutex = Mutex()
+    private var mobileLease: MobileEngineLease? = null
 
     companion object {
         private val TAG: String = ByeDpiProxyService::class.java.simpleName
@@ -70,6 +71,7 @@ class ByeDpiProxyService : LifecycleService() {
         }
 
         try {
+            startForeground()
             mutex.withLock {
                 startProxy()
             }
@@ -113,6 +115,12 @@ class ByeDpiProxyService : LifecycleService() {
             throw IllegalStateException("Proxy fields not null")
         }
 
+        if (MobileStrategyPolicy.modern(getPreferences())) {
+            val next = MobileEngineLease(this) { lifecycleScope.launch { updateStatus(ServiceStatus.Failed); stop() } }
+            mobileLease = next
+            try { next.open(getPreferences().getString("mobile_command","").orEmpty()) } catch (e: Exception) { next.close(); mobileLease = null; throw e }
+            return
+        }
         proxy = ByeDpiProxy()
         val preferences = getByeDpiPreferences()
 
@@ -133,6 +141,7 @@ class ByeDpiProxyService : LifecycleService() {
     }
 
     private suspend fun stopProxy() {
+        if (mobileLease != null) { mobileLease?.close(); mobileLease = null; return }
         Log.i(TAG, "Stopping proxy")
 
         if (status == ServiceStatus.Disconnected) {

@@ -3,7 +3,7 @@ name: Signed APK release
 on:
   push:
     branches: [main]
-    paths: [.github/workflows/signed-release.yml]
+    paths: [app/release-request.txt]
   workflow_dispatch:
 permissions:
   contents: write
@@ -40,11 +40,20 @@ jobs:
         env:
           DPI_PILOT_SIGNING: ${{ secrets.DPI_PILOT_SIGNING }}
         run: python3 scripts/restore-signing.py
+      - name: Verify all pinned catalog commands and phone JNI
+        run: |
+          python3 tv/strategies/build_catalog.py --check
+          python3 app/src/test/python/mobile_jni_test.py
+          python3 tv/src/test/python/udp_policy_test.py
+          bash tv/test-quic.sh
+      - name: Prepare real signed catalog fixture
+        run: python3 tv/strategies/prepare_fixture.py
       - name: Build and test release
-        run: bash gradlew assembleRelease testReleaseUnitTest --stacktrace
+        run: bash gradlew :app:assembleRelease :app:testReleaseUnitTest --stacktrace
       - name: Verify permanent certificate and prepare APK
         run: |
           bash scripts/verify-release.sh app/build/outputs/apk/release/app-release.apk
+          python3 scripts/check-mobile-apk.py app/build/outputs/apk/release/app-release.apk
           python3 - <<'PY'
           import hashlib, pathlib, re, shutil
           source = pathlib.Path("app/build.gradle.kts").read_text()
@@ -87,7 +96,7 @@ jobs:
               release = (await github.rest.repos.createRelease({
                 owner,repo,tag_name:tag,target_commitish:context.sha,name:'DPI Pilot '+version,
                 draft:true,prerelease:false,
-                body:'APK подписан постоянным ключом DPI Pilot. Скачайте '+name+' в Assets, без ZIP.\n\nВерсия 0.5.0: приложение сосредоточено на YouTube и Instagram. Удалены Telegram, локальный MTProxy, WebSocket, native probes и импорт внешних прокси. Удалены их зависимости. Сохранён подбор стратегий по сайту/API/CDN для YouTube и Instagram с раздельными сохранёнными результатами. Ошибки HTTPS/SOCKS теперь содержат подробности.\n\nОбновление поверх 0.4.2/0.4.3 сохраняет настройки двух оставшихся сервисов; выбор и настройки Telegram очищаются. Если в самом Telegram остался прокси 127.0.0.1:1443, отключите его вручную.\n\nВидеопоток YouTube, QUIC, вход в Instagram и Reels требуют проверки на телефоне: успешные HTTPS probes не гарантируют воспроизведение контента.\n\nSource: '+context.sha+'\nSHA-256 APK: '+digest.slice(7)
+                body:'Мобильная версия: приоритет Instagram, YouTube — отдельный профиль и подбор. Установка поверх прежней телефонной версии с постоянной подписью.\n\nАвтоматическая проверка подписанной базы раз в сутки, повтор после ошибки через час, ручная кнопка и офлайн-кеш. Загрузка данных не переключает стратегию и не загружает исполняемый код. Встроены 279 вариантов; серверная база может добавлять новые. Проверяются подпись, параметры, схема, движок и защита от отката.\n\nДля каталога добавлен отдельный движок ByeDPI 17.3 и процессы :mobileengine/:tuner. Прежний движок ручных настроек сохранён независимо. Подбор выполняется блоками до 12 вариантов с сохранением позиции и результатов отдельно по сервису/сети.\n\nInstagram: HTTPS сайта и TLS к API/CDN, раздельный учёт публичных HTTP-ответов. Анонимные 403/429 не выдаются за доступ к аккаунту, ленте или Reels и не вызывают бесконечную замену рабочего варианта. YouTube: generate_204, JPEG-превью и TLS к CDN. Ненадёжный тест прямых видеофрагментов не используется.\n\nПосле применения профиля и включения VPN работает фоновая проверка: полезный трафик защищает текущий вариант, кандидаты испытываются отдельно, после неудачной активации восстанавливается прежняя команда. Смена команды может кратковременно переподключить выбранный клиент. Одновременно действует одна стратегия; другие приложения не добавляются в VPN автоматически.\n\nОткройте «Instagram / YouTube: подбор и база», выберите сервис, выполните подбор, примените результат и включите VPN. Android может задержать фоновое обновление в режиме энергосбережения. Аккаунт, Direct, загрузка и Reels проверяются владельцем в самом Instagram. Документация: docs/MOBILE_060.md.\n\nSource: '+context.sha+'\nSHA-256 APK: '+digest.slice(7)
               })).data;
             }
             const assets = (await github.rest.repos.listReleaseAssets({owner,repo,release_id:release.id})).data;

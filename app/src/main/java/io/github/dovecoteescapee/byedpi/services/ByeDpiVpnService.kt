@@ -29,6 +29,9 @@ class ByeDpiVpnService : LifecycleVpnService() {
     private var tunFd: ParcelFileDescriptor? = null
     private val mutex = Mutex()
     private var stopping: Boolean = false
+    private var mobileLease: MobileEngineLease? = null
+    private var mobileCommand = ""
+    private var mobileMonitor: MobileMonitor? = null
 
     companion object {
         private val TAG: String = ByeDpiVpnService::class.java.simpleName
@@ -81,12 +84,17 @@ class ByeDpiVpnService : LifecycleVpnService() {
         }
 
         try {
+            startForeground()
             mutex.withLock {
                 startProxy()
                 startTun2Socks()
             }
             updateStatus(ServiceStatus.Connected)
-            startForeground()
+            if (mobileLease != null) {
+                mobileMonitor = MobileMonitor(this,lifecycleScope) { command ->
+                    mutex.withLock { replaceMobile(command) }
+                }.also { it.start() }
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to start VPN", e)
             updateStatus(ServiceStatus.Failed)
@@ -113,6 +121,7 @@ class ByeDpiVpnService : LifecycleVpnService() {
         mutex.withLock {
             stopping = true
             try {
+                mobileMonitor?.stop(); mobileMonitor = null
                 stopTun2Socks()
                 stopProxy()
             } catch (e: Exception) {
@@ -134,6 +143,13 @@ class ByeDpiVpnService : LifecycleVpnService() {
             throw IllegalStateException("Proxy fields not null")
         }
 
+        if (MobileStrategyPolicy.modern(getPreferences())) {
+            mobileCommand = getPreferences().getString("mobile_command","").orEmpty()
+            check(mobileLease == null)
+            val lease = newMobileLease(); mobileLease = lease
+            try { lease.open(mobileCommand) } catch (e: Exception) { lease.close(); mobileLease = null; throw e }
+            return
+        }
         val preferences = getByeDpiPreferences()
 
         proxyJob = lifecycleScope.launch(Dispatchers.IO) {
@@ -155,7 +171,24 @@ class ByeDpiVpnService : LifecycleVpnService() {
         Log.i(TAG, "Proxy started")
     }
 
+    private fun newMobileLease() = MobileEngineLease(this) {
+        if (!stopping) lifecycleScope.launch { updateStatus(ServiceStatus.Failed); stop() }
+    }
+    private suspend fun replaceMobile(command: String) {
+        val previous = mobileCommand
+        mobileLease?.close(); mobileLease = null
+        val next = newMobileLease()
+        try { next.open(command); mobileLease = next; mobileCommand = command }
+        catch (e: Exception) {
+            next.close()
+            val restore = newMobileLease()
+            try { restore.open(previous); mobileLease = restore; mobileCommand = previous }
+            catch (_: Exception) { restore.close(); lifecycleScope.launch { stop() } }
+            throw e
+        }
+    }
     private suspend fun stopProxy() {
+        if (mobileLease != null) { mobileLease?.close(); mobileLease = null; return }
         Log.i(TAG, "Stopping proxy")
 
         if (status == ServiceStatus.Disconnected) {

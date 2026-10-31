@@ -3,6 +3,7 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
@@ -35,6 +36,8 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.ByeDPI"
         tools:targetApi="34">
+        <service android:name=".services.MobileEngineService" android:exported="false" android:process=":mobileengine" />
+        <service android:name=".services.CatalogUpdateJob" android:permission="android.permission.BIND_JOB_SERVICE" android:exported="false" />
         <service android:name=".services.TuningWorkerService" android:exported="false" android:process=":tuner" />
         <activity android:name=".activities.ServiceTuningActivity" android:exported="false" android:label="Подбор для сервиса" />
         <activity

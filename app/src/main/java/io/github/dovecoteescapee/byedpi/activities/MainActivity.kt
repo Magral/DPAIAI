@@ -26,6 +26,8 @@ import io.github.dovecoteescapee.byedpi.databinding.ActivityMainBinding
 import io.github.dovecoteescapee.byedpi.services.ServiceManager
 import io.github.dovecoteescapee.byedpi.services.appStatus
 import io.github.dovecoteescapee.byedpi.utility.*
+import io.github.dovecoteescapee.byedpi.catalog.*
+import io.github.dovecoteescapee.byedpi.services.CatalogUpdateJob
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import java.io.IOException
@@ -33,6 +35,15 @@ import java.io.IOException
 class MainActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMainBinding
 
+    private val catalogHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    private val catalogUi = object : Runnable {
+        override fun run() {
+            binding.mobileCatalogStatus.text = "База ${RuntimeCatalog.commands.size} · ${RuntimeCatalog.version}\n${MobileCatalogUpdater.status}\n${MobileStrategyPolicy.state}"
+            catalogHandler.postDelayed(this,2000)
+        }
+    }
+    override fun onStart() { super.onStart(); catalogHandler.post(catalogUi) }
+    override fun onStop() { catalogHandler.removeCallbacks(catalogUi); super.onStop() }
     companion object {
         private val TAG: String = MainActivity::class.java.simpleName
 
@@ -124,6 +135,9 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         TargetApps.removeLegacyTarget(this)
+        MobileCatalogUpdater.load(this)
+        CatalogUpdateJob.schedule(this)
+        lifecycleScope.launch(Dispatchers.IO) { MobileCatalogUpdater.refresh(this@MainActivity) }
 
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
