@@ -1,0 +1,92 @@
+name: Windows YouTube extension and app
+on:
+  push:
+    branches: [main]
+    paths: ['windows/**', '.github/workflows/windows.yml']
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: windows-youtube-release
+  cancel-in-progress: false
+jobs:
+  native:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Compile pinned native Windows engine
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y gcc-mingw-w64-x86-64
+          make -C tv/src/main/cpp/engine windows CC=x86_64-w64-mingw32-gcc WIN_LDFLAGS='-static -static-libgcc -lws2_32 -lmswsock'
+          mkdir -p windows/Resources
+          cp tv/src/main/cpp/engine/ciadpi.exe windows/Resources/
+      - name: Prepare actual signed catalog and pinned public certificate
+        run: python3 windows/build/prepare_resources.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-public-payload
+          path: windows/Resources/*
+  windows:
+    needs: native
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - uses: actions/download-artifact@v4
+        with:
+          name: windows-public-payload
+          path: windows/Resources
+      - name: Build application and test harness
+        run: |
+          dotnet build windows/App/DpiPilot.csproj -c Release -p:PublishSingleFile=false
+          dotnet build windows/Tests/DpiPilot.Tests.csproj -c Release
+      - name: Check real Windows engine, live TCP isolation and actual Chrome PAC routing
+        env:
+          PAC_TEST_OUTPUT: ${{ runner.temp }}/youtube-test.pac
+        run: dotnet run --no-build --project windows/Tests/DpiPilot.Tests.csproj -c Release -- windows/Resources
+      - name: Test extension restoration and existing proxy conflicts
+        run: node windows/Tests/extension.test.cjs '${{ runner.temp }}/youtube-test.pac'
+      - name: Publish self-contained Windows executable
+        run: dotnet publish windows/App/DpiPilot.csproj -c Release -r win-x64 --self-contained true -o windows/publish
+      - name: Compile per-user Windows installer
+        shell: pwsh
+        run: |
+          $compiler = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (!(Test-Path $compiler)) { choco install innosetup --no-progress -y }
+          & $compiler windows/setup.iss
+          if ($LASTEXITCODE -ne 0) { throw "Installer compilation failed" }
+          Get-FileHash windows/release/* -Algorithm SHA256 | Format-List
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DPI-Pilot-YouTube-Windows-installer
+          path: windows/release/*
+      - name: Publish separate Windows release
+        if: contains(github.event.head_commit.message, '[windows-release]')
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs=require('fs'),crypto=require('crypto');
+            const {owner,repo}=context.repo;
+            const head=(await github.rest.git.getRef({owner,repo,ref:'heads/main'})).data;
+            if(head.object.sha!==context.sha)throw new Error('Source advanced; rerun from current main');
+            const name=fs.readdirSync('windows/release').find(n=>n.endsWith('.exe'));
+            if(!name)throw new Error('Installer missing');
+            const version=name.match(/Windows-([0-9.]+)-Setup/)[1],tag='windows-v'+version;
+            const data=fs.readFileSync('windows/release/'+name),hash=crypto.createHash('sha256').update(data).digest('hex');
+            let release;
+            try {release=(await github.rest.repos.getReleaseByTag({owner,repo,tag})).data;}
+            catch(e){if(e.status!==404)throw e;release=(await github.rest.repos.createRelease({owner,repo,tag_name:tag,target_commitish:context.sha,
+              name:'DPI Pilot YouTube Windows '+version,draft:true,make_latest:'false',body:
+              'Windows 10/11 x64: локальный компонент + расширение для обычного Chrome. Без отдельного профиля или специального запуска браузера.\n\nРасширение направляет только YouTube и его CDN в loopback SOCKS5; остальные адреса DIRECT. Компонент повторно отклоняет любые нецелевые домены/порты. Существующий явный системный прокси/PAC/WPAD, чужое прокси-расширение и политики не перезаписываются: в этом случае включение блокируется с объяснением. Системные proxy/DNS/маршруты и UDP не меняются. Нет сетевого драйвера, перехвата всех пакетов, установки корневого сертификата или расшифровки TLS.\n\nАвтоподбор из совместимых с Windows стратегий, проверки доступности, фоновая проверка, сохранение активных потоков при испытаниях кандидатов, пробная смена и откат, обновление подписанной базы, трей, автозапуск по выбору и отчёт.\n\nПосле установки нажмите «Установить расширение в Chrome»: включите режим разработчика и выберите установленную папку расширения. Это одноразовое действие — Chrome не разрешает этому установщику незаметно добавить расширение вне магазина. Инструкция: windows/README.md. Для повседневной работы открывайте YouTube как обычно в своём Chrome.\n\nТесты: запуск каждой совместимой команды на настоящем Windows-движке, сохранение отдельного TCP-потока во время смен тестовых движков, фактическая маршрутизация Chrome через PAC, отклонение посторонних доменов, подпись/подмена/откат базы и восстановление Chrome API при отключении расширения. Проверка реального просмотра на пользовательской сети требуется после установки.\n\nПервый Windows-релиз не имеет доверенного Authenticode-сертификата издателя; подпись базы проверяется отдельно. Android-релизы не заменяются.\nGPL-3.0. Source: '+context.sha+'\nSHA-256 installer: '+hash})).data;}
+            const assets=(await github.rest.repos.listReleaseAssets({owner,repo,release_id:release.id})).data;
+            const old=assets.find(a=>a.name===name);
+            if(old){if(old.digest!=='sha256:'+hash)throw new Error('Refusing to overwrite different published installer');}
+            else {if(!release.draft)throw new Error('Refusing published release modification');await github.rest.repos.uploadReleaseAsset({owner,repo,release_id:release.id,name,data,headers:{'content-type':'application/vnd.microsoft.portable-executable','content-length':data.length}});}
+            if(release.draft)await github.rest.repos.updateRelease({owner,repo,release_id:release.id,draft:false,make_latest:'false'});

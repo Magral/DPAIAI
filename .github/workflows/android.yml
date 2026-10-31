@@ -2,7 +2,7 @@ name: Android APK
 on:
   push:
     branches: [main]
-    paths-ignore: [.github/workflows/publish-apk.yml]
+    paths-ignore: [.github/workflows/publish-apk.yml, 'windows/**', .github/workflows/windows.yml]
   workflow_dispatch:
 permissions:
   contents: read

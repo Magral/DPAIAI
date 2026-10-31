@@ -1,0 +1,20 @@
+{
+  "manifest_version": 3,
+  "name": "DPI Pilot — только YouTube",
+  "version": "0.1.0",
+  "description": "Локальный обход DPI только для YouTube. Остальные сайты используют обычное соединение. Требуется DPI Pilot для Windows.",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEArV/maJkZMh2OtyoehSBdLStm1fxADSDkSDDA2W9nes/TalXkpue2v1tb6q3GZgWw1M6kUo57bKUDgeMgFd1JjR8+6WUoU7gFkiN7TFsM+PWOjy3XKNqtmZqx3FySAbxK0mqhEiq7GCUtS2jhiUVB1mPyix3ZsH+O6Atmwm4rSP8VTL4+Gki5pigDLradegUD5KLUCy+4YjgVcR93ZONFqyvKS43lnmi0cKD7wSYtCfwQ2bVHiWn4fjMhonJfg9c6nicYV4cbG+PxRvnOU4lbDhdnyQnFmZwCBOuDYmocmvh7wZH8+AJ1qjHWy3zjxBALCGnIC3wQ6aXRW2GSIYkbIQIDAQAB",
+  "permissions": [
+    "proxy",
+    "nativeMessaging",
+    "storage",
+    "alarms"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html"
+  },
+  "minimum_chrome_version": "120"
+}
