@@ -37,12 +37,14 @@ object ServiceProbe {
                 fun progress(value: String) { stage = value; onProgress("$prefix: $value") }
                 if (spec.kind != "tls") publicTotal++
                 val skip = spec.host in failed || remaining() <= 0
-                val budget = minOf(MobileStrategyPolicy.timeout(command).toLong()+3000,remaining()).coerceAtLeast(1)
+                val effectiveCommand = if (MobilePlan.dual(command)) MobilePlan.command(command,if (spec in ServiceTargets.target("instagram").endpoints) "instagram" else "youtube") else command
+                val readTimeout = MobileStrategyPolicy.timeout(effectiveCommand)
+                val budget = minOf(readTimeout.toLong()+3000,remaining()).coerceAtLeast(1)
                 val deadline = ProbeDeadline(budget)
                 try {
                     if (skip) throw IOException(if (spec.host in failed) "Повтор пропущен: предыдущая проверка узла не пройдена" else "Общий лимит стратегии 180 с")
                     progress("подключение; лимит узла ${budget/1000} с")
-                    TargetProbe.socket(spec.host,443,port,MobileStrategyPolicy.timeout(command),{
+                    TargetProbe.socket(spec.host,443,port,readTimeout,{
                         session.register(it); deadline.register(it)
                     }) { value -> progress(when (value) {
                         "local proxy connect" -> "соединение с локальным движком"
@@ -50,7 +52,7 @@ object ServiceProbe {
                         else -> "DNS / TCP к серверу через SOCKS5"
                     }) }.use { raw ->
                         ((SSLSocketFactory.getDefault() as SSLSocketFactory).createSocket(raw,spec.host,443,true) as SSLSocket).use { tls ->
-                            tls.soTimeout = MobileStrategyPolicy.timeout(command)
+                            tls.soTimeout = readTimeout
                             if (Build.VERSION.SDK_INT >= 24) tls.sslParameters = tls.sslParameters.apply { endpointIdentificationAlgorithm = "HTTPS" }
                             progress("TLS: ожидаем защищённое соединение")
                             tls.startHandshake()
@@ -71,7 +73,7 @@ object ServiceProbe {
                 finally { deadline.close() }
                 session.checkActive()
                 // Instagram's anonymous HTTP restrictions do not negate a successful TLS session.
-                val ok = transport && (id == "instagram" || spec.kind == "tls" || content)
+                val ok = transport && (spec.kind == "instagram" || spec.kind == "tls" || content)
                 if (ok) success++ else failed.add(spec.host)
                 if (content) publicSuccess++
                 onProgress("$prefix: ${if (ok) "OK" else "FAIL"}; $detail")

@@ -12,7 +12,7 @@ object MobileStrategyPolicy {
     @Volatile var lastProbe = "Нет результатов"
     fun modern(prefs: SharedPreferences): Boolean = prefs.getBoolean("mobile_catalog_mode",false) &&
         prefs.getBoolean("byedpi_enable_cmd_settings",false) && prefs.getString("byedpi_cmd_args",null) == prefs.getString("mobile_command",null) &&
-        (prefs.getString("mobile_command",null)?.let { CatalogProtocol.validCommand(it) } == true)
+        (prefs.getString("mobile_command",null)?.let { MobilePlan.valid(it) } == true)
     fun profile(context: Context): String {
         val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
         val links = cm.allNetworks.filter { cm.getNetworkCapabilities(it)?.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_VPN) == true }
@@ -46,7 +46,7 @@ object MobileStrategyPolicy {
             .putString("mobile_good.$target.${profile(context)}",CatalogProtocol.id(command)).apply()
     }
     fun apply(prefs: SharedPreferences,target: String,command: String) {
-        require(CatalogProtocol.validCommand(command))
+        require(MobilePlan.valid(command) && (target == MobilePlan.BOTH) == MobilePlan.dual(command))
         prefs.edit().putBoolean("mobile_catalog_mode",true).putString("mobile_target",target).putString("mobile_command",command)
             .putBoolean("byedpi_enable_cmd_settings",true).putString("byedpi_cmd_args",command)
             .putString("byedpi_proxy_ip","127.0.0.1").putString("byedpi_proxy_port","1080").putString("byedpi_mode","vpn").apply()

@@ -19,6 +19,7 @@ class MobileMonitor(private val context: Context,private val scope: CoroutineSco
     fun start() {
         val prefs = context.getPreferences(); val target = prefs.getString("mobile_target","instagram") ?: "instagram"
         var active = prefs.getString("mobile_command","") ?: ""
+        if (target == MobilePlan.BOTH) { startDual(active); return }
         sample = scope.launch {
             var at = SystemClock.elapsedRealtime(); var rx = 0L; var tx = 0L; var packets = 0L; var bad = 0
             var recentAt = at; var recentBytes = 0L
@@ -86,9 +87,91 @@ class MobileMonitor(private val context: Context,private val scope: CoroutineSco
             }
         }
     }
+    /** Each service owns a command and cursor; one failing service must not suppress the other's search. */
+    private fun startDual(initial: String) {
+        val prefs = context.getPreferences()
+        var active = initial
+        val reports = linkedMapOf<String,JSONObject>()
+        fun publish(message: String = "") {
+            MobileStrategyPolicy.state = ServiceTargets.individual.joinToString("; ") { target ->
+                reports[target.id]?.let { "${target.name}: ${it.optInt("success")}/${it.optInt("total")}" } ?: "${target.name}: ожидает проверки"
+            } + if (message.isEmpty()) " · общий VPN" else "\n$message"
+            MobileStrategyPolicy.lastProbe = JSONObject().put("mode",MobilePlan.BOTH).put("strategies",JSONObject(active))
+                .put("services",JSONObject(reports as Map<*,*>)).put("state",MobileStrategyPolicy.state).toString()
+        }
+        task = scope.launch {
+            while (isActive) {
+                try {
+                    if (!MobileStrategyPolicy.modern(prefs) || prefs.getString("mobile_command",null) != active || prefs.getString("mobile_target",null) != MobilePlan.BOTH) {
+                        MobileStrategyPolicy.state = "Настройки изменены; перезапустите общий VPN"; return@launch
+                    }
+                    if (!MobileStrategyPolicy.connected(context)) { publish("Нет физической сети; стратегии сохранены"); delay(15000); continue }
+                    val profile = MobileStrategyPolicy.profile(context)
+                    for (target in ServiceTargets.individual) {
+                        publish("Проверяется ${target.name}; оба приложения остаются в VPN")
+                        val current = probe(target.id,MobilePlan.command(active,target.id)); reports[target.id] = current; publish()
+                        if (MobileStrategyPolicy.profile(context) != profile) break
+                    }
+                    if (MobileStrategyPolicy.profile(context) != profile) continue
+                    for (target in ServiceTargets.individual) {
+                        if (reports[target.id]?.let { eligible(it) } == true) continue
+                        for (command in MobileStrategyPolicy.window(context,target)) {
+                            val key = "${target.id}:$command"
+                            if (command == MobilePlan.command(active,target.id) || (denied[key] ?: 0) > SystemClock.elapsedRealtime()) continue
+                            if (MobileStrategyPolicy.profile(context) != profile || !MobileStrategyPolicy.connected(context)) break
+                            val proposal = runCatching { MobilePlan.replace(active,target.id,command) }.getOrNull() ?: continue
+                            publish("Поиск замены для ${target.name}; стратегия другого сервиса сохранена")
+                            val result = try { MobileCandidate.run(context,target.id,command) { publish("${target.name}: $it") } }
+                                catch (e: TimeoutCancellationException) { currentCoroutineContext().ensureActive(); JSONObject() }
+                            MobileStrategyPolicy.advance(context,target.id,command)
+                            if (MobileStrategyPolicy.profile(context) != profile) break
+                            if (!eligible(result)) { denied[key] = SystemClock.elapsedRealtime()+1800000; continue }
+                            // Test real domain routing before replacing the live native process.
+                            val combined = try { MobileCandidate.run(context,MobilePlan.BOTH,proposal) { publish("Совместная проверка: $it") } }
+                                catch (e: TimeoutCancellationException) { currentCoroutineContext().ensureActive(); JSONObject() }
+                            fun resultFor(id: String): JSONObject {
+                                val hosts = ServiceTargets.target(id).endpoints.map { it.host }.toSet()
+                                val rows = combined.optJSONArray("rows") ?: return JSONObject()
+                                val own = (0 until rows.length()).map { rows.getJSONObject(it) }.filter { it.optString("host") in hosts }
+                                return JSONObject().put("success",own.count { it.optBoolean("ok") }).put("total",if (own.size == 6) 6 else 0)
+                            }
+                            val other = ServiceTargets.individual.first { it.id != target.id }
+                            val protectOther = reports[other.id]?.let { eligible(it) } == true
+                            if (!eligible(resultFor(target.id)) || (protectOther && !eligible(resultFor(other.id)))) {
+                                denied[key] = SystemClock.elapsedRealtime()+1800000; continue
+                            }
+                            if (MobileStrategyPolicy.profile(context) != profile) break
+                            val previous = active
+                            var committed = false
+                            try {
+                                replace(proposal)
+                                val verified = probe(target.id,command)
+                                val otherVerified = if (protectOther) probe(other.id,MobilePlan.command(proposal,other.id)) else null
+                                if (eligible(verified) && (otherVerified == null || eligible(otherVerified)) && MobileStrategyPolicy.profile(context) == profile) {
+                                    active = proposal
+                                    MobileStrategyPolicy.apply(prefs,MobilePlan.BOTH,active); MobileStrategyPolicy.remember(context,target.id,command)
+                                    reports[target.id] = verified
+                                    if (otherVerified != null) reports[other.id] = otherVerified
+                                    committed = true; publish("Обновлена стратегия ${target.name}; оба приложения включены")
+                                }
+                            } finally {
+                                if (!committed && currentCoroutineContext().isActive) replace(previous)
+                            }
+                            if (committed) break
+                            denied[key] = SystemClock.elapsedRealtime()+1800000; publish("Кандидат не подтвердился; прежняя пара восстановлена")
+                        }
+                    }
+                    val healthy = ServiceTargets.individual.all { reports[it.id]?.let { row -> eligible(row) } == true }
+                    publish(if (healthy) "Проверки обоих сервисов пройдены; аккаунт и видео проверяются в клиентах" else "Повтор проверки и поиска через минуту")
+                    delay(if (healthy) 300000 else 60000)
+                } catch (e: CancellationException) { throw e }
+                catch (e: Exception) { publish("Ошибка контроля: ${e.javaClass.simpleName}: ${e.message?.take(100)}; повтор через минуту"); delay(60000) }
+            }
+        }
+    }
     private suspend fun probe(target: String,command: String): JSONObject = coroutineScope {
         val current = ServiceProbe.Session(); session = current
-        val pending = async(Dispatchers.IO) { ServiceProbe.check(target,command,1080,current) }
+        val pending = async(Dispatchers.IO) { ServiceProbe.check(target,command,1080,current) { MobileStrategyPolicy.state = "${ServiceTargets.target(target).name}: $it" } }
         try {
             val result = try { withTimeout(240000) { pending.await() } } catch (e: TimeoutCancellationException) { currentCoroutineContext().ensureActive(); JSONObject().put("success",0).put("total",6).put("error","probe_timeout") }
             MobileStrategyPolicy.lastProbe = result.toString(); result

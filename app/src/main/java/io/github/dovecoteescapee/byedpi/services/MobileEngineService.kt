@@ -3,10 +3,8 @@ package io.github.dovecoteescapee.byedpi.services
 import android.app.Service
 import android.content.Intent
 import android.os.*
-import io.github.dovecoteescapee.byedpi.catalog.CatalogProtocol
+import io.github.dovecoteescapee.byedpi.utility.MobilePlan
 import io.github.dovecoteescapee.byedpi.core.MobileProxy
-import java.net.InetSocketAddress
-import java.net.Socket
 
 class MobileEngineService : Service() {
     private var used = false
@@ -15,7 +13,7 @@ class MobileEngineService : Service() {
             used = true
             val command = message.data.getString("command")
             val reply = message.replyTo
-            if (command == null || !CatalogProtocol.validCommand(command)) { stopSelf(); return@Handler true }
+            if (command == null || !MobilePlan.valid(command)) { stopSelf(); return@Handler true }
             Thread {
                 var answered = false
                 runCatching {

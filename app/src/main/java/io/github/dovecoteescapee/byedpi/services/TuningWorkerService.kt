@@ -24,7 +24,7 @@ class TuningWorkerService : Service() {
                     what = PROGRESS; data = Bundle().apply { putString("progress",text) }
                 }) } }
                 val result = try {
-                    require(command != null && CatalogProtocol.validCommand(command))
+                    require(command != null && MobilePlan.valid(command))
                     ServiceTargets.target(target)
                     progress("Запуск движка 17.3 на 127.0.0.1:19080 (до 10 с)")
                     val ready = java.util.concurrent.CountDownLatch(1)

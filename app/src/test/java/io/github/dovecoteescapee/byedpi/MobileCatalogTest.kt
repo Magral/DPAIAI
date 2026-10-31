@@ -13,7 +13,8 @@ import org.json.JSONArray
 
 class MobileCatalogTest {
     @Test fun instagramIsDefaultAndProbeTargetsStaySeparated() {
-        assertEquals(listOf("instagram","youtube"),ServiceTargets.targets.map { it.id })
+        assertEquals(listOf("both","instagram","youtube"),ServiceTargets.targets.map { it.id })
+        assertEquals(ServiceTargets.individual.flatMap { it.packages }.toSet(),ServiceTargets.combined.packages)
         assertTrue(ServiceTargets.target("instagram").endpoints.all { it.host.endsWith("instagram.com") || it.host.endsWith("cdninstagram.com") })
         assertFalse(ServiceTargets.target("instagram").packages.intersect(ServiceTargets.target("youtube").packages).isNotEmpty())
         assertTrue(StrategyCatalog.commands.all { CatalogProtocol.validCommand(it) })

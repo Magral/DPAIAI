@@ -38,7 +38,7 @@ class MainActivity : AppCompatActivity() {
     private val catalogHandler = android.os.Handler(android.os.Looper.getMainLooper())
     private val catalogUi = object : Runnable {
         override fun run() {
-            binding.mobileCatalogStatus.text = "База ${RuntimeCatalog.commands.size} · ${RuntimeCatalog.version}\n${MobileCatalogUpdater.status}\n${MobileStrategyPolicy.state}"
+            binding.mobileCatalogStatus.text = "База ${RuntimeCatalog.commands.size} · ${RuntimeCatalog.version}\n${MobileCatalogUpdater.status}\n${MobileStrategyPolicy.state}" + if (getPreferences().getString("mobile_target",null) == MobilePlan.BOTH) "\n"+MobilePlan.describe(getPreferences().getString("mobile_command","").orEmpty()) else ""
             catalogHandler.postDelayed(this,2000)
         }
     }
@@ -157,6 +157,16 @@ class MainActivity : AppCompatActivity() {
 
         binding.serviceTuningButton.setOnClickListener { startActivity(Intent(this, ServiceTuningActivity::class.java)) }
         binding.targetAppsButton.setOnClickListener { chooseTargetApps() }
+        binding.bothServicesButton.setOnClickListener {
+            if (appStatus.first != AppStatus.Halted) { Toast.makeText(this,"Сначала выключите VPN",Toast.LENGTH_SHORT).show(); return@setOnClickListener }
+            val selected = TargetApps.installed(this).map { it.packageName }.filter { it in ServiceTargets.combined.packages }.toSet()
+            if (ServiceTargets.individual.any { it.packages.intersect(selected).isEmpty() }) {
+                Toast.makeText(this,"Установите клиенты Instagram и YouTube",Toast.LENGTH_LONG).show(); return@setOnClickListener
+            }
+            getPreferences().edit().putStringSet(TargetApps.KEY,selected).apply()
+            MobileStrategyPolicy.apply(getPreferences(),MobilePlan.BOTH,MobilePlan.saved(getPreferences()))
+            updateStatus(); start()
+        }
 
         binding.statusButton.setOnClickListener {
             val (status, _) = appStatus
