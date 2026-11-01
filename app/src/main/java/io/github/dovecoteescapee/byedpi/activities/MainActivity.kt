@@ -38,7 +38,7 @@ class MainActivity : AppCompatActivity() {
     private val catalogHandler = android.os.Handler(android.os.Looper.getMainLooper())
     private val catalogUi = object : Runnable {
         override fun run() {
-            binding.mobileCatalogStatus.text = "База ${RuntimeCatalog.commands.size} · ${RuntimeCatalog.version}\n${MobileCatalogUpdater.status}\n${MobileStrategyPolicy.state}" + if (getPreferences().getString("mobile_target",null) == MobilePlan.BOTH) "\n"+MobilePlan.describe(getPreferences().getString("mobile_command","").orEmpty()) else ""
+            binding.mobileCatalogStatus.text = "База ${RuntimeCatalog.commands.size} · ${RuntimeCatalog.version}\n${MobileCatalogUpdater.status}\n${MobileStrategyPolicy.state}\n${MobileFeedback.traffic}" + if (getPreferences().getString("mobile_target",null) == MobilePlan.BOTH) "\n"+MobilePlan.describe(getPreferences().getString("mobile_command","").orEmpty()) else ""
             catalogHandler.postDelayed(this,2000)
         }
     }
@@ -137,6 +137,7 @@ class MainActivity : AppCompatActivity() {
         TargetApps.removeLegacyTarget(this)
         MobileCatalogUpdater.load(this)
         CatalogUpdateJob.schedule(this)
+        io.github.dovecoteescapee.byedpi.services.PhoneRecovery.schedule(this)
         lifecycleScope.launch(Dispatchers.IO) { MobileCatalogUpdater.refresh(this@MainActivity) }
 
         binding = ActivityMainBinding.inflate(layoutInflater)
@@ -155,19 +156,9 @@ class MainActivity : AppCompatActivity() {
             registerReceiver(receiver, intentFilter)
         }
 
+        binding.youtubeProblem.setOnClickListener { MobileFeedback.request("youtube"); Toast.makeText(this,"Запрошена замена стратегии YouTube",Toast.LENGTH_SHORT).show() }
+        binding.instagramProblem.setOnClickListener { MobileFeedback.request("instagram"); Toast.makeText(this,"Запрошена замена стратегии Instagram",Toast.LENGTH_SHORT).show() }
         binding.serviceTuningButton.setOnClickListener { startActivity(Intent(this, ServiceTuningActivity::class.java)) }
-        binding.targetAppsButton.setOnClickListener { chooseTargetApps() }
-        binding.bothServicesButton.setOnClickListener {
-            if (appStatus.first != AppStatus.Halted) { Toast.makeText(this,"Сначала выключите VPN",Toast.LENGTH_SHORT).show(); return@setOnClickListener }
-            val selected = TargetApps.installed(this).map { it.packageName }.filter { it in ServiceTargets.combined.packages }.toSet()
-            if (ServiceTargets.individual.any { it.packages.intersect(selected).isEmpty() }) {
-                Toast.makeText(this,"Установите клиенты Instagram и YouTube",Toast.LENGTH_LONG).show(); return@setOnClickListener
-            }
-            getPreferences().edit().putStringSet(TargetApps.KEY,selected).apply()
-            MobileStrategyPolicy.apply(getPreferences(),MobilePlan.BOTH,MobilePlan.saved(getPreferences()))
-            updateStatus(); start()
-        }
-
         binding.statusButton.setOnClickListener {
             val (status, _) = appStatus
             when (status) {
@@ -241,49 +232,9 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun chooseTargetApps() {
-        if (appStatus.first != AppStatus.Halted) {
-            Toast.makeText(this, R.string.target_apps_stop_first, Toast.LENGTH_SHORT).show()
-            return
-        }
-        lifecycleScope.launch {
-            val apps = kotlinx.coroutines.withContext(Dispatchers.IO) { TargetApps.installed(this@MainActivity) }
-            if (isFinishing || isDestroyed) return@launch
-            val chosen = TargetApps.selected(this@MainActivity).toMutableSet()
-            val dialog = AlertDialog.Builder(this@MainActivity)
-                .setTitle(R.string.target_apps_title)
-                .setMultiChoiceItems(apps.map { it.label }.toTypedArray(),
-                    apps.map { it.packageName in chosen }.toBooleanArray()) { _, index, checked ->
-                    if (checked) chosen.add(apps[index].packageName) else chosen.remove(apps[index].packageName)
-                }
-                .setPositiveButton(R.string.target_apps_save, null)
-                .setNegativeButton(android.R.string.cancel, null)
-                .create()
-            dialog.setOnShowListener {
-                dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
-                    val selected = chosen.intersect(apps.map { it.packageName }.toSet())
-                    if (selected.isEmpty()) {
-                        Toast.makeText(this@MainActivity, R.string.target_apps_empty, Toast.LENGTH_SHORT).show()
-                    } else if (appStatus.first != AppStatus.Halted) {
-                        Toast.makeText(this@MainActivity, R.string.target_apps_stop_first, Toast.LENGTH_SHORT).show()
-                    } else {
-                        getPreferences().edit().putStringSet(TargetApps.KEY, selected)
-                            .putString("byedpi_mode", "vpn").apply()
-                        updateStatus()
-                        Toast.makeText(this@MainActivity, R.string.target_apps_saved, Toast.LENGTH_SHORT).show()
-                        dialog.dismiss()
-                    }
-                }
-            }
-            dialog.show()
-        }
-    }
-
     private fun start() {
-        if (getPreferences().mode() == Mode.VPN && TargetApps.selected(this).isEmpty()) {
-            chooseTargetApps()
-            return
-        }
+        try { MobileSetup.prepare(this) }
+        catch (e: Exception) { Toast.makeText(this,e.message ?: "Установите YouTube или Instagram",Toast.LENGTH_LONG).show(); return }
         when (getPreferences().mode()) {
             Mode.VPN -> {
                 val intentPrepare = VpnService.prepare(this)
@@ -314,8 +265,7 @@ class MainActivity : AppCompatActivity() {
             try { packageManager.getApplicationLabel(packageManager.getApplicationInfo(pkg, 0)).toString() }
             catch (_: PackageManager.NameNotFoundException) { pkg }
         }.sorted()
-        binding.targetAppsButton.text = if (labels.isEmpty()) getString(R.string.choose_target_apps)
-            else getString(R.string.target_apps_summary, labels.joinToString(", "))
+        binding.targetsSummary.text = "Instagram + YouTube\n"+if (labels.isEmpty()) "Клиенты ещё не обнаружены" else labels.joinToString(", ")
         val proxyIp = preferences.getStringNotNull("byedpi_proxy_ip", "127.0.0.1")
         val proxyPort = preferences.getStringNotNull("byedpi_proxy_port", "1080")
         binding.proxyAddress.text = getString(R.string.proxy_address, proxyIp, proxyPort)

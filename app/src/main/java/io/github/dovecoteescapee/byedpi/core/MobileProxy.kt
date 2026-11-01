@@ -8,7 +8,7 @@ class MobileProxy {
     private external fun jniCreateSocketWithCommandLine(args: Array<String>): Int
     private external fun jniStartProxy(fd: Int): Int
     fun run(command: String,port: Int,onBound: (Boolean)->Unit = {}): Int {
-        require(port == 1080 || port == 19080)
+        require(port in MobilePlan.ports)
         val args = MobilePlan.arguments(command,port)
         val fd = jniCreateSocketWithCommandLine(args)
         onBound(fd >= 0)

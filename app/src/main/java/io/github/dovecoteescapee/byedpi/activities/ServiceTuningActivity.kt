@@ -37,11 +37,7 @@ class ServiceTuningActivity : AppCompatActivity() {
             text = "Обновить базу стратегий"; box.addView(this)
             setOnClickListener { lifecycleScope.launch(Dispatchers.IO) { MobileCatalogUpdater.refresh(this@ServiceTuningActivity,true) } }
         }
-        val choice = Spinner(this).apply {
-            adapter = ArrayAdapter(this@ServiceTuningActivity,android.R.layout.simple_spinner_dropdown_item,ServiceTargets.targets.map { it.name }); box.addView(this)
-        }
         val prefs = getPreferences()
-        choice.setSelection(ServiceTargets.targets.indexOfFirst { it.id == prefs.getString("mobile_target",MobilePlan.BOTH) }.coerceAtLeast(0))
         val note = TextView(this).apply { setPadding(0,16,0,16); box.addView(this) }
         val run = Button(this).apply { text = "Подобрать / продолжить следующий блок"; box.addView(this) }
         val cancel = Button(this).apply { text = "Остановить подбор"; isEnabled = false; box.addView(this) }
@@ -57,25 +53,22 @@ class ServiceTuningActivity : AppCompatActivity() {
         fun saveReport() { prefs.edit().putString("mobile_tuning_report",report.toString()).apply() }
         Button(this).apply {
             text = "Скопировать диагностику"; box.addView(this)
-            setOnClickListener { (getSystemService(CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("DPI Pilot",base.text.toString()+"\nТекущее состояние: "+stageView.text+"\nЭкран: "+output.text+"\nЖурнал подбора:\n"+report+"\nПоследняя проверка фонового контроля VPN:\n"+MobileStrategyPolicy.lastProbe)); Toast.makeText(this@ServiceTuningActivity,"Диагностика скопирована",Toast.LENGTH_SHORT).show() }
+            setOnClickListener { (getSystemService(CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("DPI Pilot",base.text.toString()+"\nТекущее состояние: "+stageView.text+"\nЭкран: "+output.text+"\nЖурнал подбора:\n"+report+"\nПоследняя проверка фонового контроля VPN:\n"+MobileStrategyPolicy.lastProbe+"\n"+MobileFeedback.traffic+"\n"+MobileHistory.summary(this@ServiceTuningActivity))); Toast.makeText(this@ServiceTuningActivity,"Диагностика скопирована",Toast.LENGTH_SHORT).show() }
         }
         fun showNote() {
-            val target = ServiceTargets.targets[choice.selectedItemPosition]
+            val target = ServiceTargets.combined
             note.text = target.note+"\nПодбор — до 12 вариантов на каждый сервис за блок. Можно продолжить со следующей позиции; сохранённые варианты остаются в приоритете."
             apply.text = if (target.id == MobilePlan.BOTH) "Применить Instagram + YouTube" else "Применить сохранённый результат"
             val stored = if (target.id == MobilePlan.BOTH) MobilePlan.describe(MobilePlan.saved(prefs)) else prefs.getString("tuned_"+target.id,null)
             output.text = stored?.let { "Сохранён результат: "+it.ifEmpty { "без изменений" } } ?: "Подтверждённых транспортных проверок пока нет"
         }
-        choice.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
-            override fun onNothingSelected(parent: AdapterView<*>?) {}
-            override fun onItemSelected(parent: AdapterView<*>?,view: android.view.View?,position: Int,id: Long) { showNote() }
-        }
+        showNote()
         cancel.setOnClickListener { stopReason = "нажата кнопка остановки"; job?.cancel() }
         run.setOnClickListener {
             if (appStatus.first != AppStatus.Halted) { output.text = "Сначала выключите обработку на главном экране. После включения VPN контроль будет работать в фоне."; return@setOnClickListener }
             val cm = getSystemService(CONNECTIVITY_SERVICE) as android.net.ConnectivityManager
             if (cm.activeNetwork?.let { cm.getNetworkCapabilities(it)?.hasTransport(android.net.NetworkCapabilities.TRANSPORT_VPN) } == true) { output.text = "Для подбора в вашей сети отключите другой VPN"; return@setOnClickListener }
-            val target = ServiceTargets.targets[choice.selectedItemPosition]
+            val target = ServiceTargets.combined
             val scanTargets = if (target.id == MobilePlan.BOTH) ServiceTargets.individual else listOf(target)
             val count = scanTargets.sumOf { MobileStrategyPolicy.window(this,it).size }
             val profile = MobileStrategyPolicy.profile(this)
@@ -84,7 +77,7 @@ class ServiceTuningActivity : AppCompatActivity() {
             progress("Подбор ${target.name} запущен; вариантов в блоке: ${count}"); saveReport()
             job = lifecycleScope.launch {
                 window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-                choice.isEnabled = false; run.isEnabled = false; apply.isEnabled = false; cancel.isEnabled = true
+                run.isEnabled = false; apply.isEnabled = false; cancel.isEnabled = true
                 output.text = "${target.name}: блок до ${count} вариантов. Не закрывайте экран подбора до завершения.\n"
                 try {
                     for (service in scanTargets) {
@@ -135,12 +128,12 @@ class ServiceTuningActivity : AppCompatActivity() {
                 }
                 finally {
                     saveReport(); window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-                    choice.isEnabled = true; run.isEnabled = true; apply.isEnabled = true; cancel.isEnabled = false
+                    run.isEnabled = true; apply.isEnabled = true; cancel.isEnabled = false
                 }
             }
         }
         apply.setOnClickListener {
-            val target = ServiceTargets.targets[choice.selectedItemPosition]
+            val target = ServiceTargets.combined
             val args = if (target.id == MobilePlan.BOTH) MobilePlan.saved(prefs) else prefs.getString("tuned_"+target.id,null)
             val selected = TargetApps.installed(this).map { it.packageName }.filter { it in target.packages }.toSet()
             when {

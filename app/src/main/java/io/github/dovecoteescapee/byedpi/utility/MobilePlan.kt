@@ -7,6 +7,7 @@ import org.json.JSONObject
 /** Local configuration only: signed catalog entries remain individual restricted commands. */
 object MobilePlan {
     const val BOTH = "both"
+    val ports = setOf(1080,19080,19410,19411,19420,19421)
     val domains = linkedMapOf(
         "instagram" to listOf("instagram.com","cdninstagram.com","fbcdn.net","facebook.com","fbsbx.com","ig.me"),
         "youtube" to listOf("youtube.com","youtu.be","googlevideo.com","ytimg.com","ggpht.com","googleusercontent.com","googleapis.com","gstatic.com","google.com")
@@ -31,7 +32,7 @@ object MobilePlan {
     }
     fun valid(value: String): Boolean = runCatching { arguments(value,1080); true }.getOrDefault(false)
     fun arguments(value: String,port: Int): Array<String> {
-        require(port == 1080 || port == 19080)
+        require(port in ports)
         val args = mutableListOf("ciadpi","--ip","127.0.0.1","--port",port.toString(),"--proto","udp","--pf","53")
         if (!dual(value)) {
             require(CatalogProtocol.validCommand(value))

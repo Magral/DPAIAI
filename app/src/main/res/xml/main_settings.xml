@@ -23,6 +23,9 @@
             android:defaultValue="vpn"
             app:useSimpleSummaryProvider="true" />
 
+        <SwitchPreference android:key="mobile_recovery" android:title="Восстанавливать ранее включённый VPN"
+            android:summary="После перезагрузки или остановки системой. Ручное выключение запоминается. Android может ограничить фоновый запуск."
+            android:defaultValue="true" />
         <SwitchPreference
             android:key="mobile_network_dns"
             android:title="DNS текущей сети для Instagram / YouTube"

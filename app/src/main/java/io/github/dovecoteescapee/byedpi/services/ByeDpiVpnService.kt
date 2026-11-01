@@ -32,7 +32,7 @@ class ByeDpiVpnService : LifecycleVpnService() {
     private var tunFd: ParcelFileDescriptor? = null
     private val mutex = Mutex()
     private var stopping: Boolean = false
-    private var mobileLease: MobileEngineLease? = null
+    private var mobileRuntime: MobileRuntime? = null
     private var mobileCommand = ""
     private var mobileMonitor: MobileMonitor? = null
     private var networkJob: Job? = null
@@ -58,24 +58,28 @@ class ByeDpiVpnService : LifecycleVpnService() {
         super.onStartCommand(intent, flags, startId)
         return when (val action = intent?.action) {
             START_ACTION -> {
+                getPreferences().edit().putBoolean("mobile_enabled",true).apply()
+                PhoneRecovery.schedule(this)
                 lifecycleScope.launch { start() }
                 START_STICKY
             }
 
             STOP_ACTION -> {
+                getPreferences().edit().putBoolean("mobile_enabled",false).apply()
                 lifecycleScope.launch { stop() }
                 START_NOT_STICKY
             }
 
             else -> {
-                Log.w(TAG, "Unknown action: $action")
-                START_NOT_STICKY
+                if (action == null && PhoneRecovery.desired(this)) { lifecycleScope.launch { start() }; START_STICKY }
+                else START_NOT_STICKY
             }
         }
     }
 
     override fun onRevoke() {
         Log.i(TAG, "VPN revoked")
+        getPreferences().edit().putBoolean("mobile_enabled",false).apply()
         lifecycleScope.launch { stop() }
     }
 
@@ -89,15 +93,14 @@ class ByeDpiVpnService : LifecycleVpnService() {
 
         try {
             startForeground()
+            MobileSetup.prepare(this)
             mutex.withLock {
                 startProxy()
                 startTun2Socks()
             }
             updateStatus(ServiceStatus.Connected)
-            if (mobileLease != null) {
-                mobileMonitor = MobileMonitor(this,lifecycleScope) { command ->
-                    mutex.withLock { replaceMobile(command) }
-                }.also { it.start() }
+            if (mobileRuntime != null) {
+                mobileMonitor = MobileMonitor(this,lifecycleScope,mobileRuntime!!).also { it.start() }
                 networkJob = lifecycleScope.launch {
                     var signature = MobileNetwork.signature(this@ByeDpiVpnService)
                     while (isActive) {
@@ -167,9 +170,9 @@ class ByeDpiVpnService : LifecycleVpnService() {
 
         if (MobileStrategyPolicy.modern(getPreferences())) {
             mobileCommand = getPreferences().getString("mobile_command","").orEmpty()
-            check(mobileLease == null)
-            val lease = newMobileLease(); mobileLease = lease
-            try { lease.open(mobileCommand) } catch (e: Exception) { lease.close(); mobileLease = null; throw e }
+            check(mobileRuntime == null)
+            val runtime = MobileRuntime(this); mobileRuntime = runtime
+            try { runtime.open(mobileCommand) } catch (e: Exception) { runtime.close(); mobileRuntime = null; throw e }
             return
         }
         val preferences = getByeDpiPreferences()
@@ -193,24 +196,8 @@ class ByeDpiVpnService : LifecycleVpnService() {
         Log.i(TAG, "Proxy started")
     }
 
-    private fun newMobileLease() = MobileEngineLease(this) {
-        if (!stopping) lifecycleScope.launch { updateStatus(ServiceStatus.Failed); stop() }
-    }
-    private suspend fun replaceMobile(command: String) {
-        val previous = mobileCommand
-        mobileLease?.close(); mobileLease = null
-        val next = newMobileLease()
-        try { next.open(command); mobileLease = next; mobileCommand = command }
-        catch (e: Exception) {
-            next.close()
-            val restore = newMobileLease()
-            try { restore.open(previous); mobileLease = restore; mobileCommand = previous }
-            catch (_: Exception) { restore.close(); lifecycleScope.launch { stop() } }
-            throw e
-        }
-    }
     private suspend fun stopProxy() {
-        if (mobileLease != null) { mobileLease?.close(); mobileLease = null; return }
+        if (mobileRuntime != null) { mobileRuntime?.close(); mobileRuntime = null; return }
         Log.i(TAG, "Stopping proxy")
 
         if (status == ServiceStatus.Disconnected) {

@@ -23,10 +23,10 @@ object MobileStrategyPolicy {
         val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
         return cm.allNetworks.any { val c = cm.getNetworkCapabilities(it); c?.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_VPN) == true && c.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) }
     }
-    fun ordered(ids: List<String>,preferred: List<String>,commands: List<String>,saved: String?,cursor: Int,limit: Int = 12): List<Int> {
+    fun ordered(ids: List<String>,preferred: List<String>,commands: List<String>,saved: String?,cursor: Int,limit: Int = 12,backups: List<String> = emptyList()): List<Int> {
         require(ids.size == commands.size && commands.isNotEmpty())
-        val priority = (listOfNotNull(saved)+preferred.map { CatalogProtocol.id(it) }+listOf(CatalogProtocol.id(""))+ids.getOrNull(7).orEmpty())
-            .mapNotNull { ids.indexOf(it).takeIf { n -> n >= 0 } }.distinct()
+        val priority = (listOfNotNull(saved)+backups.take(3)+preferred.map { CatalogProtocol.id(it) }+listOf(CatalogProtocol.id(""))+ids.getOrNull(7).orEmpty())
+            .mapNotNull { ids.indexOf(it).takeIf { n -> n >= 0 } }.distinct().take((limit-3).coerceAtLeast(1))
         val start = cursor.coerceAtLeast(0)%commands.size
         val rest = commands.indices.map { (start+it)%commands.size }.filter { it !in priority }
         return (priority+rest).take(limit)
@@ -35,7 +35,7 @@ object MobileStrategyPolicy {
         val prefs = context.getPreferences(); val key = "${target.id}.${profile(context)}"
         val saved = prefs.getString("mobile_good.$key",null) ?: prefs.getString("tuned_${target.id}",null)?.let { CatalogProtocol.id(it) }
         val commands = RuntimeCatalog.commands; val ids = RuntimeCatalog.ids.take(commands.size)
-        return ordered(ids,target.preferred,commands,saved,prefs.getInt("mobile_cursor.$key",0)).map { commands[it] }
+        return ordered(ids,target.preferred,commands,saved,prefs.getInt("mobile_cursor.$key",0),backups = MobileHistory.backups(context,target.id).map { CatalogProtocol.id(it) }).map { commands[it] }
     }
     fun advance(context: Context,target: String,command: String) {
         val i = RuntimeCatalog.ids.indexOf(CatalogProtocol.id(command))

@@ -5,7 +5,7 @@ import android.os.*
 import kotlinx.coroutines.*
 import java.util.concurrent.atomic.AtomicBoolean
 
-class MobileEngineLease(private val context: Context,private val failed: () -> Unit = {}) {
+class MobileEngineLease(private val context: Context,private val failed: () -> Unit = {},private val serviceClass: Class<out MobileEngineService> = MobileEngineService::class.java) {
     private val closing = AtomicBoolean(false)
     private val reported = AtomicBoolean(false)
     private fun notifyFailure() { if (!closing.get() && reported.compareAndSet(false,true)) failed() }
@@ -27,7 +27,7 @@ class MobileEngineLease(private val context: Context,private val failed: () -> U
         }
     }
     suspend fun open(command: String) {
-        withContext(Dispatchers.Main) { bound = context.bindService(Intent(context,MobileEngineService::class.java),connection,Context.BIND_AUTO_CREATE); check(bound) }
+        withContext(Dispatchers.Main) { bound = context.bindService(Intent(context,serviceClass),connection,Context.BIND_AUTO_CREATE); check(bound) }
         withTimeout(10000) {
             Messenger(connected.await()).send(Message.obtain().apply { replyTo = this@MobileEngineLease.callback; data = Bundle().apply { putString("command",command) } })
             check(ready.await()) { "Engine startup failed" }
