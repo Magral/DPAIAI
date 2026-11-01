@@ -14,6 +14,34 @@ import org.json.JSONObject
 
 class ServiceTuningActivity : AppCompatActivity() {
     private var job: Job? = null
+    private val exportProfile = registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.CreateDocument("application/json")) { uri ->
+        if (uri != null) lifecycleScope.launch(Dispatchers.IO) {
+            val prefs = getPreferences(); val plan = MobilePlan.saved(prefs)
+            val text = ProfileWire.encode(listOf("instagram","youtube").associateWith { MobilePlan.command(plan,it) })
+            val success = runCatching { contentResolver.openOutputStream(uri,"wt")!!.bufferedWriter().use { it.write(text) } }.isSuccess
+            withContext(Dispatchers.Main) { Toast.makeText(this@ServiceTuningActivity,if (success) "Профиль сохранён" else "Не удалось сохранить профиль",Toast.LENGTH_LONG).show() }
+        }
+    }
+    private val importProfile = registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) lifecycleScope.launch {
+            try {
+                val commands = withContext(Dispatchers.IO) {
+                    contentResolver.openInputStream(uri)!!.use { input ->
+                        val out = java.io.ByteArrayOutputStream();val buffer = ByteArray(1024)
+                        while (true) { val n = input.read(buffer);if (n < 0) break;require(out.size()+n <= 16384);out.write(buffer,0,n) }
+                        ProfileWire.decode(out.toString("UTF-8"))
+                    }
+                }
+                androidx.appcompat.app.AlertDialog.Builder(this@ServiceTuningActivity).setTitle("Профиль для проверки")
+                    .setMessage(commands.entries.joinToString("\n\n") { "${it.key}: ${it.value.ifEmpty { "контроль" }}" }+"\n\nЭто локальный файл. Команды будут испытаны перед сохранением в рабочий резерв.")
+                    .setPositiveButton("Добавить к подбору") { _,_ ->
+                        val edit = getPreferences().edit();commands.forEach { (id,command) -> edit.putString("mobile_imported.$id",command) };edit.apply()
+                        commands.keys.forEach { MobileFeedback.request(it) }
+                        Toast.makeText(this@ServiceTuningActivity,"Профиль добавлен. Включите VPN для испытания.",Toast.LENGTH_LONG).show()
+                    }.setNegativeButton("Отмена",null).show()
+            } catch (_: Exception) { Toast.makeText(this@ServiceTuningActivity,"Файл повреждён или несовместим с движком",Toast.LENGTH_LONG).show() }
+        }
+    }
     private val handler = Handler(Looper.getMainLooper())
     private lateinit var base: TextView
     private lateinit var stageView: TextView
@@ -38,6 +66,12 @@ class ServiceTuningActivity : AppCompatActivity() {
             setOnClickListener { lifecycleScope.launch(Dispatchers.IO) { MobileCatalogUpdater.refresh(this@ServiceTuningActivity,true) } }
         }
         val prefs = getPreferences()
+        Button(this).apply { text = "Источники и состояние базы";box.addView(this);setOnClickListener {
+            androidx.appcompat.app.AlertDialog.Builder(this@ServiceTuningActivity).setTitle("${RuntimeCatalog.version}")
+                .setMessage(RuntimeCatalog.sources.joinToString("\n\n")).setPositiveButton("Закрыть",null).show()
+        } }
+        Button(this).apply { text = "Сохранить профиль в файл";box.addView(this);setOnClickListener { exportProfile.launch("DPI-Pilot-profile.json") } }
+        Button(this).apply { text = "Импорт профиля с ТВ / другого устройства";box.addView(this);setOnClickListener { importProfile.launch(arrayOf("application/json","text/plain")) } }
         val note = TextView(this).apply { setPadding(0,16,0,16); box.addView(this) }
         val run = Button(this).apply { text = "Подобрать / продолжить следующий блок"; box.addView(this) }
         val cancel = Button(this).apply { text = "Остановить подбор"; isEnabled = false; box.addView(this) }
@@ -108,14 +142,7 @@ class ServiceTuningActivity : AppCompatActivity() {
                             output.append("\n${service.name}: кандидат сохранён: основные публичные узлы доступны. Видео и аккаунт не проверялись.")
                         }
                     }
-                    if (target.id == MobilePlan.BOTH) {
-                        val plan = MobilePlan.saved(prefs)
-                        progress("Проверка совместной конфигурации Instagram + YouTube")
-                        val combined = MobileCandidate.run(this@ServiceTuningActivity,MobilePlan.BOTH,plan,::progress)
-                        if (MobileStrategyPolicy.profile(this@ServiceTuningActivity) != profile) error("Сеть изменилась")
-                        record("Совместная конфигурация: ${MobilePlan.describe(plan)}\n$combined")
-                        output.append("\nСовместная проверка: ${ProbeAssessment.evaluate(MobilePlan.BOTH,combined).text()}.\n"+MobilePlan.describe(plan))
-                    }
+                    record("Отдельные команды сохранены. Совместный маршрут проверяется при включении VPN через независимые обработчики.")
                     output.append("\nПримените результат и включите VPN. В общем режиме работают оба приложения; аккаунт, лента и видео проверяются в самих клиентах.")
                     progress("Подбор завершён"); record(output.text.toString())
                 } catch (_: CancellationException) {

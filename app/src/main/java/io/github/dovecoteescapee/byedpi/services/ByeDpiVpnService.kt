@@ -36,6 +36,7 @@ class ByeDpiVpnService : LifecycleVpnService() {
     private var mobileCommand = ""
     private var mobileMonitor: MobileMonitor? = null
     private var networkJob: Job? = null
+    private var physicalCallback: android.net.ConnectivityManager.NetworkCallback? = null
 
     companion object {
         private val TAG: String = ByeDpiVpnService::class.java.simpleName
@@ -101,23 +102,30 @@ class ByeDpiVpnService : LifecycleVpnService() {
             updateStatus(ServiceStatus.Connected)
             if (mobileRuntime != null) {
                 mobileMonitor = MobileMonitor(this,lifecycleScope,mobileRuntime!!).also { it.start() }
-                networkJob = lifecycleScope.launch {
-                    var signature = MobileNetwork.signature(this@ByeDpiVpnService)
-                    while (isActive) {
-                        delay(5000)
-                        val next = MobileNetwork.signature(this@ByeDpiVpnService)
-                        if (next.isEmpty() || next == signature) continue
-                        try {
-                            mutex.withLock { stopTun2Socks(); startTun2Socks() }
-                            signature = next
-                            MobileStrategyPolicy.state = "Физическая сеть изменилась; VPN и DNS обновлены"
-                        } catch (e: CancellationException) { throw e }
-                        catch (e: Exception) {
-                            lifecycleScope.launch { updateStatus(ServiceStatus.Failed); stop() }
-                            return@launch
+                var signature = MobileNetwork.signature(this)
+                val cm = getSystemService(CONNECTIVITY_SERVICE) as android.net.ConnectivityManager
+                physicalCallback = object : android.net.ConnectivityManager.NetworkCallback() {
+                    private fun changed() {
+                        networkJob?.cancel()
+                        networkJob = lifecycleScope.launch {
+                            delay(1500)
+                            val next = MobileNetwork.signature(this@ByeDpiVpnService)
+                            if (next.isEmpty() || next == signature) return@launch
+                            try {
+                                mutex.withLock { stopTun2Socks(); startTun2Socks() }
+                                signature = next; MobileFeedback.wake()
+                                MobileStrategyPolicy.state = "Сеть изменилась; VPN и DNS обновлены"
+                            } catch (e: CancellationException) { throw e }
+                            catch (_: Exception) { lifecycleScope.launch { updateStatus(ServiceStatus.Failed); stop() } }
                         }
                     }
+                    override fun onAvailable(network: android.net.Network) = changed()
+                    override fun onLost(network: android.net.Network) = changed()
+                    override fun onLinkPropertiesChanged(network: android.net.Network,properties: android.net.LinkProperties) = changed()
                 }
+                cm.registerNetworkCallback(android.net.NetworkRequest.Builder().addCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET)
+                    .addCapability(android.net.NetworkCapabilities.NET_CAPABILITY_NOT_VPN).build(),physicalCallback!!)
+
             }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to start VPN", e)
@@ -145,6 +153,7 @@ class ByeDpiVpnService : LifecycleVpnService() {
         mutex.withLock {
             stopping = true
             try {
+                physicalCallback?.let { runCatching { (getSystemService(CONNECTIVITY_SERVICE) as android.net.ConnectivityManager).unregisterNetworkCallback(it) } }; physicalCallback = null
                 networkJob?.cancel(); networkJob = null
                 mobileMonitor?.stop(); mobileMonitor = null
                 stopTun2Socks()

@@ -1,4 +1,4 @@
-#define AppVersion "0.1.0"
+#define AppVersion "0.1.1"
 [Setup]
 AppId={{B0FC1F56-5ED3-4E29-B9C8-A511A227B103}
 AppName=DPI Pilot YouTube

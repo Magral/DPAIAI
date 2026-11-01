@@ -71,7 +71,14 @@ object CatalogProtocol {
             val source = metadata.getJSONObject(it)
             val title = source.getString("title"); val url = source.getString("url")
             require(title.length <= 200 && url.length <= 1000 && url.startsWith("https://") && !title.any { c -> c.isISOControl() })
-            "$title\n$url"
+            val state = when (source.optString("fetch_status","snapshot")) {
+                "fetched" -> "Источник получен"
+                "fetch failed; snapshot retained" -> "Источник недоступен; прежние команды сохранены"
+                "no complete commands; snapshot retained" -> "Новых команд не извлечено; прежние сохранены"
+                else -> "Сохранённый снимок источника"
+            }
+            val checked = source.optString("checked_at","").takeIf { Regex("[0-9TZ:.,+\\-]{0,40}").matches(it) }.orEmpty()
+            "$title\n$url\n$state${if (checked.isEmpty()) "" else "; $checked"}"
         }
         return CatalogUpdate(sequence,version,entries,sources)
     }

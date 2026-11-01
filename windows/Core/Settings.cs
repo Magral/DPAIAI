@@ -6,6 +6,7 @@ namespace DpiPilot;
 public sealed class Settings
 {
     public bool Enabled { get; set; }
+    public bool PeriodicChecks { get; set; }
     public string PacToken { get; set; } = Convert.ToHexString(RandomNumberGenerator.GetBytes(20)).ToLowerInvariant();
     public Dictionary<string, List<string>> History { get; set; } = [];
     public long CatalogSequence { get; set; }

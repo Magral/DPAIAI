@@ -23,14 +23,18 @@ object MobilePlan {
     fun command(value: String,target: String): String = if (dual(value)) decode(value).getString(target) else value
     fun create(instagram: String,youtube: String): String {
         val value = JSONObject().put("schema",1).put("instagram",instagram).put("youtube",youtube).toString()
-        arguments(value,1080) // Enforce native argv and group-mask limits before storing it.
+        require(valid(value)) // Independent services validate each native command separately.
         return value
     }
     fun replace(value: String,target: String,replacement: String): String {
         require(target in domains)
         return create(if (target == "instagram") replacement else command(value,"instagram"),if (target == "youtube") replacement else command(value,"youtube"))
     }
-    fun valid(value: String): Boolean = runCatching { arguments(value,1080); true }.getOrDefault(false)
+    fun valid(value: String): Boolean = runCatching {
+        if (dual(value)) { val data = decode(value);domains.keys.forEach { arguments(data.getString(it),19410) } }
+        else arguments(value,1080)
+        true
+    }.getOrDefault(false)
     fun arguments(value: String,port: Int): Array<String> {
         require(port in ports)
         val args = mutableListOf("ciadpi","--ip","127.0.0.1","--port",port.toString(),"--proto","udp","--pf","53")

@@ -23,7 +23,7 @@ internal sealed class MainForm : Form
     {
         this.settings=settings;this.catalog=catalog;
         pilot=new(settings,catalog,executable);
-        Text="DPI Pilot · YouTube для Chrome · 0.1.0";MinimumSize=new(760,620);Size=new(1020,790);StartPosition=FormStartPosition.CenterScreen;
+        Text="DPI Pilot · YouTube для Chrome · 0.1.1";MinimumSize=new(760,620);Size=new(1020,790);StartPosition=FormStartPosition.CenterScreen;
         AutoScaleMode=AutoScaleMode.Dpi;Font=new("Segoe UI",11);
         var layout=new TableLayoutPanel{Dock=DockStyle.Fill,ColumnCount=1,RowCount=7,Padding=new(20)};
         layout.RowStyles.Add(new(SizeType.AutoSize));layout.RowStyles.Add(new(SizeType.AutoSize));layout.RowStyles.Add(new(SizeType.AutoSize));layout.RowStyles.Add(new(SizeType.AutoSize));layout.RowStyles.Add(new(SizeType.AutoSize));layout.RowStyles.Add(new(SizeType.AutoSize));layout.RowStyles.Add(new(SizeType.Percent,100));
@@ -43,7 +43,10 @@ internal sealed class MainForm : Form
         var autorun=new CheckBox{Text="Запускать в трее при входе в Windows",AutoSize=true,Padding=new(10)};
         using(var key=Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run"))autorun.Checked=key?.GetValue("DpiPilotYouTube") is string;
         autorun.CheckedChanged+=(_,_)=>{using var key=Registry.CurrentUser.CreateSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run");if(autorun.Checked)key.SetValue("DpiPilotYouTube","\""+Environment.ProcessPath+"\" --background");else key.DeleteValue("DpiPilotYouTube",false);};
-        install.Controls.Add(autorun);layout.Controls.Add(install);
+        install.Controls.Add(autorun);
+        var periodic=new CheckBox{Text="Периодические проверки (раз в час)",AutoSize=true,Checked=settings.Value.PeriodicChecks,Padding=new(10)};
+        periodic.CheckedChanged+=(_,_)=>{settings.Change(s=>s.PeriodicChecks=periodic.Checked);pilot.RequestCheck();};
+        install.Controls.Add(periodic);layout.Controls.Add(install);
         layout.Controls.Add(new Label{AutoSize=true,Text="Закрытие окна сворачивает приложение в трей. Полный выход — через меню значка рядом с часами.",Padding=new(0,4,0,10)});
         layout.Controls.Add(information);Controls.Add(layout);
         var menu=new ContextMenuStrip();menu.Items.Add("Открыть",null,(_,_)=>ShowPanel());menu.Items.Add("Выход",null,async(_,_)=>await ExitAsync());
@@ -77,7 +80,7 @@ internal sealed class MainForm : Form
         information.Text=Report();
     }
     private string Report()=>
-        "DPI Pilot Windows 0.1.0 · Chrome extension\r\n"+
+        "DPI Pilot Windows 0.1.1 · Chrome extension\r\n"+
         "Расширение: "+(Interlocked.Read(ref extensionSeen)>0 && Environment.TickCount64-Interlocked.Read(ref extensionSeen)<20000 ? "связь есть (статус маршрута — на значке Chrome)" : "нет связи; проверьте одноразовую установку")+"\r\n"+
         "Маршрутизация: "+safety.Reason+"\r\n"+
         "Стратегия: "+pilot.ActiveDescription.Replace("\n","\r\n")+"\r\n\r\n"+

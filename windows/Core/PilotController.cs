@@ -24,6 +24,8 @@ public sealed class PilotController : IAsyncDisposable
     private Task? catalogWorker;
     private volatile bool requested;
     private volatile bool stalled;
+    private volatile bool trialInProgress;
+    private volatile bool manualRequest;
     private long usefulAt,watchAt,lastSent,lastReceived;
     private int deficient;
     private bool disposed;
@@ -83,7 +85,7 @@ public sealed class PilotController : IAsyncDisposable
         }
         finally { operation.Release(); }
     }
-    public void RequestCheck() { requested = true; }
+    public void RequestCheck() { manualRequest=true; requested = true; }
     private string Profile()
     {
         var parts = NetworkInterface.GetAllNetworkInterfaces().Where(n => n.OperationalStatus == OperationalStatus.Up && n.NetworkInterfaceType != NetworkInterfaceType.Loopback)
@@ -109,8 +111,8 @@ public sealed class PilotController : IAsyncDisposable
             while (!cancellation.IsCancellationRequested)
             {
                 if (!NetworkInterface.GetIsNetworkAvailable()) { Phase = "Нет физического подключения; ожидаем сеть"; await Task.Delay(10000,cancellation); continue; }
-                if (!requested && !stalled && active?.Alive == true && DateTimeOffset.UtcNow < next) { await Task.Delay(1000,cancellation); continue; }
-                requested = false; bool wasStalled = stalled; stalled = false;
+                if (!requested && !stalled && active?.Alive == true && DateTimeOffset.UtcNow < next) { await Task.Delay(settings.Value.PeriodicChecks ? 1000 : 10000,cancellation); continue; }
+                requested = false; bool manual = manualRequest; manualRequest=false; bool wasStalled = stalled; stalled = false;
                 try
                 {
                     string profile = Profile(); var bank = catalog.Snapshot.Entries;
@@ -123,11 +125,11 @@ public sealed class PilotController : IAsyncDisposable
                     }
                     var previous = active!; Phase = "Проверка активной стратегии";
                     ProbeResult current = await Probe.CheckAsync(previous,cancellation); LastProbe = current.Detail; Log("Текущая: "+current.Detail);
-                    if (current.Ok && !wasStalled) { Phase = "Включено · проверки YouTube пройдены"; failures=0; Remember(profile,previous.Strategy); next=DateTimeOffset.UtcNow.AddMinutes(5); continue; }
+                    if (current.Ok && !wasStalled) { Phase = "Включено · проверки YouTube пройдены"; failures=0; Remember(profile,previous.Strategy); next=settings.Value.PeriodicChecks ? DateTimeOffset.UtcNow.AddHours(1) : DateTimeOffset.MaxValue; continue; }
                     if (!wasStalled && Useful(Interlocked.Read(ref usefulAt))) { Phase="YouTube получает данные; сохраняем работающий поток"; next=DateTimeOffset.UtcNow.AddMinutes(1); continue; }
                     var order = history.Concat(bank.Where(s=>s.Args.StartsWith("--timeout 8 --cache-ttl 600",StringComparison.Ordinal)).Select(s=>s.Id))
                         .Concat(bank.Skip(settings.Value.ScanCursor % bank.Count).Concat(bank.Take(settings.Value.ScanCursor % bank.Count)).Select(s=>s.Id)).Distinct()
-                        .Select(id=>bank.FirstOrDefault(s=>s.Id==id)).Where(s=>s is not null && s.Id != previous.Strategy.Id && (!blocked.TryGetValue(s.Id,out var until) || until < DateTimeOffset.UtcNow)).Take(12).ToArray();
+                        .Select(id=>bank.FirstOrDefault(s=>s.Id==id)).Where(s=>s is not null && s.Id != previous.Strategy.Id && (!blocked.TryGetValue(s.Id,out var until) || until < DateTimeOffset.UtcNow)).Take(settings.Value.PeriodicChecks || manual ? 12 : 3).ToArray();
                     bool changed = false;
                     foreach (var strategy in order)
                     {
@@ -147,17 +149,18 @@ public sealed class PilotController : IAsyncDisposable
                             lock(routeGate) active = candidate;
                             var trial = candidate; candidate = null;
                             Phase = "Пробная стратегия; наблюдение за новыми соединениями до 2 минут";
-                            Log(Phase); bool rollback = false,trialFailed = false; long trialAt = Environment.TickCount64;
+                            Log(Phase); trialInProgress=true; bool rollback = false,trialFailed = false; long trialAt = Environment.TickCount64;
                             for (int t=0;t<12;t++)
                             {
                                 await Task.Delay(10000,cancellation);
                                 if (!trial.Alive || (stalled && Environment.TickCount64-trialAt >= 45000)) { trialFailed=true; rollback = current.Ok && !wasStalled && previous.Alive; break; }
-                                if (t == 2)
+                                if ((settings.Value.PeriodicChecks && t == 2) || t == 11)
                                 {
                                     var check = await Probe.CheckAsync(trial,cancellation);
                                     if (!check.Ok) { var repeat = await Probe.CheckAsync(trial,cancellation); if (!repeat.Ok) { trialFailed=true; rollback = current.Ok && !wasStalled && previous.Alive; break; } }
                                 }
                             }
+                            trialInProgress=false;
                             if (rollback)
                             { lock(routeGate) active = previous; trial.Dispose(); blocked[strategy.Id]=DateTimeOffset.UtcNow.AddMinutes(30); Phase="Откат к предыдущей стратегии"; Log(Phase); }
                             else if(trialFailed)
@@ -172,14 +175,14 @@ public sealed class PilotController : IAsyncDisposable
                         catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { throw; }
                         catch (Exception e) when (e is IOException or SocketException or InvalidOperationException)
                         { blocked[strategy!.Id]=DateTimeOffset.UtcNow.AddMinutes(30); Log("Кандидат: "+e.GetType().Name); }
-                        finally { candidate?.Dispose(); }
+                        finally { trialInProgress=false; candidate?.Dispose(); }
                     }
                     failures = changed ? 0 : failures+1;
                     if (!changed) Phase="Обработка включена; полная доступность YouTube пока не подтверждена";
-                    next = DateTimeOffset.UtcNow.AddMinutes(changed ? 5 : failures switch {1=>1,2=>2,3=>5,_=>10});
+                    next = settings.Value.PeriodicChecks ? DateTimeOffset.UtcNow.AddMinutes(changed ? 60 : 10) : DateTimeOffset.MaxValue;
                 }
                 catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { throw; }
-                catch (Exception e) { Phase="Ошибка проверки: "+e.GetType().Name+"; повтор через минуту"; Log(Phase); next=DateTimeOffset.UtcNow.AddMinutes(1); }
+                catch (Exception e) { Phase="Ошибка проверки: "+e.GetType().Name+"; повтор через минуту"; Log(Phase); next=settings.Value.PeriodicChecks ? DateTimeOffset.UtcNow.AddMinutes(10) : DateTimeOffset.MaxValue; }
             }
         }
         catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { }
@@ -192,6 +195,7 @@ public sealed class PilotController : IAsyncDisposable
             while (!lifetime.IsCancellationRequested)
             {
                 await Task.Delay(10000,lifetime.Token);
+                if (!settings.Value.PeriodicChecks && !trialInProgress) { Observation="Тихий режим: проверка при запуске, смене сети или по кнопке"; continue; }
                 long now=Environment.TickCount64, rx=Gateway.Received, tx=Gateway.Sent;
                 if (rx-priorRx >= 256*1024) Interlocked.Exchange(ref usefulAt,now); priorRx=rx;
                 if (watchAt == 0 || now-watchAt > 90000 || !NetworkInterface.GetIsNetworkAvailable() || !Enabled) { watchAt=now; lastSent=tx; lastReceived=rx; deficient=0; }

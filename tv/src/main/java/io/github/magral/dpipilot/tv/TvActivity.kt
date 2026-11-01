@@ -72,6 +72,12 @@ class TvActivity : Activity() {
         reselect = button(actions,"Подобрать заново") { requestCheck(true) }
         button(actions,"Полный отчёт") { showReport() }
         details = text("",21f).apply { isFocusable = true }
+        val periodic = Switch(this).apply {
+            text = "Периодический контроль (обычно не нужен)"; textSize = 22f; setTextColor(Color.WHITE)
+            isChecked = prefs.getBoolean("periodic_checks",false); isFocusable = true
+            setOnCheckedChangeListener { _,enabled -> prefs.edit().putBoolean("periodic_checks",enabled).apply(); if (prefs.getBoolean("enabled",false)) requestCheck(false) }
+        }
+        box.addView(periodic,LinearLayout.LayoutParams(-1,-2))
         val boot = Switch(this).apply {
             text = "Автозапуск при загрузке приставки"; textSize = 22f; setTextColor(Color.WHITE)
             isChecked = prefs.getBoolean("boot",true); isFocusable = true
@@ -89,11 +95,16 @@ class TvActivity : Activity() {
         val diagnostics = row()
         button(diagnostics,"Проверка автозапуска") { showAudit() }
         button(diagnostics,"Экспорт отчёта") { exportReport() }
+        button(diagnostics,"Профиль для телефона") { exportProfile() }
         val updates = row()
         button(updates,"Обновить базу стратегий") { Thread { CatalogUpdater.refresh(applicationContext,true) }.start() }
-        text("После первого разрешения VPN служба работает без открытого окна. Для автозапуска оставьте VPN включённым. После явного выключения он останется выключенным и при перезагрузке. Системный постоянный VPN настраивается отдельно.",18f)
-        text("Журнал событий · сохраняется после перезапуска",23f)
+        val autonomyNote = text("После первого разрешения VPN служба работает без открытого окна. Для автозапуска оставьте VPN включённым. После явного выключения он останется выключенным и при перезагрузке. Системный постоянный VPN настраивается отдельно.",18f)
+        val journalTitle = text("Журнал событий · сохраняется после перезапуска",23f)
         journal = text("",18f).apply { typeface = Typeface.MONOSPACE; isFocusable = true }
+        val advanced = listOf<View>(actions,boot,periodic,settings,diagnostics,updates,autonomyNote,journalTitle,journal)
+        fun showAdvanced() { val visible = !prefs.getBoolean("simple_screen",true); advanced.forEach { it.visibility = if (visible) View.VISIBLE else View.GONE } }
+        button(row(),"Дополнительные настройки") { prefs.edit().putBoolean("simple_screen",!prefs.getBoolean("simple_screen",true)).apply(); showAdvanced() }
+        showAdvanced()
         if (prefs.getBoolean("enabled",false) && VpnService.prepare(this) == null) startHelper()
         if (prefs.getBoolean("enabled",false)) open.requestFocus() else toggle.requestFocus()
         render()
@@ -151,7 +162,7 @@ class TvActivity : Activity() {
         status.setTextColor(if (TvState.vpnEstablished && TvState.verified) Color.rgb(121,225,165) else Color.rgb(255,211,133))
         toggle.text = if (enabled) "Выключить VPN" else "Включить VPN"
         check.isEnabled = enabled; reselect.isEnabled = enabled
-        details.text = information()
+        details.text = if (prefs.getBoolean("simple_screen",true)) "Стратегия: ${if (TvState.strategyIndex >= 0) "№${TvState.strategyIndex+1}" else "ещё не выбрана"}\n${TvState.phase}\nПоследняя проверка: ${time(TvState.lastCheckAt)}\n${if (prefs.getBoolean("periodic_checks",false)) "Периодический контроль включён" else "Без плановых сетевых проверок"}" else information()
         if (renderedReport != TvState.report) {
             renderedReport = TvState.report
             journal.text = renderedReport.ifBlank { "Событий пока нет" }
@@ -164,7 +175,7 @@ class TvActivity : Activity() {
         }
         if (intent == null) Toast.makeText(this,"Официальный YouTube не установлен",Toast.LENGTH_LONG).show() else startActivity(intent)
     }
-    private fun startHelper(action: String = "check") {
+    private fun startHelper(action: String = "resume") {
         try { MaintenanceJob.schedule(this); TvVpnService.start(this,action) }
         catch (e: Exception) {
             TvState.phase = "Ошибка запуска"
@@ -226,6 +237,14 @@ class TvActivity : Activity() {
         AlertDialog.Builder(this).setTitle("Проверка автономности").setMessage(AutonomyAudit.report(this))
             .setPositiveButton("Закрыть",null).show()
     }
+    private fun exportProfile() {
+        val command = RuntimeCatalog.commands.getOrNull(TvState.strategyIndex)
+        if (command == null) { Toast.makeText(this,"Сначала включите VPN",Toast.LENGTH_LONG).show();return }
+        try {
+            java.io.File(cacheDir,"pending-profile.json").writeText(ProfileWire.encode(mapOf("youtube" to command)))
+            startActivityForResult(Intent(Intent.ACTION_CREATE_DOCUMENT).apply { addCategory(Intent.CATEGORY_OPENABLE);type="application/json";putExtra(Intent.EXTRA_TITLE,"DPI-Pilot-TV-profile.json") },13)
+        } catch (_: Exception) { Toast.makeText(this,"Не удалось открыть сохранение файла",Toast.LENGTH_LONG).show() }
+    }
     private fun exportReport() {
         try {
             java.io.File(cacheDir,"pending-report.txt").writeText(reportText())
@@ -259,9 +278,9 @@ class TvActivity : Activity() {
     @Deprecated("Deprecated in Java")
     override fun onActivityResult(requestCode: Int,resultCode: Int,data: Intent?) {
         super.onActivityResult(requestCode,resultCode,data)
-        if (requestCode == 12 && resultCode == RESULT_OK) {
+        if (requestCode in listOf(12,13) && resultCode == RESULT_OK) {
             val uri = data?.data ?: return
-            val source = java.io.File(cacheDir,"pending-report.txt")
+            val source = java.io.File(cacheDir,if (requestCode == 13) "pending-profile.json" else "pending-report.txt")
             Thread {
                 val saved = runCatching {
                     contentResolver.openOutputStream(uri,"wt")?.use { out -> source.inputStream().use { it.copyTo(out) } }

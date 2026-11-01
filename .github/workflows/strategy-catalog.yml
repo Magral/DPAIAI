@@ -34,6 +34,11 @@ jobs:
         run: python3 tv/strategies/test_refresh.py
       - name: Collect sources, validate every entry, sign exact payload
         run: python3 tv/strategies/refresh_catalog.py
+      - name: Weekly discovery of candidate sources
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          if [[ "$(date -u +%u)" == "7" ]]; then python3 tv/strategies/discover_sources.py; fi
       - name: Remove private key
         if: always()
         run: rm -f "$RUNNER_TEMP/dpipilot-release.p12"
@@ -60,7 +65,7 @@ jobs:
             }
             const summary = JSON.parse(fs.readFileSync('catalog-release/summary.json'));
             const assets = (await github.rest.repos.listReleaseAssets({owner,repo,release_id:release.id})).data;
-            for (const name of ['catalog-v1.json','refresh-report.json']) {
+            for (const name of ['catalog-v1.json','refresh-report.json',...(fs.existsSync('catalog-release/source-discovery.json')?['source-discovery.json']:[])]) {
               const data = fs.readFileSync('catalog-release/'+name);
               const temporary = name+'.'+summary.sequence;
               const uploaded = (await github.rest.repos.uploadReleaseAsset({owner,repo,release_id:release.id,
@@ -81,8 +86,10 @@ jobs:
             const {owner,repo} = context.repo;
             // A real, compact monthly audit also maintains repository activity for scheduled workflows.
             // Never move main during an APK release, whose publisher pins its source to main.
-            const runs = (await github.rest.actions.listWorkflowRuns({owner,repo,workflow_id:'tv-release.yml',per_page:30})).data.workflow_runs;
-            if (runs.some(r => r.status !== 'completed')) { core.notice('APK release active; monthly audit deferred'); return; }
+            for (const workflow_id of ['tv-release.yml','signed-release.yml','windows.yml','android.yml']) {
+              const runs = (await github.rest.actions.listWorkflowRuns({owner,repo,workflow_id,per_page:30})).data.workflow_runs;
+              if (runs.some(r => r.status !== 'completed')) { core.notice('Release/build active; monthly audit deferred'); return; }
+            }
             const head = (await github.rest.git.getRef({owner,repo,ref:'heads/main'})).data;
             if (head.object.sha !== context.sha) { core.notice('Source advanced; monthly audit deferred'); return; }
             const path = 'tv/strategies/update-status.json';

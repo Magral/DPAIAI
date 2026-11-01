@@ -138,7 +138,7 @@ def main():
         if successful==0:raise RuntimeError('No source refreshed; refusing to publish a misleading update')
         sequence=max(int(time.time()),(old['sequence']+1 if old else 1))
         payload={'schema':1,'sequence':sequence,'version':'remote-'+str(sequence),'engine_commit':ENGINE,
-                 'strategies':list(entries.values()),'sources':[{k:v for k,v in s.items() if k!='commands'} for s in sources]}
+                 'strategies':list(entries.values()),'sources':[{**{k:v for k,v in source.items() if k!='commands'},'fetch_status':report['sources'][i]['status'],'checked_at':report['generated_at']} for i,source in enumerate(sources)],'collection':{'fetched':successful,'total':len(sources),'checked_at':report['generated_at']}}
         out=root/'catalog-release';out.mkdir(exist_ok=True)
         data=json.dumps(payload,ensure_ascii=False,separators=(',',':')).encode()
         if len(data)>MAX_BODY:raise ValueError('payload too large')

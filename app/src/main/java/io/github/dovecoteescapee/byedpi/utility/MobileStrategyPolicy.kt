@@ -35,7 +35,8 @@ object MobileStrategyPolicy {
         val prefs = context.getPreferences(); val key = "${target.id}.${profile(context)}"
         val saved = prefs.getString("mobile_good.$key",null) ?: prefs.getString("tuned_${target.id}",null)?.let { CatalogProtocol.id(it) }
         val commands = RuntimeCatalog.commands; val ids = RuntimeCatalog.ids.take(commands.size)
-        return ordered(ids,target.preferred,commands,saved,prefs.getInt("mobile_cursor.$key",0),backups = MobileHistory.backups(context,target.id).map { CatalogProtocol.id(it) }).map { commands[it] }
+        val imported = prefs.getString("mobile_imported.${target.id}",null)?.takeIf { CatalogProtocol.validCommand(it) }
+        return (listOfNotNull(imported)+ordered(ids,target.preferred,commands,saved,prefs.getInt("mobile_cursor.$key",0),backups = MobileHistory.backups(context,target.id).map { CatalogProtocol.id(it) }).map { commands[it] }).distinct().take(12)
     }
     fun advance(context: Context,target: String,command: String) {
         val i = RuntimeCatalog.ids.indexOf(CatalogProtocol.id(command))

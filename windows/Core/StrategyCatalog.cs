@@ -136,7 +136,7 @@ public sealed class CatalogStore
             settings.Change(s => s.CatalogAttempt = now); Status = "Проверка подписанной базы…";
             using var handler = new HttpClientHandler { UseProxy = false, AllowAutoRedirect = false };
             using var http = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(25) };
-            http.DefaultRequestHeaders.UserAgent.ParseAdd("DPI-Pilot-Windows/0.1.0");
+            http.DefaultRequestHeaders.UserAgent.ParseAdd("DPI-Pilot-Windows/0.1.1");
             var url = new Uri("https://github.com/Magral/DPAIAI/releases/download/strategy-catalog/catalog-v1.json");
             for (int attempt = 0; attempt < 4; attempt++)
             {

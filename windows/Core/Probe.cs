@@ -18,7 +18,7 @@ public static class Probe
             MaxResponseHeadersLength = 32, MaxConnectionsPerServer = 1, PooledConnectionLifetime = TimeSpan.Zero
         };
         using var http = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(55) };
-        http.DefaultRequestHeaders.UserAgent.ParseAdd("DPI-Pilot-Windows/0.1.0");
+        http.DefaultRequestHeaders.UserAgent.ParseAdd("DPI-Pilot-Windows/0.1.1");
         for (int round=0;round<2;round++)
         {
             foreach (var spec in new[] {"YouTube","Превью","CDN TLS"})

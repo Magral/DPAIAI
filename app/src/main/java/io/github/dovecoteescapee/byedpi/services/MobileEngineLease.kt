@@ -5,7 +5,7 @@ import android.os.*
 import kotlinx.coroutines.*
 import java.util.concurrent.atomic.AtomicBoolean
 
-class MobileEngineLease(private val context: Context,private val failed: () -> Unit = {},private val serviceClass: Class<out MobileEngineService> = MobileEngineService::class.java) {
+class MobileEngineLease(private val context: Context,private val serviceClass: Class<out MobileEngineService> = MobileEngineService::class.java,private val failed: () -> Unit = {}) {
     private val closing = AtomicBoolean(false)
     private val reported = AtomicBoolean(false)
     private fun notifyFailure() { if (!closing.get() && reported.compareAndSet(false,true)) failed() }

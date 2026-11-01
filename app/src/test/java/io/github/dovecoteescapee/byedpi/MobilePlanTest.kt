@@ -30,7 +30,8 @@ class MobilePlanTest {
         assertFalse(MobilePlan.valid("""{"schema":1,"instagram":"","youtube":"","extra":"ignored"}"""))
         assertFalse(MobilePlan.valid("{broken"))
         val huge = (1..16).joinToString(" ") { "--auto torst --split 1" }
-        assertFalse(runCatching { MobilePlan.create(huge,huge) }.isSuccess)
+        assertTrue(MobilePlan.valid(MobilePlan.create(huge,huge)))
+        assertFalse(runCatching { MobilePlan.arguments(MobilePlan.create(huge,huge),1080) }.isSuccess)
     }
     @Test fun exportExactProductionArgvForNativeRoutingIntegration() {
         val fixtures = JSONObject()

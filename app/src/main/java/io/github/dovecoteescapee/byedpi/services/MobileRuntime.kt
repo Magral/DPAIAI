@@ -12,18 +12,24 @@ class MobileRuntime(private val context: Context) {
         Slot("youtube",19420,YoutubeAService::class.java),Slot("youtube",19421,YoutubeBService::class.java))
     val router = ServiceRouter()
     private var serial = 0L
+    private val maintenance = CoroutineScope(SupervisorJob()+Dispatchers.Main)
+    private val protected = mutableSetOf<ServiceRouter.Route>()
+    init { router.onDrained = { maintenance.launch { reap() } } }
     suspend fun open(plan: String) {
+        // Active preferences are committed only after a trial. Interrupted trials restart on the old pair.
+        context.getPreferences().edit().remove("mobile_trial.instagram").remove("mobile_trial.youtube").apply()
         try {
             for (id in listOf("instagram","youtube")) {
                 val slot = slots.first { it.id == id }; launch(slot,MobilePlan.command(plan,id))
                 router.route(id,ServiceRouter.Route(slot.port,slot.generation))
             }
             router.start()
+            MobileFeedback.provider = { diagnostic() }
         } catch (e: Exception) { close(); throw e }
     }
     private suspend fun launch(slot: Slot,command: String) {
         slot.lease?.close(); slot.lease = null; slot.alive = false
-        val lease = MobileEngineLease(context,{ slot.alive = false; MobileFeedback.wake() },slot.type)
+        val lease = MobileEngineLease(context,slot.type) { slot.alive = false; MobileFeedback.wake() }
         try { lease.open(command); slot.lease = lease; slot.command = command; slot.generation = ++serial; slot.alive = true }
         catch (e: Exception) { lease.close(); throw e }
     }
@@ -31,18 +37,20 @@ class MobileRuntime(private val context: Context) {
     suspend fun stage(id: String,command: String): ServiceRouter.Route? {
         val active = router.active(id)
         val reusable = slots.firstOrNull { it.id == id && it.port != active?.port && it.alive && it.command == command }
-        if (reusable != null) return ServiceRouter.Route(reusable.port,reusable.generation)
+        if (reusable != null) { active?.let { protected.add(it) }; return ServiceRouter.Route(reusable.port,reusable.generation) }
         val slot = slots.firstOrNull { it.id == id && it.port != active?.port && router.connections(ServiceRouter.Route(it.port,it.generation)) == 0 } ?: return null
         launch(slot,command)
+        active?.let { protected.add(it) }
         return ServiceRouter.Route(slot.port,slot.generation)
     }
     fun activate(id: String,route: ServiceRouter.Route) { router.route(id,route) }
     suspend fun rollback(id: String,previous: ServiceRouter.Route,candidate: ServiceRouter.Route) {
-        router.route(id,previous); router.closeRoute(candidate)
+        router.route(id,previous); protected.remove(previous); router.closeRoute(candidate)
         slots.firstOrNull { it.port == candidate.port }?.let { it.lease?.close(); it.lease = null; it.alive = false; it.command = null }
     }
+    suspend fun commit(previous: ServiceRouter.Route) { protected.remove(previous); reap() }
     suspend fun reap() {
-        for (slot in slots) if (slot.lease != null && slot.port != router.active(slot.id)?.port && router.connections(ServiceRouter.Route(slot.port,slot.generation)) == 0) {
+        for (slot in slots) if (slot.lease != null && slot.port != router.active(slot.id)?.port && ServiceRouter.Route(slot.port,slot.generation) !in protected && router.connections(ServiceRouter.Route(slot.port,slot.generation)) == 0) {
             slot.lease?.close(); slot.lease = null; slot.alive = false; slot.command = null
         }
     }
@@ -50,6 +58,7 @@ class MobileRuntime(private val context: Context) {
         val s = router.stats(id); "$id: tx=${s.tx}; rx=${s.rx}; записей=${s.writes}; соединений=${s.connections}; ошибок подключения=${s.failures}"
     }
     suspend fun close() = withContext(NonCancellable) {
+        maintenance.cancel(); MobileFeedback.provider = null
         router.close()
         for (slot in slots) { runCatching { slot.lease?.close() }; slot.lease = null; slot.alive = false }
     }

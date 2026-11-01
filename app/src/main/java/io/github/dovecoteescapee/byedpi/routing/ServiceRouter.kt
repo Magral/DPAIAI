@@ -7,7 +7,7 @@ import java.util.concurrent.atomic.*
 
 /** Local SOCKS5 frontend. Established flows keep their backend during a route change. */
 class ServiceRouter(private val bindPort: Int = 1080) : AutoCloseable {
-    private fun <K,V> ConcurrentHashMap<K,V>.getOrCreate(key: K,create: ()->V): V = get(key) ?: create().let { putIfAbsent(key,it) ?: it }
+    private fun <K: Any,V: Any> ConcurrentHashMap<K,V>.getOrCreate(key: K,create: ()->V): V = get(key) ?: create().let { putIfAbsent(key,it) ?: it }
     data class Route(val port: Int,val generation: Long)
     data class Stats(val tx: Long,val rx: Long,val writes: Long,val connections: Int,val failures: Long)
     private class Meter { val tx = AtomicLong(); val rx = AtomicLong(); val writes = AtomicLong(); val connections = AtomicInteger(); val failures = AtomicLong() }
@@ -20,6 +20,7 @@ class ServiceRouter(private val bindPort: Int = 1080) : AutoCloseable {
     private val flows = java.util.Collections.newSetFromMap(ConcurrentHashMap<Flow,Boolean>())
     private val sockets = java.util.Collections.newSetFromMap(ConcurrentHashMap<Closeable,Boolean>())
     private var listener: ServerSocket? = null
+    @Volatile var onDrained: ((Route)->Unit)? = null
     val port get() = listener!!.localPort
     fun start() {
         check(running.compareAndSet(false,true))
@@ -92,7 +93,7 @@ class ServiceRouter(private val bindPort: Int = 1080) : AutoCloseable {
             finally { runCatching { client.close() }; runCatching { upstreamPeer.close() }; upload.cancel(true) }
         } catch (_: Exception) { if (flow == null) { meter?.failures?.incrementAndGet(); routeMeter?.failures?.incrementAndGet() } }
         finally {
-            flow?.let { flows.remove(it); meter?.connections?.decrementAndGet(); routeMeter?.connections?.decrementAndGet() }
+            flow?.let { flows.remove(it); meter?.connections?.decrementAndGet(); routeMeter?.connections?.decrementAndGet(); it.route?.let { route -> if (connections(route) == 0) onDrained?.invoke(route) } }
             sockets.remove(client); runCatching { client.close() }
             peer?.let { sockets.remove(it); runCatching { it.close() } }
         }

@@ -81,7 +81,7 @@ class TvVpnService : VpnService() {
             stopSelf(); return START_NOT_STICKY
         }
         MaintenanceJob.schedule(this)
-        requested.set(true)
+        if (controller == null || periodic() || intent?.action in listOf("boot","update","manual","check","different")) requested.set(true)
         if (intent?.action == "different") different.set(true)
         if (controller == null) {
             scope.launch {
@@ -148,7 +148,7 @@ class TvVpnService : VpnService() {
         if (Build.VERSION.SDK_INT >= 26) manager.createNotificationChannel(NotificationChannel("tv_auto","YouTube: авторежим",NotificationManager.IMPORTANCE_LOW))
         val open = PendingIntent.getActivity(this,0,Intent(this,TvActivity::class.java),PendingIntent.FLAG_IMMUTABLE)
         val notification = NotificationCompat.Builder(this,"tv_auto").setSmallIcon(R.drawable.tv_icon)
-            .setContentTitle("DPI Pilot TV — YouTube").setContentText("Автопроверка и восстановление соединения")
+            .setContentTitle("DPI Pilot TV — YouTube").setContentText("Проверка при запуске · рабочая стратегия сохраняется")
             .setOngoing(true).setSilent(true).setContentIntent(open).build()
         if (Build.VERSION.SDK_INT >= 34) startForeground(1,notification,ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
         else startForeground(1,notification)
@@ -171,21 +171,28 @@ class TvVpnService : VpnService() {
         val source = "${link?.interfaceName}|"+link?.dnsServers?.mapNotNull { it.hostAddress }?.sorted().orEmpty().joinToString(",")
         return MessageDigest.getInstance("SHA-256").digest(source.toByteArray()).take(12).joinToString("") { "%02x".format(it.toInt() and 255) }
     }
+    private fun periodic() = prefs.getBoolean("periodic_checks",false)
     private fun watch() {
+        var lastNetwork = physical()?.let { it.toString()+profileKey(it) }
+        fun changed() {
+            val next = physical()?.let { it.toString()+profileKey(it) }
+            if (next != lastNetwork) { lastNetwork = next; requested.set(true) }
+        }
         monitor = object : ConnectivityManager.NetworkCallback() {
-            override fun onAvailable(network: Network) { requested.set(true) }
-            override fun onLost(network: Network) { requested.set(true) }
-            override fun onLinkPropertiesChanged(network: Network,properties: LinkProperties) { requested.set(true) }
+            override fun onAvailable(network: Network) { changed() }
+            override fun onLost(network: Network) { changed() }
+            override fun onLinkPropertiesChanged(network: Network,properties: LinkProperties) { changed() }
         }
         cm.registerNetworkCallback(NetworkRequest.Builder().addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
             .addCapability(NetworkCapabilities.NET_CAPABILITY_NOT_VPN).build(),monitor!!)
         screen = object : BroadcastReceiver() {
-            override fun onReceive(context: Context,intent: Intent) { requested.set(true) }
+            override fun onReceive(context: Context,intent: Intent) { if (periodic() || !TvState.engineReady || tun == null) requested.set(true) }
         }
         ContextCompat.registerReceiver(this,screen,IntentFilter(Intent.ACTION_SCREEN_ON),ContextCompat.RECEIVER_NOT_EXPORTED)
     }
     private fun sampleTraffic() {
         val now = SystemClock.elapsedRealtime()
+        if (!periodic() && trial == null) return
         if (tun == null || now < sampleAt) return
         sampleAt = now+5000L
         val stats = TProxyService.TProxyGetStats()
@@ -218,10 +225,14 @@ class TvVpnService : VpnService() {
     }
     private suspend fun waitForCheck(milliseconds: Long) {
         TvState.phase = "Ожидание следующей проверки"
-        val end = SystemClock.elapsedRealtime()+milliseconds
-        TvState.nextCheckAt = end
+        val quiet = !periodic() && trial == null
+        val end = if (quiet) Long.MAX_VALUE else SystemClock.elapsedRealtime()+milliseconds
+        TvState.nextCheckAt = if (quiet) 0 else end
+        if (quiet) TvState.phase = "Рабочий режим · проверки только по событию"
         while (SystemClock.elapsedRealtime() < end && !requested.get()) {
-            TvState.beat(this); sampleTraffic(); delay(1000)
+            TvState.beat(this)
+            if (!quiet) sampleTraffic()
+            delay(if (quiet) 10000 else 1000)
         }
         TvState.nextCheckAt = 0
     }
@@ -454,7 +465,7 @@ class TvVpnService : VpnService() {
             stalled = stallRequested.getAndSet(false) || stalled
             force = manual || ((stalled || active in blocked) && !playback.recent(SystemClock.elapsedRealtime()))
             if (reviewTrial(current,network,stalled,manual)) continue
-            val optimize = current.ok && !force && !playback.recent(SystemClock.elapsedRealtime()) &&
+            val optimize = periodic() && current.ok && !force && !playback.recent(SystemClock.elapsedRealtime()) &&
                 System.currentTimeMillis()-prefs.getLong("optimized.$profile",0) >= 6*60*60*1000L
             if (current.ok) {
                 confirm(active,current.quality); failures = 0
@@ -478,7 +489,7 @@ class TvVpnService : VpnService() {
             var bestScore = -1
             val cursor = TvPolicy.indexOfId(prefs.getString("scan.next_id.$profile",null)) ?: 0
             TvState.scanCursor = cursor
-            val window = TvPolicy.scanWindow(known,active,blocked.keys,cursor)
+            val window = TvPolicy.scanWindow(known,active,blocked.keys,cursor).take(if (periodic() || manual) 12 else 3)
             TvState.update(this,"База ${TvPolicy.strategies.size}: фоновый блок до ${window.size} вариантов; позиция ${cursor+1}")
             for (index in window) {
                 currentCoroutineContext().ensureActive()
