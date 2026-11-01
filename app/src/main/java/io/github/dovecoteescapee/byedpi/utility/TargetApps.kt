@@ -20,14 +20,12 @@ object TargetApps {
         context.getSharedPreferences("telegram_bridge",Context.MODE_PRIVATE).edit().clear().apply()
     }
     fun selected(context: Context): Set<String> =
-        context.getPreferences().getStringSet(KEY, emptySet())!!.toSet() - context.packageName - removedPackages
+        context.getPreferences().getStringSet(KEY, emptySet())!!.toSet().intersect(popular.toSet()) - context.packageName - removedPackages
 
     @Suppress("DEPRECATION")
     fun installed(context: Context): List<App> {
         val pm = context.packageManager
-        val launcher = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
-        val discovered = pm.queryIntentActivities(launcher, 0).map { it.activityInfo.packageName }
-        return (popular + discovered).distinct().filter { it != context.packageName && it !in removedPackages }.mapNotNull { pkg ->
+        return popular.distinct().filter { it != context.packageName && it !in removedPackages }.mapNotNull { pkg ->
             try {
                 val info = pm.getApplicationInfo(pkg, 0)
                 if (!info.enabled) null else App(pkg, pm.getApplicationLabel(info).toString())

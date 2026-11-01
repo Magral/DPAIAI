@@ -7,17 +7,18 @@ import java.util.Locale
 /** Reads only plaintext HTTP headers or the public TLS ClientHello. Never terminates TLS. */
 object HostInspector {
     data class Prefix(val bytes: ByteArray,val host: String?)
+    private val domains = mapOf("instagram" to listOf("instagram.com","cdninstagram.com","fbcdn.net","facebook.com","fbsbx.com","ig.me"),
+            "youtube" to listOf("youtube.com","youtu.be","googlevideo.com","ytimg.com","ggpht.com","googleusercontent.com","googleapis.com","gstatic.com","google.com"))
     fun service(host: String?): String? {
         val name = host?.trimEnd('.')?.lowercase(Locale.ROOT) ?: return null
-        val domains = mapOf("instagram" to listOf("instagram.com","cdninstagram.com","fbcdn.net","facebook.com","fbsbx.com","ig.me"),
-            "youtube" to listOf("youtube.com","youtu.be","googlevideo.com","ytimg.com","ggpht.com","googleusercontent.com","googleapis.com","gstatic.com","google.com"))
         return domains.entries.firstOrNull { (_,roots) -> roots.any { name == it || name.endsWith(".$it") } }?.key
     }
     fun read(input: InputStream): Prefix {
         val out = ByteArrayOutputStream()
+        var lastByte = -1
         fun bytes(n: Int): Boolean {
             if (n < 0 || out.size()+n > 65536) return false
-            repeat(n) { val next = input.read(); if (next < 0) return false; out.write(next) }
+            repeat(n) { val next = input.read(); if (next < 0) return false; out.write(next);lastByte=next }
             return true
         }
         try {
@@ -41,10 +42,12 @@ object HostInspector {
                     if (!bytes(1)) return Prefix(out.toByteArray(),null)
                 }
             } else if (out.toByteArray()[0].toInt().toChar() in "GPHDCOT") {
+                var tail = lastByte
                 while (out.size() < 32768) {
                     if (!bytes(1)) break
-                    val value = out.toByteArray()
-                    if (value.size >= 4 && value.takeLast(4) == listOf(13.toByte(),10.toByte(),13.toByte(),10.toByte())) {
+                    tail = (tail shl 8) or lastByte
+                    if (out.size() >= 4 && tail == 0x0d0a0d0a) {
+                        val value = out.toByteArray()
                         val host = String(value,Charsets.ISO_8859_1).lineSequence().drop(1).firstOrNull { it.startsWith("Host:",true) }
                             ?.substringAfter(':')?.trim()?.substringBefore(':')
                         return Prefix(value,host)

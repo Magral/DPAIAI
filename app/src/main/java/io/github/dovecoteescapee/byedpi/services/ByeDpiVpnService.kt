@@ -67,6 +67,7 @@ class ByeDpiVpnService : LifecycleVpnService() {
 
             STOP_ACTION -> {
                 getPreferences().edit().putBoolean("mobile_enabled",false).apply()
+                MobileFeedback.acknowledgeAll()
                 lifecycleScope.launch { stop() }
                 START_NOT_STICKY
             }

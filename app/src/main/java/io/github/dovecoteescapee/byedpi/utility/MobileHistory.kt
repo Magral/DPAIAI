@@ -21,7 +21,7 @@ object MobileHistory {
         row.put(if (good) "good" else "bad",row.optInt(if (good) "good" else "bad")+1)
             .put("usefulMillis",row.optLong("usefulMillis")+usefulMillis.coerceAtLeast(0)).put("at",System.currentTimeMillis())
         if (rollback) row.put("rollbacks",row.optInt("rollbacks")+1)
-        val retained = rows.sortedWith(compareByDescending<JSONObject> { score(it) }.thenByDescending { it.optLong("at") }).take(8)
+        val retained = listOf(row)+rows.filter { it !== row }.sortedWith(compareByDescending<JSONObject> { score(it) }.thenByDescending { it.optLong("at") }).take(7)
         context.getPreferences().edit().putString(key(context,id),JSONArray(retained).toString()).apply()
     }
     fun summary(context: Context) = ServiceTargets.individual.joinToString("\n") { target ->

@@ -35,6 +35,11 @@ class MobilePlanTest {
     }
     @Test fun exportExactProductionArgvForNativeRoutingIntegration() {
         val fixtures = JSONObject()
+            .put("router_instagram",JSONArray(MobilePlan.arguments("--mod-http h",19410).toList()))
+            .put("router_youtube",JSONArray(MobilePlan.arguments("--mod-http r",19420).toList()))
+            .put("router_youtube_next",JSONArray(MobilePlan.arguments("--mod-http h",19421).toList()))
+            .put("router_instagram_tls",JSONArray(MobilePlan.arguments("--tlsrec 1",19410).toList()))
+            .put("router_youtube_tls",JSONArray(MobilePlan.arguments("",19420).toList()))
             .put("http",JSONArray(MobilePlan.arguments(MobilePlan.create("--mod-http h --auto torst,ssl_err --mod-http h","--mod-http r"),1080).toList()))
             .put("tv36",JSONArray(MobilePlan.arguments(MobilePlan.create("--tlsrec 1",ServiceTargets.youtubeStartup),1080).toList()))
             .put("tls",JSONArray(MobilePlan.arguments(MobilePlan.create("--tlsrec 1",""),1080).toList()))

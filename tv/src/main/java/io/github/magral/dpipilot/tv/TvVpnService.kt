@@ -81,7 +81,7 @@ class TvVpnService : VpnService() {
             stopSelf(); return START_NOT_STICKY
         }
         MaintenanceJob.schedule(this)
-        if (controller == null || periodic() || intent?.action in listOf("boot","update","manual","check","different")) requested.set(true)
+        if (CheckSchedule.onResume(periodic(),controller != null,intent?.action in listOf("boot","update","manual","check","different"))) requested.set(true)
         if (intent?.action == "different") different.set(true)
         if (controller == null) {
             scope.launch {
@@ -226,9 +226,9 @@ class TvVpnService : VpnService() {
     private suspend fun waitForCheck(milliseconds: Long) {
         TvState.phase = "Ожидание следующей проверки"
         val quiet = !periodic() && trial == null
-        val end = if (quiet) Long.MAX_VALUE else SystemClock.elapsedRealtime()+milliseconds
+        val end = if (quiet) CheckSchedule.QUIET_WAIT else SystemClock.elapsedRealtime()+milliseconds
         TvState.nextCheckAt = if (quiet) 0 else end
-        if (quiet) TvState.phase = "Рабочий режим · проверки только по событию"
+        if (quiet) TvState.phase = "Ожидание события · без плановых проверок"
         while (SystemClock.elapsedRealtime() < end && !requested.get()) {
             TvState.beat(this)
             if (!quiet) sampleTraffic()
@@ -378,7 +378,7 @@ class TvVpnService : VpnService() {
         clearTrial()
         if (latest.ok && !manual) confirm(pending.candidate,latest.quality) else if (!latest.ok) reputation.failed(pending.candidate)
         TvState.update(this,"Испытание №${pending.candidate+1} завершено: ${if (latest.ok) "пробы пройдены; полезный обмен учтён отдельно" else "успех не подтверждён"}")
-        if (latest.ok && !manual) { waitForCheck(300000); return true }
+        if (latest.ok && !manual) { waitForCheck(3600000); return true }
         return false
     }
     private fun establish(network: Network) {
@@ -471,7 +471,7 @@ class TvVpnService : VpnService() {
                 confirm(active,current.quality); failures = 0
                 if (!force && !optimize) {
                     TvState.update(this,"Проверки текущей стратегии №${active+1} пройдены; VPN не пересоздавался")
-                    waitForCheck(300000); continue
+                    waitForCheck(3600000); continue
                 }
             } else {
                 reputation.failed(active)
@@ -489,7 +489,7 @@ class TvVpnService : VpnService() {
             var bestScore = -1
             val cursor = TvPolicy.indexOfId(prefs.getString("scan.next_id.$profile",null)) ?: 0
             TvState.scanCursor = cursor
-            val window = TvPolicy.scanWindow(known,active,blocked.keys,cursor).take(if (periodic() || manual) 12 else 3)
+            val window = TvPolicy.scanWindow(known,active,blocked.keys,cursor).take(CheckSchedule.candidates(periodic(),manual))
             TvState.update(this,"База ${TvPolicy.strategies.size}: фоновый блок до ${window.size} вариантов; позиция ${cursor+1}")
             for (index in window) {
                 currentCoroutineContext().ensureActive()
@@ -545,12 +545,12 @@ class TvVpnService : VpnService() {
                 if (result.ok) {
                     confirm(replacement,result.quality); failures = 0
                     TvState.update(this,"Стратегия №${replacement+1} проверена и сохранена")
-                    waitForCheck(300000); continue
+                    waitForCheck(3600000); continue
                 }
             }
             if (current.ok && replacement == null) {
                 TvState.update(this,"Сравнение завершено: значимого улучшения нет; рабочая №${active+1} сохранена")
-                waitForCheck(300000); continue
+                waitForCheck(3600000); continue
             }
             failures++
             TvState.update(this,"VPN сохранён без перебора туннелей; доступ YouTube полностью не подтверждён. Повтор через ${TvPolicy.backoffMillis(failures)/60000} мин.")

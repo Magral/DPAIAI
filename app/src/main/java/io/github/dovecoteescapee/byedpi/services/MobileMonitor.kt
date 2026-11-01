@@ -2,6 +2,7 @@ package io.github.dovecoteescapee.byedpi.services
 
 import android.content.Context
 import android.os.SystemClock
+import io.github.dovecoteescapee.byedpi.catalog.CheckSchedule
 import io.github.dovecoteescapee.byedpi.routing.ServiceRouter
 import io.github.dovecoteescapee.byedpi.utility.*
 import kotlinx.coroutines.*
@@ -14,7 +15,7 @@ class MobileMonitor(private val context: Context,private val scope: CoroutineSco
     private var session: ServiceProbe.Session? = null
     private val health = listOf("instagram","youtube").associateWith { FlowHealth() }
     private val denied = mutableMapOf<String,Long>()
-    private val consumed = mutableMapOf<String,Long>()
+    private val consumed = MobileFeedback.consumed
     private val reports = linkedMapOf<String,JSONObject>()
     @Volatile private var trialRunning = false
     private var active = context.getPreferences().getString("mobile_command","").orEmpty()
@@ -25,6 +26,9 @@ class MobileMonitor(private val context: Context,private val scope: CoroutineSco
         MobileStrategyPolicy.lastProbe = JSONObject().put("mode","independent").put("strategies",JSONObject(active))
             .put("services",JSONObject(reports as Map<*,*>)).put("state",MobileStrategyPolicy.state).put("traffic",runtime.diagnostic())
             .put("history",MobileHistory.summary(context)).toString()
+    }
+    private val preferenceListener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _,key ->
+        if (key == "mobile_periodic") scope.launch { if (periodic()) sampling();MobileFeedback.wake() }
     }
     private fun periodic() = context.getPreferences().getBoolean("mobile_periodic",false)
     private fun sampling() {
@@ -43,6 +47,8 @@ class MobileMonitor(private val context: Context,private val scope: CoroutineSco
         }
     }
     fun start() {
+        MobileFeedback.clearSignals()
+        context.getPreferences().registerOnSharedPreferenceChangeListener(preferenceListener)
         sampling()
         task = scope.launch {
             var profile = MobileStrategyPolicy.profile(context)
@@ -59,19 +65,23 @@ class MobileMonitor(private val context: Context,private val scope: CoroutineSco
                         val forced = token != (consumed[id] ?: 0L) || context.getPreferences().contains("mobile_imported.$id")
                         val current = probe(id); reports[id] = current
                         val stalled = health.getValue(id).stalled || runtime.fault(id)
-                        if (eligible(id,current) && !forced && !stalled) continue
+                        if (eligible(id,current) && !forced && !stalled) {
+                            val command = MobilePlan.command(active,id)
+                            MobileHistory.record(context,id,command,true);MobileStrategyPolicy.remember(context,id,command)
+                            continue
+                        }
                         val previous = runtime.router.active(id) ?: continue
                         val previousCommand = MobilePlan.command(active,id)
                         val useful = health.getValue(id).usefulAt
                         if (!forced && !stalled && useful > 0 && SystemClock.elapsedRealtime()-useful < 90000) { publish("${target.name} получает данные; замена отложена"); continue }
                         consumed[id] = token
-                        for (command in MobileStrategyPolicy.window(context,target).take(if (periodic() || forced) 12 else 3)) {
+                        for (command in MobileStrategyPolicy.window(context,target).take(CheckSchedule.candidates(periodic(),forced))) {
                             val key = "$profile:$id:$command"
                             if (command == previousCommand && !runtime.fault(id)) continue
                             if ((denied[key] ?: 0L) > SystemClock.elapsedRealtime()) continue
                             if (MobileStrategyPolicy.profile(context) != profile) break
                             publish("${target.name}: проверяю резерв; второй сервис продолжает работать")
-                            val result = try { MobileCandidate.run(context,id,command) { publish("${target.name}: $it") } }
+                            val result = try { withTimeout(if (periodic() || forced) 205000 else 30000) { MobileCandidate.run(context,id,command) { publish("${target.name}: $it") } } }
                                 catch (e: TimeoutCancellationException) { currentCoroutineContext().ensureActive(); JSONObject() }
                             MobileStrategyPolicy.advance(context,id,command)
                             if (!eligible(id,result)) { denied[key] = SystemClock.elapsedRealtime()+1800000; MobileHistory.record(context,id,command,false); continue }
@@ -87,14 +97,13 @@ class MobileMonitor(private val context: Context,private val scope: CoroutineSco
                                 val deadline = SystemClock.elapsedRealtime()+120000
                                 publish("${target.name}: испытание до 2 минут; другой сервис не перезапускается")
                                 var verified = probe(id,command)
-                                while (eligible(id,verified) && !health.getValue(id).stalled && !runtime.fault(id) &&
-                                    SystemClock.elapsedRealtime() < deadline && MobileStrategyPolicy.profile(context) == profile && MobileFeedback.token(id) == token) {
+                                fun decision() = TrialGuard.decide(SystemClock.elapsedRealtime(),deadline,eligible(id,verified),health.getValue(id).stalled,!runtime.fault(id),MobileStrategyPolicy.profile(context) == profile,MobileFeedback.token(id) == token)
+                                while (decision() == TrialGuard.Decision.WAIT) {
                                     MobileFeedback.waitFor(minOf(15000,deadline-SystemClock.elapsedRealtime()).coerceAtLeast(1))
-                                    if (SystemClock.elapsedRealtime() >= deadline) break
-                                    if (periodic()) verified = probe(id,command)
+                                    if (periodic() && decision() == TrialGuard.Decision.WAIT) verified = probe(id,command)
                                 }
-                                verified = probe(id,command)
-                                if (SystemClock.elapsedRealtime() >= deadline && eligible(id,verified) && !health.getValue(id).stalled && !runtime.fault(id) && MobileStrategyPolicy.profile(context) == profile && MobileFeedback.token(id) == token) {
+                                if (decision() == TrialGuard.Decision.CONFIRM) verified = probe(id,command)
+                                if (decision() == TrialGuard.Decision.CONFIRM) {
                                     active = MobilePlan.replace(active,id,command)
                                     MobileStrategyPolicy.apply(context.getPreferences(),MobilePlan.BOTH,active)
                                     MobileStrategyPolicy.remember(context,id,command)
@@ -114,12 +123,14 @@ class MobileMonitor(private val context: Context,private val scope: CoroutineSco
                                     health.getValue(id).reset(); publish("${target.name}: выполнен откат; второй сервис сохранён")
                                 }
                             }
-                            if (accepted) break
+                            if (accepted || MobileFeedback.token(id) != token) break
                         }
                     }
                     val healthy = ServiceTargets.individual.all { reports[it.id]?.let { r -> eligible(it.id,r) } == true }
-                    publish(if (healthy) "Работает · плановые сетевые проверки выключены" else "Проверка завершена; сохранён прежний маршрут. Для продолжения нажмите «не работает»")
-                    MobileFeedback.waitFor(if (periodic()) { if (healthy) 3600000 else 600000 } else Long.MAX_VALUE)
+                    publish(if (healthy) { if (periodic()) "Работает · следующая плановая проверка через час" else "Работает · плановые сетевые проверки выключены" }
+                        else if (periodic()) "Проверка завершена; повтор через 10 минут" else "Проверка завершена; прежний маршрут сохранён. Для продолжения нажмите «не работает»")
+                    if (MobileStrategyPolicy.profile(context) != profile || ServiceTargets.individual.any { MobileFeedback.token(it.id) != (consumed[it.id] ?: 0L) }) MobileFeedback.wake()
+                    MobileFeedback.waitFor(CheckSchedule.delay(periodic(),healthy))
                 } catch (e: CancellationException) { throw e }
                 catch (e: Exception) { publish("Ошибка контроля: ${e.javaClass.simpleName}: ${e.message?.take(120)}"); MobileFeedback.waitFor(if (periodic()) 600000 else Long.MAX_VALUE) }
             }
@@ -128,9 +139,12 @@ class MobileMonitor(private val context: Context,private val scope: CoroutineSco
     private suspend fun probe(id: String,command: String = MobilePlan.command(active,id)): JSONObject = coroutineScope {
         val current = ServiceProbe.Session(); session = current
         val pending = async(Dispatchers.IO) { ServiceProbe.check(id,command,1080,current) { publish("${ServiceTargets.target(id).name}: $it") } }
-        try { withTimeout(205000) { pending.await() } }
+        try {
+            try { withTimeout(if (periodic() || trialRunning) 205000 else 30000) { pending.await() } }
+            catch (e: TimeoutCancellationException) { currentCoroutineContext().ensureActive(); JSONObject().put("error","Startup probe budget exceeded") }
+        }
         finally { current.cancel(); session = null }
     }
     private fun eligible(id: String,result: JSONObject) = ProbeAssessment.evaluate(id,result).eligible
-    suspend fun stop() { session?.cancel(); task?.cancelAndJoin(); sample?.cancelAndJoin(); task = null; sample = null }
+    suspend fun stop() { context.getPreferences().unregisterOnSharedPreferenceChangeListener(preferenceListener);session?.cancel(); task?.cancelAndJoin(); sample?.cancelAndJoin(); task = null; sample = null }
 }

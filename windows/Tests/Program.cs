@@ -99,3 +99,10 @@ if(OperatingSystem.IsWindows())
 Assert(registryBefore==RegistrySnapshot(),"System WinINet/WinHTTP proxy configuration changed");
 Console.WriteLine("System WinINet/WinHTTP proxy configuration unchanged");
 Console.WriteLine("ALL WINDOWS CORE / ROUTING TESTS PASSED");
+
+// A verified profile never performs timer-driven network probes in the default mode.
+var scheduleNow=DateTimeOffset.UtcNow;
+if(new Settings().PeriodicChecks || CheckPolicy.ShouldProbe(false,false,false,true,scheduleNow,DateTimeOffset.MinValue)) throw new Exception("Quiet default regressed");
+if(!CheckPolicy.ShouldProbe(false,true,false,true,scheduleNow,DateTimeOffset.MaxValue) || !CheckPolicy.ShouldProbe(false,false,false,false,scheduleNow,DateTimeOffset.MaxValue)) throw new Exception("Explicit/start recovery check lost");
+if(CheckPolicy.Next(false,scheduleNow)!=DateTimeOffset.MaxValue || CheckPolicy.Candidates(false,false)!=3 || CheckPolicy.Candidates(false,true)!=12) throw new Exception("Quiet scan budget regressed");
+Console.WriteLine("Quiet startup/event-only probe policy verified");

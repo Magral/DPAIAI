@@ -58,6 +58,7 @@ public class MobileProxy {
 }''')
     subprocess.run([str(java/'bin/javac'),str(test)],check=True)
     for mode,args in fixtures.items():
+        if mode.startswith("router_"):continue
         reservation=socket.socket();reservation.bind(('127.0.0.1',0));port=reservation.getsockname()[1];reservation.close()
         args[4]=str(port)
         process=subprocess.Popen([str(java/'bin/java'),'-cp',str(work),'io.github.dovecoteescapee.byedpi.core.MobileProxy',str(lib),*args],stdin=subprocess.PIPE,stdout=subprocess.DEVNULL,stderr=subprocess.PIPE)
@@ -118,3 +119,6 @@ public class MobileProxy {
             print(f'Dual profile {mode}: {count} concurrent numeric-IP SOCKS flows correctly selected Instagram, YouTube or unchanged fallback')
         finally:
             if process.poll() is None:process.kill();process.communicate()
+
+    from router_integration import check_router
+    check_router(root,work,lib,java,fixtures,hello,records,recv_exact)

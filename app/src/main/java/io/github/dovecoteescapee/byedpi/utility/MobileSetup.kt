@@ -9,7 +9,12 @@ object MobileSetup {
         val selected = TargetApps.installed(context).map { it.packageName }.filter { it in ServiceTargets.combined.packages }.toSet()
         check(selected.isNotEmpty()) { "Установите YouTube или Instagram" }
         var plan = MobilePlan.saved(prefs)
-        for (id in listOf("instagram","youtube")) MobileHistory.backups(context,id).firstOrNull()?.let { plan = MobilePlan.replace(plan,id,it) }
+        for (id in listOf("instagram","youtube")) {
+            val good = prefs.getString("mobile_good.$id.${MobileStrategyPolicy.profile(context)}",null)
+            val preferred = MobileHistory.entries(context,id).firstOrNull { it.optInt("good") > 0 && io.github.dovecoteescapee.byedpi.catalog.CatalogProtocol.id(it.optString("command")) == good }?.optString("command")
+                ?: MobileHistory.backups(context,id).firstOrNull()
+            preferred?.let { plan = MobilePlan.replace(plan,id,it) }
+        }
         prefs.edit().putStringSet(TargetApps.KEY,selected).apply()
         MobileStrategyPolicy.apply(prefs,MobilePlan.BOTH,plan)
     }

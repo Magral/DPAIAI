@@ -258,6 +258,8 @@ class MainActivity : AppCompatActivity() {
 
         Log.i(TAG, "Updating status: $status, $mode")
 
+        binding.youtubeProblem.isEnabled = status == AppStatus.Running
+        binding.instagramProblem.isEnabled = status == AppStatus.Running
         val preferences = getPreferences()
         val targets = TargetApps.selected(this)
         @Suppress("DEPRECATION")

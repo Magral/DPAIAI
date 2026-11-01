@@ -13,7 +13,7 @@ class MobileRuntime(private val context: Context) {
     val router = ServiceRouter()
     private var serial = 0L
     private val maintenance = CoroutineScope(SupervisorJob()+Dispatchers.Main)
-    private val protected = mutableSetOf<ServiceRouter.Route>()
+    private val protectedRoutes = mutableSetOf<ServiceRouter.Route>()
     init { router.onDrained = { maintenance.launch { reap() } } }
     suspend fun open(plan: String) {
         // Active preferences are committed only after a trial. Interrupted trials restart on the old pair.
@@ -37,20 +37,20 @@ class MobileRuntime(private val context: Context) {
     suspend fun stage(id: String,command: String): ServiceRouter.Route? {
         val active = router.active(id)
         val reusable = slots.firstOrNull { it.id == id && it.port != active?.port && it.alive && it.command == command }
-        if (reusable != null) { active?.let { protected.add(it) }; return ServiceRouter.Route(reusable.port,reusable.generation) }
+        if (reusable != null) { active?.let { protectedRoutes.add(it) }; return ServiceRouter.Route(reusable.port,reusable.generation) }
         val slot = slots.firstOrNull { it.id == id && it.port != active?.port && router.connections(ServiceRouter.Route(it.port,it.generation)) == 0 } ?: return null
         launch(slot,command)
-        active?.let { protected.add(it) }
+        active?.let { protectedRoutes.add(it) }
         return ServiceRouter.Route(slot.port,slot.generation)
     }
     fun activate(id: String,route: ServiceRouter.Route) { router.route(id,route) }
     suspend fun rollback(id: String,previous: ServiceRouter.Route,candidate: ServiceRouter.Route) {
-        router.route(id,previous); protected.remove(previous); router.closeRoute(candidate)
+        router.route(id,previous); protectedRoutes.remove(previous); router.closeRoute(candidate)
         slots.firstOrNull { it.port == candidate.port }?.let { it.lease?.close(); it.lease = null; it.alive = false; it.command = null }
     }
-    suspend fun commit(previous: ServiceRouter.Route) { protected.remove(previous); reap() }
+    suspend fun commit(previous: ServiceRouter.Route) { protectedRoutes.remove(previous); reap() }
     suspend fun reap() {
-        for (slot in slots) if (slot.lease != null && slot.port != router.active(slot.id)?.port && ServiceRouter.Route(slot.port,slot.generation) !in protected && router.connections(ServiceRouter.Route(slot.port,slot.generation)) == 0) {
+        for (slot in slots) if (slot.lease != null && slot.port != router.active(slot.id)?.port && ServiceRouter.Route(slot.port,slot.generation) !in protectedRoutes && router.connections(ServiceRouter.Route(slot.port,slot.generation)) == 0) {
             slot.lease?.close(); slot.lease = null; slot.alive = false; slot.command = null
         }
     }

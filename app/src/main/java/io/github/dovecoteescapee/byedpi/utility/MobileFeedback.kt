@@ -8,6 +8,9 @@ import java.util.concurrent.atomic.AtomicLong
 object MobileFeedback {
     private val signals = Channel<Unit>(Channel.CONFLATED)
     private val requested = ConcurrentHashMap<String,AtomicLong>()
+    val consumed = ConcurrentHashMap<String,Long>()
+    fun clearSignals() { while (signals.tryReceive().isSuccess) { } }
+    fun acknowledgeAll() { requested.forEach { (id,token) -> consumed[id] = token.get() };clearSignals() }
     fun request(id: String) { require(id in listOf("instagram","youtube")); (requested[id] ?: AtomicLong().let { requested.putIfAbsent(id,it) ?: it }).incrementAndGet(); wake() }
     fun token(id: String) = requested[id]?.get() ?: 0L
     fun wake() { signals.trySend(Unit) }

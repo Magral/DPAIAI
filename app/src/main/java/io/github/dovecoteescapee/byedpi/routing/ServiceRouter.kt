@@ -13,6 +13,7 @@ class ServiceRouter(private val bindPort: Int = 1080) : AutoCloseable {
     private class Meter { val tx = AtomicLong(); val rx = AtomicLong(); val writes = AtomicLong(); val connections = AtomicInteger(); val failures = AtomicLong() }
     private data class Flow(val client: Socket,val peer: Socket,val service: String?,val route: Route?)
     private val running = AtomicBoolean(false)
+    private val deadlines = ScheduledThreadPoolExecutor(1) { r -> Thread(r,"route-deadlines").apply { isDaemon = true } }.apply { removeOnCancelPolicy = true }
     private val workers = ThreadPoolExecutor(0,192,20,TimeUnit.SECONDS,SynchronousQueue(),{ r -> Thread(r,"service-router").apply { isDaemon = true } })
     private val routes = ConcurrentHashMap<String,Route>()
     private val meters = ConcurrentHashMap<String,Meter>()
@@ -53,7 +54,10 @@ class ServiceRouter(private val bindPort: Int = 1080) : AutoCloseable {
     }
     private fun handle(client: Socket) {
         var peer: Socket? = null; var flow: Flow? = null; var meter: Meter? = null; var routeMeter: Meter? = null
+        val connecting = AtomicReference<Socket?>()
+        var startup: ScheduledFuture<*>? = null
         try {
+            startup = deadlines.schedule({ runCatching { client.close() };runCatching { connecting.get()?.close() } },90000,TimeUnit.MILLISECONDS)
             client.soTimeout = 10000; client.tcpNoDelay = true
             val input = DataInputStream(client.inputStream); val output = client.outputStream
             require(input.readUnsignedByte() == 5)
@@ -61,18 +65,20 @@ class ServiceRouter(private val bindPort: Int = 1080) : AutoCloseable {
             output.write(byteArrayOf(5,0)); output.flush()
             require(input.readUnsignedByte() == 5); val command = input.readUnsignedByte(); require(input.readUnsignedByte() == 0)
             val (host,encoded) = address(input); val targetPort = input.readUnsignedShort()
-            if (command == 3) { udp(client,output); return }
+            if (command == 3) { startup?.cancel(false);udp(client,output); return }
             require(command == 1 && targetPort > 0)
             // A numeric TUN destination has no hostname until ClientHello arrives.
             output.write(byteArrayOf(5,0,0,1,127,0,0,1,0,0)); output.flush()
             client.soTimeout = 5000
-            val prefix = HostInspector.read(input)
+            val prefixDeadline = deadlines.schedule({ runCatching { client.close() } },5000,TimeUnit.MILLISECONDS)
+            val prefix = try { HostInspector.read(input) } finally { prefixDeadline.cancel(false) }
+            check(!client.isClosed) { "Initial request deadline exceeded" }
             val service = HostInspector.service(prefix.host) ?: HostInspector.service(host)
             val route = service?.let { routes[it] }
             val serviceMeter = meters.getOrCreate(service ?: "unknown") { Meter() }; meter = serviceMeter
             routeMeter = route?.let { routeMeters.getOrCreate(it) { Meter() } }
             val totals = listOfNotNull(serviceMeter,routeMeter)
-            val upstreamPeer = Socket(Proxy.NO_PROXY).apply { tcpNoDelay = true }; peer = upstreamPeer
+            val upstreamPeer = Socket(Proxy.NO_PROXY).apply { tcpNoDelay = true }; peer = upstreamPeer;connecting.set(upstreamPeer)
             sockets.add(upstreamPeer)
             if (route != null) {
                 upstreamPeer.connect(InetSocketAddress("127.0.0.1",route.port),2000); upstreamPeer.soTimeout = 65000
@@ -82,6 +88,7 @@ class ServiceRouter(private val bindPort: Int = 1080) : AutoCloseable {
                 require(upstream.readUnsignedByte() == 5 && upstream.readUnsignedByte() == 0); upstream.readUnsignedByte(); address(upstream); upstream.readUnsignedShort()
             } else upstreamPeer.connect(InetSocketAddress(host,targetPort),10000)
             upstreamPeer.soTimeout = 0; client.soTimeout = 0
+            startup?.cancel(false)
             val established = Flow(client,upstreamPeer,service,route); flow = established; flows.add(established); totals.forEach { it.connections.incrementAndGet() }
             upstreamPeer.outputStream.write(prefix.bytes); upstreamPeer.outputStream.flush(); totals.forEach { it.tx.addAndGet(prefix.bytes.size.toLong()); it.writes.incrementAndGet() }
             val stats = totals
@@ -93,6 +100,7 @@ class ServiceRouter(private val bindPort: Int = 1080) : AutoCloseable {
             finally { runCatching { client.close() }; runCatching { upstreamPeer.close() }; upload.cancel(true) }
         } catch (_: Exception) { if (flow == null) { meter?.failures?.incrementAndGet(); routeMeter?.failures?.incrementAndGet() } }
         finally {
+            startup?.cancel(false)
             flow?.let { flows.remove(it); meter?.connections?.decrementAndGet(); routeMeter?.connections?.decrementAndGet(); it.route?.let { route -> if (connections(route) == 0) onDrained?.invoke(route) } }
             sockets.remove(client); runCatching { client.close() }
             peer?.let { sockets.remove(it); runCatching { it.close() } }
@@ -137,6 +145,6 @@ class ServiceRouter(private val bindPort: Int = 1080) : AutoCloseable {
     }
     override fun close() {
         running.set(false); runCatching { listener?.close() }
-        sockets.toList().forEach { runCatching { it.close() } }; sockets.clear(); workers.shutdownNow(); flows.clear()
+        sockets.toList().forEach { runCatching { it.close() } }; sockets.clear(); workers.shutdownNow();deadlines.shutdownNow(); flows.clear()
     }
 }

@@ -111,7 +111,7 @@ public sealed class PilotController : IAsyncDisposable
             while (!cancellation.IsCancellationRequested)
             {
                 if (!NetworkInterface.GetIsNetworkAvailable()) { Phase = "Нет физического подключения; ожидаем сеть"; await Task.Delay(10000,cancellation); continue; }
-                if (!requested && !stalled && active?.Alive == true && DateTimeOffset.UtcNow < next) { await Task.Delay(settings.Value.PeriodicChecks ? 1000 : 10000,cancellation); continue; }
+                if (!CheckPolicy.ShouldProbe(settings.Value.PeriodicChecks,requested,stalled,active?.Alive == true,DateTimeOffset.UtcNow,next)) { await Task.Delay(settings.Value.PeriodicChecks ? 1000 : 10000,cancellation); continue; }
                 requested = false; bool manual = manualRequest; manualRequest=false; bool wasStalled = stalled; stalled = false;
                 try
                 {
@@ -125,11 +125,11 @@ public sealed class PilotController : IAsyncDisposable
                     }
                     var previous = active!; Phase = "Проверка активной стратегии";
                     ProbeResult current = await Probe.CheckAsync(previous,cancellation); LastProbe = current.Detail; Log("Текущая: "+current.Detail);
-                    if (current.Ok && !wasStalled) { Phase = "Включено · проверки YouTube пройдены"; failures=0; Remember(profile,previous.Strategy); next=settings.Value.PeriodicChecks ? DateTimeOffset.UtcNow.AddHours(1) : DateTimeOffset.MaxValue; continue; }
+                    if (current.Ok && !wasStalled) { Phase = "Включено · проверки YouTube пройдены"; failures=0; Remember(profile,previous.Strategy); next=CheckPolicy.Next(settings.Value.PeriodicChecks,DateTimeOffset.UtcNow); continue; }
                     if (!wasStalled && Useful(Interlocked.Read(ref usefulAt))) { Phase="YouTube получает данные; сохраняем работающий поток"; next=DateTimeOffset.UtcNow.AddMinutes(1); continue; }
                     var order = history.Concat(bank.Where(s=>s.Args.StartsWith("--timeout 8 --cache-ttl 600",StringComparison.Ordinal)).Select(s=>s.Id))
                         .Concat(bank.Skip(settings.Value.ScanCursor % bank.Count).Concat(bank.Take(settings.Value.ScanCursor % bank.Count)).Select(s=>s.Id)).Distinct()
-                        .Select(id=>bank.FirstOrDefault(s=>s.Id==id)).Where(s=>s is not null && s.Id != previous.Strategy.Id && (!blocked.TryGetValue(s.Id,out var until) || until < DateTimeOffset.UtcNow)).Take(settings.Value.PeriodicChecks || manual ? 12 : 3).ToArray();
+                        .Select(id=>bank.FirstOrDefault(s=>s.Id==id)).Where(s=>s is not null && s.Id != previous.Strategy.Id && (!blocked.TryGetValue(s.Id,out var until) || until < DateTimeOffset.UtcNow)).Take(CheckPolicy.Candidates(settings.Value.PeriodicChecks,manual)).ToArray();
                     bool changed = false;
                     foreach (var strategy in order)
                     {
