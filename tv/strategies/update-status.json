@@ -1,11 +1,11 @@
 {
-  "period": "2026-10",
-  "checked_at": "2026-10-31T03:55:36.350490+00:00",
-  "source_commit": "bbc7004c7b3d9a1bf9f00372d9989c1eda68dc20",
-  "sequence": 1793418944,
+  "period": "2026-11",
+  "checked_at": "2026-11-01T10:38:22.962263+00:00",
+  "source_commit": "bfab0230bf40ec8f98d71149c579ac64a20c0d11",
+  "sequence": 1793529510,
   "strategies": 294,
   "sources_fetched": 6,
-  "envelope_sha256": "b05c8a4e8600cfed9f4732a0f73927e62848abe1bf765374e75627e0474b0669",
+  "envelope_sha256": "3f2fc3b48c998b18f079ea761e0db42aa0154f744c6050f98c0150a59dcd7e0a",
   "sources": [
     {
       "id": "byebyedpi",
