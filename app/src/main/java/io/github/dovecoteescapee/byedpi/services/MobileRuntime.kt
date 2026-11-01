@@ -33,10 +33,10 @@ class MobileRuntime(private val context: Context) {
         try { lease.open(command); slot.lease = lease; slot.command = command; slot.generation = ++serial; slot.alive = true }
         catch (e: Exception) { lease.close(); throw e }
     }
-    fun fault(id: String): Boolean = slots.firstOrNull { it.id == id && it.port == router.active(id)?.port }?.alive != true
+    fun fault(id: String): Boolean = slots.firstOrNull { it.id == id && it.port == router.active(id)?.port }?.let { it.alive && it.lease?.alive() == true } != true
     suspend fun stage(id: String,command: String): ServiceRouter.Route? {
         val active = router.active(id)
-        val reusable = slots.firstOrNull { it.id == id && it.port != active?.port && it.alive && it.command == command }
+        val reusable = slots.firstOrNull { it.id == id && it.port != active?.port && it.alive && it.lease?.alive() == true && it.command == command }
         if (reusable != null) { active?.let { protectedRoutes.add(it) }; return ServiceRouter.Route(reusable.port,reusable.generation) }
         val slot = slots.firstOrNull { it.id == id && it.port != active?.port && router.connections(ServiceRouter.Route(it.port,it.generation)) == 0 } ?: return null
         launch(slot,command)
@@ -57,9 +57,12 @@ class MobileRuntime(private val context: Context) {
     fun diagnostic() = listOf("instagram","youtube","unknown").joinToString("\n") { id ->
         val s = router.stats(id); "$id: tx=${s.tx}; rx=${s.rx}; записей=${s.writes}; соединений=${s.connections}; ошибок подключения=${s.failures}"
     }
+    fun beginClose() {
+        maintenance.cancel();MobileFeedback.provider = null;router.close()
+        slots.forEach { runCatching { it.lease?.releaseNow() };it.alive = false }
+    }
     suspend fun close() = withContext(NonCancellable) {
-        maintenance.cancel(); MobileFeedback.provider = null
-        router.close()
+        beginClose()
         for (slot in slots) { runCatching { slot.lease?.close() }; slot.lease = null; slot.alive = false }
     }
 }

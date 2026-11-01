@@ -1,1 +1,1 @@
-TV 0.6.1: remove unreliable synthetic video probe and every media eligibility/ranking/status dependency; retain real YouTube traffic watchdog and rollback; validate preview HTTP framing and image signatures.
+TV 0.6.2: quiet startup/network/manual checks by default, no timer-driven probing or optimization; simplified remote UI, optional periodic mode, profile file export and signed-source health. Permanent signing.

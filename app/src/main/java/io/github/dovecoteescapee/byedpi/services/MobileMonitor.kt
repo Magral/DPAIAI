@@ -27,8 +27,9 @@ class MobileMonitor(private val context: Context,private val scope: CoroutineSco
             .put("services",JSONObject(reports as Map<*,*>)).put("state",MobileStrategyPolicy.state).put("traffic",runtime.diagnostic())
             .put("history",MobileHistory.summary(context)).toString()
     }
+    @Volatile private var disabledNotice = false
     private val preferenceListener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _,key ->
-        if (key == "mobile_periodic") scope.launch { if (periodic()) sampling();MobileFeedback.wake() }
+        if (key == "mobile_periodic") scope.launch { if (periodic()) sampling() else disabledNotice = true;MobileFeedback.wake() }
     }
     private fun periodic() = context.getPreferences().getBoolean("mobile_periodic",false)
     private fun sampling() {
@@ -54,6 +55,13 @@ class MobileMonitor(private val context: Context,private val scope: CoroutineSco
             var profile = MobileStrategyPolicy.profile(context)
             while (isActive) {
                 try {
+                    if (disabledNotice) {
+                        disabledNotice = false
+                        if (!periodic() && MobileStrategyPolicy.profile(context) == profile && ServiceTargets.individual.all { MobileFeedback.token(it.id) == (consumed[it.id] ?: 0L) && !runtime.fault(it.id) }) {
+                            publish("Периодические проверки выключены; рабочие маршруты сохранены")
+                            MobileFeedback.clearSignals();MobileFeedback.waitFor(Long.MAX_VALUE);continue
+                        }
+                    }
                     if (!MobileStrategyPolicy.modern(context.getPreferences())) { publish("Настройки изменены; перезапустите VPN"); return@launch }
                     if (!MobileStrategyPolicy.connected(context)) { publish("Нет физической сети"); MobileFeedback.waitFor(15000); continue }
                     val nextProfile = MobileStrategyPolicy.profile(context)
@@ -84,7 +92,11 @@ class MobileMonitor(private val context: Context,private val scope: CoroutineSco
                             val result = try { withTimeout(if (periodic() || forced) 205000 else 30000) { MobileCandidate.run(context,id,command) { publish("${target.name}: $it") } } }
                                 catch (e: TimeoutCancellationException) { currentCoroutineContext().ensureActive(); JSONObject() }
                             MobileStrategyPolicy.advance(context,id,command)
-                            if (!eligible(id,result)) { denied[key] = SystemClock.elapsedRealtime()+1800000; MobileHistory.record(context,id,command,false); continue }
+                            if (!eligible(id,result)) {
+                                denied[key] = SystemClock.elapsedRealtime()+1800000;MobileHistory.record(context,id,command,false)
+                                if (context.getPreferences().getString("mobile_imported.$id",null) == command) context.getPreferences().edit().remove("mobile_imported.$id").apply()
+                                continue
+                            }
                             val candidate = runtime.stage(id,command)
                             if (candidate == null) { publish("Резервный обработчик занят прежним потоком; переключение отложено"); break }
                             var accepted = false

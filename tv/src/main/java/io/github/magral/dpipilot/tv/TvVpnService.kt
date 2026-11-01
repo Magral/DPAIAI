@@ -225,11 +225,14 @@ class TvVpnService : VpnService() {
     }
     private suspend fun waitForCheck(milliseconds: Long) {
         TvState.phase = "Ожидание следующей проверки"
-        val quiet = !periodic() && trial == null
-        val end = if (quiet) CheckSchedule.QUIET_WAIT else SystemClock.elapsedRealtime()+milliseconds
+        var quiet = !periodic() && trial == null
+        var end = if (quiet) CheckSchedule.QUIET_WAIT else SystemClock.elapsedRealtime()+milliseconds
         TvState.nextCheckAt = if (quiet) 0 else end
         if (quiet) TvState.phase = "Ожидание события · без плановых проверок"
-        while (SystemClock.elapsedRealtime() < end && !requested.get()) {
+        while (!requested.get()) {
+            val newQuiet = !periodic() && trial == null
+            if (newQuiet != quiet) { quiet = newQuiet;end = if (quiet) CheckSchedule.QUIET_WAIT else SystemClock.elapsedRealtime()+milliseconds;TvState.nextCheckAt = if (quiet) 0 else end }
+            if (SystemClock.elapsedRealtime() >= end) break
             TvState.beat(this)
             if (!quiet) sampleTraffic()
             delay(if (quiet) 10000 else 1000)

@@ -66,6 +66,8 @@ class MainSettingsFragment : PreferenceFragmentCompat() {
             true
         }
 
+        findPreferenceNotNull<ListPreference>("byedpi_mode").value = "vpn"
+        listOf("byedpi_mode","legacy_byedpi_category").forEach { findPreference<Preference>(it)?.isVisible = false }
         findPreferenceNotNull<Preference>("version").summary = BuildConfig.VERSION_NAME
 
         updatePreferences()

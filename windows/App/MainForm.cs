@@ -45,7 +45,7 @@ internal sealed class MainForm : Form
         autorun.CheckedChanged+=(_,_)=>{using var key=Registry.CurrentUser.CreateSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run");if(autorun.Checked)key.SetValue("DpiPilotYouTube","\""+Environment.ProcessPath+"\" --background");else key.DeleteValue("DpiPilotYouTube",false);};
         install.Controls.Add(autorun);
         var periodic=new CheckBox{Text="Периодические проверки (раз в час)",AutoSize=true,Checked=settings.Value.PeriodicChecks,Padding=new(10)};
-        periodic.CheckedChanged+=(_,_)=>{settings.Change(s=>s.PeriodicChecks=periodic.Checked);pilot.RequestCheck();};
+        periodic.CheckedChanged+=(_,_)=>{settings.Change(s=>s.PeriodicChecks=periodic.Checked);if(periodic.Checked)pilot.RequestCheck();};
         install.Controls.Add(periodic);layout.Controls.Add(install);
         layout.Controls.Add(new Label{AutoSize=true,Text="Закрытие окна сворачивает приложение в трей. Полный выход — через меню значка рядом с часами.",Padding=new(0,4,0,10)});
         layout.Controls.Add(information);Controls.Add(layout);

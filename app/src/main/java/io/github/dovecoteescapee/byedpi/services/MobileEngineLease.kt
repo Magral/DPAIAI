@@ -33,9 +33,13 @@ class MobileEngineLease(private val context: Context,private val serviceClass: C
             check(ready.await()) { "Engine startup failed" }
         }
     }
-    suspend fun close() = withContext(NonCancellable+Dispatchers.Main) {
+    fun alive() = binder?.isBinderAlive == true && !closing.get()
+    fun releaseNow() {
         closing.set(true)
         if (bound) { context.unbindService(connection); bound = false }
+    }
+    suspend fun close() = withContext(NonCancellable+Dispatchers.Main) {
+        releaseNow()
         if (binder?.isBinderAlive == true) withTimeout(5000) { died.await() }
     }
 }

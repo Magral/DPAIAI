@@ -85,6 +85,19 @@ class ByeDpiVpnService : LifecycleVpnService() {
         lifecycleScope.launch { stop() }
     }
 
+    override fun onDestroy() {
+        physicalCallback?.let { runCatching { (getSystemService(CONNECTIVITY_SERVICE) as android.net.ConnectivityManager).unregisterNetworkCallback(it) } }
+        physicalCallback = null;networkJob?.cancel();networkJob = null
+        val monitor = mobileMonitor;val runtime = mobileRuntime
+        mobileMonitor = null;mobileRuntime = null
+        runtime?.beginClose()
+        if (tunFd != null) runCatching { stopTun2Socks() }
+        if (runtime != null || monitor != null) kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob()+Dispatchers.Main.immediate).launch {
+            runCatching { monitor?.stop() };runCatching { runtime?.close() }
+        }
+        updateStatus(ServiceStatus.Disconnected)
+        super.onDestroy()
+    }
     private suspend fun start() {
         Log.i(TAG, "Starting")
 

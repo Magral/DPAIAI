@@ -267,7 +267,7 @@ class MainActivity : AppCompatActivity() {
             try { packageManager.getApplicationLabel(packageManager.getApplicationInfo(pkg, 0)).toString() }
             catch (_: PackageManager.NameNotFoundException) { pkg }
         }.sorted()
-        binding.targetsSummary.text = "Instagram + YouTube\n"+if (labels.isEmpty()) "Клиенты ещё не обнаружены" else labels.joinToString(", ")
+        binding.targetsSummary.text = "Instagram + YouTube\n"+if (labels.isEmpty()) "Подключаются установленные клиенты" else labels.joinToString(", ")
         val proxyIp = preferences.getStringNotNull("byedpi_proxy_ip", "127.0.0.1")
         val proxyPort = preferences.getStringNotNull("byedpi_proxy_port", "1080")
         binding.proxyAddress.text = getString(R.string.proxy_address, proxyIp, proxyPort)

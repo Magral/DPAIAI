@@ -75,7 +75,7 @@ class TvActivity : Activity() {
         val periodic = Switch(this).apply {
             text = "Периодический контроль (обычно не нужен)"; textSize = 22f; setTextColor(Color.WHITE)
             isChecked = prefs.getBoolean("periodic_checks",false); isFocusable = true
-            setOnCheckedChangeListener { _,enabled -> prefs.edit().putBoolean("periodic_checks",enabled).apply(); if (prefs.getBoolean("enabled",false)) requestCheck(false) }
+            setOnCheckedChangeListener { _,enabled -> prefs.edit().putBoolean("periodic_checks",enabled).apply() }
         }
         box.addView(periodic,LinearLayout.LayoutParams(-1,-2))
         val boot = Switch(this).apply {
