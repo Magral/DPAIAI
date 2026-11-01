@@ -35,6 +35,13 @@ class QualityStore(private val prefs: SharedPreferences) {
     }
     fun preferred(legacy: List<Int>): List<Int> = ((records.entries.filter { it.value.successes > 0 || (it.value.usefulSeconds >= 300 && it.value.stalls == 0 && it.value.rollbacks == 0) }
         .sortedByDescending { it.value.rank() }.mapNotNull { TvPolicy.indexOfId(it.key) })+legacy).distinct().take(3)
+    fun choices(legacy: List<Int>): List<Int> = TvPolicy.selectable(
+        records.entries.filter { it.value.successes > 0 }.sortedByDescending { it.value.rank() }.map { it.key },
+        legacy.mapNotNull { RuntimeCatalog.ids.getOrNull(it) })
+    fun describe(index: Int): String {
+        val r = records[RuntimeCatalog.ids[index]] ?: return "Сохранённый рабочий вариант"
+        return "Успешные тесты: ${r.successes}/${r.successes+r.failures}; полезный обмен: ${r.usefulSeconds/60} мин; откаты: ${r.rollbacks}; задержка: ${r.latencyMs} мс"
+    }
     fun summary(): String = records.entries.sortedByDescending { it.value.rank() }.take(5).joinToString("\n") { (id,r) ->
         "№${(TvPolicy.indexOfId(id) ?: -1)+1}: тесты ${r.successes}/${r.successes+r.failures}; полезный обмен ${r.usefulSeconds/60} мин; зависания ${r.stalls}; откаты ${r.rollbacks}; задержка ${r.latencyMs} мс"
     }.ifEmpty { "История качества ещё не накоплена" }

@@ -67,6 +67,7 @@ class TvActivity : Activity() {
             if (prefs.getBoolean("enabled",false)) disable() else configure()
         }
         open = button(primary,"Открыть YouTube") { openYouTube() }
+        button(row(),"Выбрать найденную стратегию") { chooseStrategy() }
         val actions = row()
         check = button(actions,"Проверить сейчас") { requestCheck(false) }
         reselect = button(actions,"Подобрать заново") { requestCheck(true) }
@@ -169,6 +170,42 @@ class TvActivity : Activity() {
             journal.text = renderedReport.ifBlank { "Событий пока нет" }
         }
     }
+    private fun chooseStrategy() {
+        val profile = TvState.networkProfile.ifEmpty { prefs.getString("last_profile","").orEmpty() }
+        if (profile.isEmpty()) {
+            Toast.makeText(this,"Сначала включите VPN и выполните подбор",Toast.LENGTH_LONG).show(); return
+        }
+        val store = QualityStore(prefs).apply { network(profile) }
+        val history = TvPolicy.savedHistory(prefs.getString("history_ids.$profile",null),prefs.getString("history.$profile",null).orEmpty())
+        val ids = store.choices(history).map { RuntimeCatalog.ids[it] }
+        if (ids.isEmpty()) {
+            AlertDialog.Builder(this).setTitle("Найденные стратегии")
+                .setMessage("Для этой сети ещё нет успешных результатов. Включите VPN и нажмите «Проверить сейчас» или «Подобрать заново» в дополнительных настройках.")
+                .setPositiveButton("Закрыть",null).show(); return
+        }
+        val labels = ids.map { id ->
+            val index = TvPolicy.indexOfId(id)!!
+            "№${index+1}${if (index == TvState.strategyIndex) " · включена" else ""}\n${store.describe(index)}"
+        }.toTypedArray()
+        AlertDialog.Builder(this).setTitle("Найденные стратегии этой сети")
+            .setItems(labels) { _,which ->
+                val id = ids[which]
+                val index = TvPolicy.indexOfId(id) ?: return@setItems
+                val text = "${store.describe(index)}\n\n${RuntimeCatalog.commands[index].ifEmpty { "Без модификаций" }}\n\nИсточник: ${RuntimeCatalog.origins[index]}\n\nПеред применением — отдельная проверка. При переключении видео может переподключиться. После успешного испытания выбор сохранится для этой сети."
+                AlertDialog.Builder(this).setTitle("Стратегия №${index+1}").setMessage(text)
+                    .setPositiveButton("Проверить и применить") { _,_ ->
+                        if (!prefs.getBoolean("enabled",false) || VpnService.prepare(this) != null) {
+                            Toast.makeText(this,"Сначала включите VPN",Toast.LENGTH_LONG).show()
+                        } else {
+                            synchronized(TvState) {
+                                prefs.edit().putString("manual_request",org.json.JSONObject().put("id",id).put("profile",profile).toString()).apply()
+                            }
+                            TvState.update(this,"Запрошена стратегия №${index+1}; ожидает проверки")
+                            startHelper("select")
+                        }
+                    }.setNegativeButton("Назад") { _,_ -> chooseStrategy() }.show()
+            }.setNegativeButton("Закрыть",null).show()
+    }
     private fun openYouTube() {
         if (prefs.getBoolean("enabled",false) && VpnService.prepare(this) == null) startHelper()
         val intent = TvVpnService.installed(this).firstNotNullOfOrNull { pkg ->
@@ -213,7 +250,7 @@ class TvActivity : Activity() {
         AlertDialog.Builder(this).setTitle("Выключить VPN?")
             .setMessage("Автоматическое восстановление и запуск при следующей загрузке остановятся до нажатия «Включить VPN».")
             .setNegativeButton("Отмена",null).setPositiveButton("Выключить") { _,_ ->
-                prefs.edit().putBoolean("enabled",false).apply()
+                prefs.edit().putBoolean("enabled",false).remove("manual_request").apply()
                 MaintenanceJob.cancel(this)
                 TvState.phase = "Остановка"
                 TvState.update(this,"VPN выключен пользователем; автоматический запуск приостановлен")

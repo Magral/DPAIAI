@@ -41,6 +41,7 @@ class TvVpnService : VpnService() {
     private var observedRx = 0L
     private var historyFlushAt = 0L
     private var trial: Trial? = null
+    private var manualChoice: Int? = null
     private val reputation by lazy { QualityStore(prefs) }
     private val cm get() = getSystemService(CONNECTIVITY_SERVICE) as ConnectivityManager
     private val prefs get() = TvState.prefs(this)
@@ -81,7 +82,7 @@ class TvVpnService : VpnService() {
             stopSelf(); return START_NOT_STICKY
         }
         MaintenanceJob.schedule(this)
-        if (CheckSchedule.onResume(periodic(),controller != null,intent?.action in listOf("boot","update","manual","check","different"))) requested.set(true)
+        if (CheckSchedule.onResume(periodic(),controller != null,intent?.action in listOf("boot","update","manual","check","different","select"))) requested.set(true)
         if (intent?.action == "different") different.set(true)
         if (controller == null) {
             scope.launch {
@@ -258,6 +259,10 @@ class TvVpnService : VpnService() {
                     session.cancel(); pending.cancel(); pending.join()
                     return@coroutineScope TvProbe.Result(false,"Пробная стратегия зависла; запрошен быстрый откат")
                 }
+                if (prefs.contains("manual_request")) {
+                    session.cancel(); pending.cancel(); pending.join()
+                    return@coroutineScope TvProbe.Result(false,"Проверка прервана ручным выбором стратегии")
+                }
                 delay(250)
             }
             val result = pending.await()
@@ -274,7 +279,9 @@ class TvVpnService : VpnService() {
     } }
     private fun confirm(index: Int,quality: ProbeQuality) {
         val known = TvPolicy.savedHistory(prefs.getString("history_ids.$profile",null),prefs.getString("history.$profile",null).orEmpty())
-        prefs.edit().putInt("good",index).putString("good_id",RuntimeCatalog.ids[index])
+        val edit = prefs.edit()
+        if (prefs.getString("manual_id.$profile",null) != RuntimeCatalog.ids[index]) edit.remove("manual_id.$profile")
+        edit.putInt("good",index).putString("good_id",RuntimeCatalog.ids[index])
             .putString("history_ids.$profile",TvPolicy.remember(known,index).joinToString(",") { RuntimeCatalog.ids[it] })
             .putString("history.$profile",TvPolicy.remember(known,index).joinToString(","))
             .putLong("last_success",System.currentTimeMillis()).apply()
@@ -339,10 +346,11 @@ class TvVpnService : VpnService() {
         }
     }
     private fun clearTrial() {
-        trial = null; prefs.edit().remove("trial.$profile").apply()
+        trial = null; manualChoice = null; prefs.edit().remove("trial.$profile").apply()
         TvState.trialDetail = "Пробное переключение не выполняется"
     }
     private fun beginTrial(previous: Int,candidate: Int,baseline: ProbeQuality,restorable: Boolean) {
+        manualChoice = null
         trial = Trial(previous,candidate,SystemClock.elapsedRealtime(),restorable,baseline)
         prefs.edit().putString("trial.$profile",JSONObject().put("previous",RuntimeCatalog.ids[previous])
             .put("candidate",RuntimeCatalog.ids[candidate]).put("time",System.currentTimeMillis()).put("restore",restorable).toString()).commit()
@@ -370,7 +378,7 @@ class TvVpnService : VpnService() {
             delay(1500)
             val repeat = healthy(pending.candidate)
             latest = repeat
-            if (physical() != network) { requested.set(true); return true }
+            if (physical() != network || prefs.contains("manual_request")) { requested.set(true); return true }
             if (pending.rollback(SystemClock.elapsedRealtime(),QualityPolicy.regression(pending.baseline,repeat.quality),false)) return rollback(network)
         }
         if (!pending.expired(SystemClock.elapsedRealtime()) && !manual) {
@@ -378,8 +386,12 @@ class TvVpnService : VpnService() {
             waitForCheck((120000L-(SystemClock.elapsedRealtime()-pending.started)).coerceIn(1000L,120000L))
             return true
         }
+        val chosenManually = manualChoice == pending.candidate
         clearTrial()
-        if (latest.ok && !manual) confirm(pending.candidate,latest.quality) else if (!latest.ok) reputation.failed(pending.candidate)
+        if (latest.ok && !manual) {
+            confirm(pending.candidate,latest.quality)
+            if (chosenManually) prefs.edit().putString("manual_id.$profile",RuntimeCatalog.ids[pending.candidate]).apply()
+        } else if (!latest.ok) reputation.failed(pending.candidate)
         TvState.update(this,"Испытание №${pending.candidate+1} завершено: ${if (latest.ok) "пробы пройдены; полезный обмен учтён отдельно" else "успех не подтверждён"}")
         if (latest.ok && !manual) { waitForCheck(3600000); return true }
         return false
@@ -404,6 +416,53 @@ class TvVpnService : VpnService() {
         TProxyService.TProxyStartService(path.absolutePath,tun!!.fd)
         TvState.vpnEstablished = true
         TvState.update(this,"VPN-интерфейс создан; приложения: ${targets.joinToString()}. Доступ YouTube ещё проверяется")
+    }
+    /** Test the exact user-selected stable ID in :scout before touching the active tunnel. */
+    private suspend fun applyManual(network: Network): Boolean {
+        val raw = synchronized(TvState) {
+            prefs.getString("manual_request",null)?.also { prefs.edit().remove("manual_request").apply() }
+        } ?: return false
+        val request = runCatching { JSONObject(raw) }.getOrNull()
+        val index = TvPolicy.indexOfId(request?.optString("id"))
+        val history = TvPolicy.savedHistory(prefs.getString("history_ids.$profile",null),prefs.getString("history.$profile",null).orEmpty())
+        if (request?.optString("profile") != profile || index == null || index !in reputation.choices(history)) {
+            TvState.update(this,"Ручной выбор отклонён: вариант отсутствует в успешных результатах текущей сети")
+            return false
+        }
+        val active = activeIndex ?: return false
+        if (index == active) {
+            if (trial == null) prefs.edit().putString("manual_id.$profile",RuntimeCatalog.ids[index]).apply()
+            TvState.update(this,"Выбранная №${index+1} уже включена; туннель не перезапускался")
+            return false
+        }
+        TvState.update(this,"Ручной выбор №${index+1}: отдельная проверка; активна №${active+1}")
+        val next = EngineLease(this,scout = true)
+        scoutLease = next
+        val result = try {
+            next.open(index); healthy(index,19081)
+        } catch (e: TimeoutCancellationException) {
+            currentCoroutineContext().ensureActive()
+            TvProbe.Result(false,"Таймаут проверки выбранной стратегии")
+        } catch (e: CancellationException) { throw e }
+        catch (e: Exception) { TvProbe.Result(false,"${e.javaClass.simpleName}: ${e.message?.take(120)}") }
+        finally { next.close(); scoutLease = null }
+        if (physical() != network || prefs.contains("manual_request")) { requested.set(true); return true }
+        if (!result.ok) {
+            reputation.failed(index)
+            TvState.update(this,"Выбранная №${index+1} не прошла проверку; №${active+1} сохранена. ${result.detail}")
+            if (trial == null) { waitForCheck(3600000); return true }
+            return false
+        }
+        reputation.approved(index,result.quality,System.currentTimeMillis())
+        val reserve = trial?.takeIf { it.restorable && it.previous != index }
+        val previous = reserve?.previous ?: active
+        val restorable = reserve != null || (trial == null && TvState.verified)
+        clearTrial(); blocked.remove(index); persistQuarantine()
+        beginTrial(previous,index,ProbeQuality(restorable,if (restorable) 6 else 0,0),restorable)
+        manualChoice = index
+        TvState.update(this,"Применяю выбранную №${index+1}; испытание до 2 минут, резерв №${previous+1}. Видео может переподключиться")
+        release(); open(index); establish(network); networkId = network.toString()
+        return true
     }
     private suspend fun control() {
         var failures = 0
@@ -441,6 +500,8 @@ class TvVpnService : VpnService() {
                     prefs.edit().remove("trial.$profile").apply()
                 }
             }
+            TvState.networkProfile = profile
+            prefs.edit().putString("last_profile",profile).apply()
             blocked.entries.removeAll { it.value <= SystemClock.elapsedRealtime() }
             val old = TvPolicy.indexOfId(prefs.getString("good_id",null)) ?: prefs.getInt("good",-1).takeIf { it in 0..7 }
             val known = reputation.preferred(TvPolicy.savedHistory(prefs.getString("history_ids.$profile",null),prefs.getString("history.$profile",null) ?: old?.toString().orEmpty()))
@@ -454,17 +515,19 @@ class TvVpnService : VpnService() {
                     TvState.update(this,"Движок пробного варианта завершился: восстанавливаю прежнюю стратегию")
                 }
                 release()
-                val initial = recovered ?: known.firstOrNull { it !in blocked } ?: TvPolicy.adaptiveIndex
+                val preferred = TvPolicy.indexOfId(prefs.getString("manual_id.$profile",null))?.takeIf { it !in blocked }
+                val initial = recovered ?: preferred ?: known.firstOrNull { it !in blocked } ?: TvPolicy.adaptiveIndex
                 open(initial); establish(network); networkId = network.toString()
                 TvState.update(this,"Включена стратегия №${initial+1}; предварительный режим до проверки")
             }
+            if (applyManual(network)) continue
             val active = activeIndex!!
             var manual = different.getAndSet(false)
             var stalled = stallRequested.getAndSet(false)
             var force = manual || ((stalled || active in blocked) && !playback.recent(SystemClock.elapsedRealtime()))
             if (trial?.rollback(SystemClock.elapsedRealtime(),false,stalled) == true && rollback(network)) continue
             val current = healthy(active)
-            if (physical() != network) { requested.set(true); continue }
+            if (physical() != network || prefs.contains("manual_request")) { requested.set(true); continue }
             stalled = stallRequested.getAndSet(false) || stalled
             force = manual || ((stalled || active in blocked) && !playback.recent(SystemClock.elapsedRealtime()))
             if (reviewTrial(current,network,stalled,manual)) continue
@@ -496,7 +559,7 @@ class TvVpnService : VpnService() {
             TvState.update(this,"База ${TvPolicy.strategies.size}: фоновый блок до ${window.size} вариантов; позиция ${cursor+1}")
             for (index in window) {
                 currentCoroutineContext().ensureActive()
-                if (physical() != network) { requested.set(true); break }
+                if (physical() != network || prefs.contains("manual_request")) { requested.set(true); break }
                 force = manual || ((stalled || active in blocked) && !playback.recent(SystemClock.elapsedRealtime()))
                 if (!force && playback.recent(SystemClock.elapsedRealtime())) break
                 TvState.update(this,"Фоновый тест №${index+1}; активна №${active+1}, VPN не отключается")
@@ -507,7 +570,10 @@ class TvVpnService : VpnService() {
                     next.open(index)
                     val result = healthy(index,19081)
                     if (result.score > bestScore) { bestScore = result.score; trialCandidate = index }
-                    if (result.ok) candidates.add(index to result)
+                    if (result.ok) {
+                        reputation.approved(index,result.quality,System.currentTimeMillis())
+                        candidates.add(index to result)
+                    }
                     if (candidates.size >= 3) break
                 } catch (e: TimeoutCancellationException) {
                     currentCoroutineContext().ensureActive()
@@ -528,7 +594,7 @@ class TvVpnService : VpnService() {
                     }
                 }
             }
-            if (physical() != network) { requested.set(true); continue }
+            if (physical() != network || prefs.contains("manual_request")) { requested.set(true); continue }
             manual = different.getAndSet(false) || manual
             stalled = stallRequested.getAndSet(false) || stalled
             force = manual || ((stalled || active in blocked) && !playback.recent(SystemClock.elapsedRealtime()))

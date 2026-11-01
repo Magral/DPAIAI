@@ -20,6 +20,9 @@ object TvPolicy {
     fun indexOfId(id: String?): Int? = id?.let { RuntimeCatalog.ids.indexOf(it).takeIf { n -> n >= 0 } }
     fun savedHistory(ids: String?,legacy: String): List<Int> = if (ids == null) history(legacy).filter { it <= 7 }
         else ids.split(',').mapNotNull { indexOfId(it) }.distinct().take(3)
+    /** Persisted successes are scoped by caller to a network; catalog positions are never persisted. */
+    fun selectable(successIds: List<String>,historyIds: List<String>): List<Int> =
+        (successIds+historyIds).mapNotNull { indexOfId(it) }.distinct()
     fun scanWindow(known: List<Int>,active: Int,blocked: Set<Int>,cursor: Int,limit: Int = 12): List<Int> {
         require(limit > 0)
         val priority = (known+adaptiveIndex).filter { it in strategies.indices && it != active && it !in blocked }.distinct().take(limit)
