@@ -32,6 +32,7 @@ class ByeDpiVpnService : LifecycleVpnService() {
     private var tunFd: ParcelFileDescriptor? = null
     private val mutex = Mutex()
     private var stopping: Boolean = false
+    private var starting: Boolean = false
     private var mobileRuntime: MobileRuntime? = null
     private var mobileCommand = ""
     private var mobileMonitor: MobileMonitor? = null
@@ -101,11 +102,12 @@ class ByeDpiVpnService : LifecycleVpnService() {
     private suspend fun start() {
         Log.i(TAG, "Starting")
 
-        if (status == ServiceStatus.Connected) {
+        if (status == ServiceStatus.Connected || starting) {
             Log.w(TAG, "VPN already connected")
             return
         }
 
+        starting = true
         try {
             startForeground()
             MobileSetup.prepare(this)
@@ -145,7 +147,7 @@ class ByeDpiVpnService : LifecycleVpnService() {
             Log.e(TAG, "Failed to start VPN", e)
             updateStatus(ServiceStatus.Failed)
             stop()
-        }
+        } finally { starting = false }
     }
 
     private fun startForeground() {

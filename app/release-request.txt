@@ -1,1 +1,2 @@
 Mobile 0.8.0: fixed Instagram+YouTube product, independent hot-swappable native slots with draining connections, per-route trial counters and reserves; quiet startup/event checks by default; recovery and profile exchange. Production router/native, UDP, rollback and quiet-policy preflight passed. Permanent signing.
+Final source revision: coalesce duplicate phone service start intents.

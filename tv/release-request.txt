@@ -1,1 +1,2 @@
 TV 0.6.2: quiet startup/network/manual checks by default, no timer-driven probing or optimization; simplified remote UI, optional periodic mode, profile file export and signed-source health. Permanent signing.
+Final source revision: coalesce duplicate phone service start intents.

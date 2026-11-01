@@ -1,1 +1,2 @@
 Windows 0.1.1: quiet startup/network/manual checks by default; optional hourly control, bounded startup search, existing Chrome profile and selective YouTube route preserved. Native/Chrome/PAC/installer preflight passed.
+Final source revision: coalesce duplicate phone service start intents.
