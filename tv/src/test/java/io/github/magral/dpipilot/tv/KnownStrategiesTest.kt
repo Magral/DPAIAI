@@ -46,6 +46,35 @@ class KnownStrategiesTest {
         restored.network("wifi-a")
         assertEquals(6,restored.choices(emptyList()).size)
     }
+    @Test fun failuresStayExcludedAcrossRestartAndSuccessCannotSilentlyReviveThem() {
+        val prefs = preferences()
+        val store = QualityStore(prefs).apply { network("wifi-a") }
+        store.approved(1,ProbeQuality(true,6,100),1000)
+        store.approved(2,ProbeQuality(true,6,40),1000)
+        store.approved(3,ProbeQuality(true,6,200),1000)
+        assertEquals(listOf(2,1,3),store.choices(emptyList()))
+        store.failed(2)
+        store.approved(2,ProbeQuality(true,6,1),2000)
+        val restored = QualityStore(prefs).apply { network("wifi-a") }
+        assertEquals(setOf(2),restored.excluded())
+        assertEquals(listOf(1,3),restored.choices(listOf(2)))
+        restored.network("wifi-b")
+        assertTrue(restored.excluded().isEmpty())
+        restored.network("wifi-a")
+        assertEquals(setOf(2),restored.excluded())
+        restored.resetExclusions()
+        assertEquals(listOf(2,1,3),restored.choices(emptyList()))
+        assertTrue(QualityStore(prefs).apply { network("wifi-a") }.excluded().isEmpty())
+    }
+    @Test fun excludedMissingCatalogIdSurvivesUnrelatedHistoryWrites() {
+        val prefs = preferences()
+        prefs.edit().putString("quality.wifi-a", "{\"removed-command\":{\"excluded\":true,\"fail\":1}}").apply()
+        val store = QualityStore(prefs).apply { network("wifi-a") }
+        store.approved(1,ProbeQuality(true,6,100),1000)
+        val saved = org.json.JSONObject(prefs.getString("quality.wifi-a","{}").orEmpty())
+        assertTrue(saved.getJSONObject("removed-command").getBoolean("excluded"))
+        assertFalse(store.summary().contains("№0"))
+    }
     @Test fun missingStableIdsCannotSelectAnotherCommandAndLegacySuccessIsIncludedOnce() {
         val ids = RuntimeCatalog.ids
         assertEquals(listOf(5,1,2),TvPolicy.selectable(listOf(ids[5],"removed",ids[1],ids[5]),listOf(ids[2],ids[1])))

@@ -67,16 +67,16 @@ class TvActivity : Activity() {
             if (prefs.getBoolean("enabled",false)) disable() else configure()
         }
         open = button(primary,"Открыть YouTube") { openYouTube() }
-        button(row(),"Выбрать найденную стратегию") { chooseStrategy() }
+        button(row(),"Рабочие стратегии · выбор по задержке") { chooseStrategy() }
         val actions = row()
         check = button(actions,"Проверить сейчас") { requestCheck(false) }
-        reselect = button(actions,"Подобрать заново") { requestCheck(true) }
+        reselect = button(actions,"Найти самый быстрый вариант") { requestCheck(true) }
         button(actions,"Полный отчёт") { showReport() }
         details = text("",21f).apply { isFocusable = true }
         val periodic = Switch(this).apply {
-            text = "Периодический контроль (обычно не нужен)"; textSize = 22f; setTextColor(Color.WHITE)
-            isChecked = prefs.getBoolean("periodic_checks",false); isFocusable = true
-            setOnCheckedChangeListener { _,enabled -> prefs.edit().putBoolean("periodic_checks",enabled).apply() }
+            text = "Автоподбор минимальной задержки раз в 3 дня"; textSize = 22f; setTextColor(Color.WHITE)
+            isChecked = prefs.getBoolean("auto_three_days",true); isFocusable = true
+            setOnCheckedChangeListener { _,enabled -> prefs.edit().putBoolean("auto_three_days",enabled).apply() }
         }
         box.addView(periodic,LinearLayout.LayoutParams(-1,-2))
         val boot = Switch(this).apply {
@@ -121,7 +121,7 @@ class TvActivity : Activity() {
         val index = TvState.strategyIndex.takeIf { it in TvPolicy.strategies.indices }
         val command = index?.let { TvPolicy.strategies[it].ifEmpty { "Без модификаций (контроль)" } } ?: "Нет активной стратегии"
         val remaining = ((TvState.nextCheckAt-SystemClock.elapsedRealtime())/1000).coerceAtLeast(0)
-        val next = if (TvState.nextCheckAt > 0) "через ${remaining/60} мин ${remaining%60} с" else "выполняется / не назначена"
+        val next = if (TvState.nextCheckAt > 0) "через ${remaining/86400} д ${(remaining%86400)/3600} ч" else "выполняется / не назначена"
         val saved = (TvPolicy.indexOfId(prefs.getString("good_id",null)) ?: prefs.getInt("good",-1).takeIf { it in 0..7 })?.let { "№${it+1}" } ?: "нет"
         val boot = when {
             !prefs.getBoolean("boot",true) -> "выключен"
@@ -132,7 +132,7 @@ class TvActivity : Activity() {
             .let { if (full) it else it.take(8) }.sortedBy { it.key }
         val resultText = recent.joinToString("\n") { "№${it.key+1}: ${if (full) it.value else it.value.take(260)}" }.ifEmpty { "ещё нет" }
         return "Обновления базы: ${CatalogUpdater.status}\nПопытка: ${time(prefs.getLong("catalog_attempt",0))}; проверена: ${time(prefs.getLong("catalog_checked",0))}; загружена: ${time(prefs.getLong("catalog_updated",0))}\n\nБаза: ${TvPolicy.strategies.size} вариантов · ${RuntimeCatalog.version}\n${StrategyCatalog.engine}\nЭтап: ${TvState.phase}\n${TvState.status}\n\n"+
-            "Стратегия: ${index?.let { "№${it+1} из ${TvPolicy.strategies.size}" } ?: "не запущена"}\n$command\nИсточник: ${index?.let { RuntimeCatalog.origins[it] } ?: "нет"}\nПозиция расширенного подбора: ${TvState.scanCursor+1}/${TvPolicy.strategies.size} (блок до 12)\n"+
+            "Стратегия: ${index?.let { "№${it+1} из ${TvPolicy.strategies.size}" } ?: "не запущена"}\n$command\nИсточник: ${index?.let { RuntimeCatalog.origins[it] } ?: "нет"}\nПозиция подбора по задержке: ${TvState.scanCursor+1}/${TvPolicy.strategies.size}\n"+
             "Диагностика стратегии ${if (TvState.probeIndex >= 0) "№${TvState.probeIndex+1}" else "(предыдущий запуск)"}: ${TvState.probeDetail}\nСледующая проверка: $next\n"+
             "${TvState.trialDetail}\nНаблюдение: ${TvState.stallDetail}\n\n"+
             "Качество профиля сети:\n${TvState.qualityHistory}\n\n"+
@@ -156,7 +156,7 @@ class TvActivity : Activity() {
             !enabled -> "VPN выключен"
             VpnService.prepare(this) != null -> "Нужно подтвердить разрешение VPN"
             TvState.vpnEstablished && TvState.verified -> "VPN включён · проверки YouTube пройдены"
-            TvState.vpnEstablished && !prefs.getBoolean("periodic_checks",false) -> "VPN включён · плановые проверки выключены"
+            TvState.vpnEstablished && !prefs.getBoolean("auto_three_days",true) -> "VPN включён · проверки только по требованию"
             TvState.vpnEstablished -> "VPN включён · доступ YouTube проверяется"
             TvState.running -> "VPN ещё не создан · ${TvState.phase}"
             else -> "VPN не запущен · смотрите причину ниже"
@@ -164,7 +164,12 @@ class TvActivity : Activity() {
         status.setTextColor(if (TvState.vpnEstablished && TvState.verified) Color.rgb(121,225,165) else Color.rgb(255,211,133))
         toggle.text = if (enabled) "Выключить VPN" else "Включить VPN"
         check.isEnabled = enabled; reselect.isEnabled = enabled
-        details.text = if (prefs.getBoolean("simple_screen",true)) "Стратегия: ${if (TvState.strategyIndex >= 0) "№${TvState.strategyIndex+1}" else "ещё не выбрана"}\n${TvState.phase}\nПоследняя проверка: ${time(TvState.lastCheckAt)}\n${if (prefs.getBoolean("periodic_checks",false)) "Периодический контроль включён" else "Без плановых сетевых проверок"}" else information()
+        val profile = TvState.networkProfile.ifEmpty { prefs.getString("last_profile","").orEmpty() }
+        val lastScan = prefs.getLong("scan_started.$profile",0)
+        val nextScan = if (prefs.getBoolean("auto_three_days",true)) {
+            if (lastScan <= 0) "при первом запуске" else time(lastScan+TvCheckPolicy.INTERVAL)
+        } else "только по требованию"
+        details.text = if (prefs.getBoolean("simple_screen",true)) "Стратегия: ${if (TvState.strategyIndex >= 0) "№${TvState.strategyIndex+1}" else "ещё не выбрана"}\n${TvState.phase}\nПоследняя проверка: ${time(TvState.lastCheckAt)}\nСледующий автоподбор: $nextScan\n${if (prefs.getBoolean("auto_three_days",true)) "Автоподбор раз в 3 дня" else "Проверки только по требованию"}" else information()
         if (renderedReport != TvState.report) {
             renderedReport = TvState.report
             journal.text = renderedReport.ifBlank { "Событий пока нет" }
@@ -180,18 +185,19 @@ class TvActivity : Activity() {
         val ids = store.choices(history).map { RuntimeCatalog.ids[it] }
         if (ids.isEmpty()) {
             AlertDialog.Builder(this).setTitle("Найденные стратегии")
-                .setMessage("Для этой сети ещё нет успешных результатов. Включите VPN и нажмите «Проверить сейчас» или «Подобрать заново» в дополнительных настройках.")
+                .setMessage("Для этой сети ещё нет успешных результатов. Включите VPN и нажмите «Проверить сейчас» или «Найти самый быстрый вариант» в дополнительных настройках.")
+                .setNeutralButton("Сбросить исключения") { _,_ -> resetExclusions(profile) }
                 .setPositiveButton("Закрыть",null).show(); return
         }
         val labels = ids.map { id ->
             val index = TvPolicy.indexOfId(id)!!
-            "№${index+1}${if (index == TvState.strategyIndex) " · включена" else ""}\n${store.describe(index)}"
+            "№${index+1} · ${store.latency(index).takeIf { it > 0 }?.let { "$it мс" } ?: "задержка не измерена"}${if (index == TvState.strategyIndex) " · включена" else ""}\n${store.describe(index)}"
         }.toTypedArray()
-        AlertDialog.Builder(this).setTitle("Найденные стратегии этой сети")
+        AlertDialog.Builder(this).setTitle("Рабочие: от быстрых к медленным · исключено ${store.excluded().size}")
             .setItems(labels) { _,which ->
                 val id = ids[which]
                 val index = TvPolicy.indexOfId(id) ?: return@setItems
-                val text = "${store.describe(index)}\n\n${RuntimeCatalog.commands[index].ifEmpty { "Без модификаций" }}\n\nИсточник: ${RuntimeCatalog.origins[index]}\n\nПеред применением — отдельная проверка. При переключении видео может переподключиться. После успешного испытания выбор сохранится для этой сети."
+                val text = "${store.describe(index)}\n\n${RuntimeCatalog.commands[index].ifEmpty { "Без модификаций" }}\n\nИсточник: ${RuntimeCatalog.origins[index]}\n\nПеред применением — отдельная проверка. При переключении видео может переподключиться. После успешного испытания выбор сохранится для этой сети. При включённом авторежиме следующий плановый подбор снова выберет минимум задержки. Чтобы оставить ручной выбор, выключите автоподбор."
                 AlertDialog.Builder(this).setTitle("Стратегия №${index+1}").setMessage(text)
                     .setPositiveButton("Проверить и применить") { _,_ ->
                         if (!prefs.getBoolean("enabled",false) || VpnService.prepare(this) != null) {
@@ -204,7 +210,17 @@ class TvActivity : Activity() {
                             startHelper("select")
                         }
                     }.setNegativeButton("Назад") { _,_ -> chooseStrategy() }.show()
-            }.setNegativeButton("Закрыть",null).show()
+            }.setNeutralButton("Сбросить исключения") { _,_ -> resetExclusions(profile) }
+            .setNegativeButton("Закрыть",null).show()
+    }
+    private fun resetExclusions(profile: String) {
+        AlertDialog.Builder(this).setTitle("Разрешить повторные тесты?")
+            .setMessage("Неудачные стратегии этой сети снова станут доступны для проверки. Рабочая стратегия останется включённой. Сброс сам по себе не запускает тестирование.")
+            .setPositiveButton("Сбросить") { _,_ ->
+                prefs.edit().putString("reset_exclusions",profile).apply()
+                if (prefs.getBoolean("enabled",false) && VpnService.prepare(this) == null) startHelper("reset")
+                Toast.makeText(this,"Сброс запрошен; для нового подбора нажмите «Проверить сейчас»",Toast.LENGTH_LONG).show()
+            }.setNegativeButton("Отмена",null).show()
     }
     private fun openYouTube() {
         if (prefs.getBoolean("enabled",false) && VpnService.prepare(this) == null) startHelper()

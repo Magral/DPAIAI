@@ -1,1 +1,1 @@
-TV 0.6.3: remote-friendly manual selection of successful strategies for the current network, stable IDs, persisted scout successes, preflight before applying, bounded trial and rollback. Quiet mode unchanged. Permanent signing.
+TV 0.6.4: persisted three-day per-network scan budget, on-demand checks, permanent failed-command exclusions with explicit reset, HTTPS-latency sorted picker and minimum-latency automatic selection. Quiet between cycles; signed update.
