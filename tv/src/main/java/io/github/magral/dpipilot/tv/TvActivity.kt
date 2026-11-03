@@ -157,7 +157,7 @@ class TvActivity : Activity() {
             VpnService.prepare(this) != null -> "Нужно подтвердить разрешение VPN"
             TvState.vpnEstablished && TvState.verified -> "VPN включён · проверки YouTube пройдены"
             TvState.vpnEstablished && !prefs.getBoolean("auto_three_days",true) -> "VPN включён · проверки только по требованию"
-            TvState.vpnEstablished -> "VPN включён · доступ YouTube проверяется"
+            TvState.vpnEstablished -> "VPN включён · стратегия ещё не подтверждена"
             TvState.running -> "VPN ещё не создан · ${TvState.phase}"
             else -> "VPN не запущен · смотрите причину ниже"
         }

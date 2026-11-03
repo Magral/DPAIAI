@@ -246,7 +246,14 @@ class TvVpnService : VpnService() {
         }
         TvState.nextCheckAt = 0
     }
-    private suspend fun healthy(index: Int,port: Int = 19080): TvProbe.Result = withTimeout(180000) { coroutineScope {
+    private suspend fun healthy(index: Int,port: Int = 19080): TvProbe.Result = try {
+        probe(index,port)
+    } catch (e: TimeoutCancellationException) {
+        currentCoroutineContext().ensureActive()
+        TvProbe.Result(false,"Таймаут проверки стратегии")
+    } catch (e: CancellationException) { throw e }
+    catch (e: Exception) { TvProbe.Result(false,"${e.javaClass.simpleName}: ${e.message?.take(160)}") }
+    private suspend fun probe(index: Int,port: Int): TvProbe.Result = withTimeout(180000) { coroutineScope {
         TvState.phase = if (port == 19081) "Фоновая проверка стратегии №${index+1}" else "Проверка текущей стратегии №${index+1}"
         TvState.probeIndex = index
         TvState.nextCheckAt = 0
@@ -513,7 +520,7 @@ class TvVpnService : VpnService() {
                     waitForCheck(0); continue
                 }
                 open(initial); establish(network); networkId = network.toString()
-                TvState.verified = initial in known
+                TvState.verified = initial in reputation.choices(history)
                 TvState.update(this,"Включена сохранённая №${initial+1}; перезапуск не сбрасывает срок следующего автоподбора")
             }
             if (applyManual(network)) continue
