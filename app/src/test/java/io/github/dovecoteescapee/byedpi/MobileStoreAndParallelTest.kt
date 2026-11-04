@@ -67,11 +67,12 @@ class MobileStoreAndParallelTest {
         assertFalse(MobileScanPolicy.due(true,false,1000,999))
     }
     @Test(timeout=5000) fun parallelFirstFailureCancelsWaitingSiblingsWithoutAwaitingTheirTimeout() {
-        val entered=CountDownLatch(3);val cancelled=CountDownLatch(2);val abort=AtomicInteger()
+        val entered=CountDownLatch(3);val waiting=CountDownLatch(2);val cancelled=CountDownLatch(2);val abort=AtomicInteger()
         val started=System.nanoTime()
         val rows=ParallelProbe.round(3,{}, { it },{ abort.incrementAndGet() }) { i ->
             entered.countDown();assertTrue(entered.await(2,TimeUnit.SECONDS))
-            if(i==0) false else {
+            if(i==0) { assertTrue(waiting.await(2,TimeUnit.SECONDS));false } else {
+                waiting.countDown()
                 try { CountDownLatch(1).await(30,TimeUnit.SECONDS);true }
                 catch(_: InterruptedException) { cancelled.countDown();false }
             }

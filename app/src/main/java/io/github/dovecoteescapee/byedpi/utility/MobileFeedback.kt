@@ -6,6 +6,8 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
 
 object MobileFeedback {
+    private val revision = AtomicLong()
+    fun requestVersion() = revision.get()
     private val cancelled = AtomicLong()
     fun cancelToken() = cancelled.get()
     fun cancelScans(context: android.content.Context) {
@@ -19,7 +21,7 @@ object MobileFeedback {
     val consumed = ConcurrentHashMap<String,Long>()
     fun clearSignals() { while (signals.tryReceive().isSuccess) { } }
     fun acknowledgeAll() { requested.forEach { (id,token) -> consumed[id] = token.get() };clearSignals() }
-    fun request(id: String) { require(id in listOf("instagram","youtube")); (requested[id] ?: AtomicLong().let { requested.putIfAbsent(id,it) ?: it }).incrementAndGet(); wake() }
+    fun request(id: String) { require(id in listOf("instagram","youtube")); (requested[id] ?: AtomicLong().let { requested.putIfAbsent(id,it) ?: it }).incrementAndGet(); revision.incrementAndGet();wake() }
     fun token(id: String) = requested[id]?.get() ?: 0L
     fun wake() { signals.trySend(Unit) }
     suspend fun waitFor(millis: Long) { if (millis == Long.MAX_VALUE) signals.receive() else withTimeoutOrNull(millis) { signals.receive() } }

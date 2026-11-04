@@ -15,6 +15,8 @@ class MobileMonitor(private val context: Context,private val scope: CoroutineSco
     private val consumed = MobileFeedback.consumed
     private val reports = linkedMapOf<String,JSONObject>()
     @Volatile private var trialRunning = false
+    private var revision = MobileFeedback.requestVersion()
+    private fun superseded() = revision != MobileFeedback.requestVersion()
     private var cancellation = MobileFeedback.cancelToken()
     private var active = context.getPreferences().getString("mobile_command","").orEmpty()
     private val prefs get() = context.getPreferences()
@@ -59,8 +61,9 @@ class MobileMonitor(private val context: Context,private val scope: CoroutineSco
                     if (profile != currentProfile) { profile = currentProfile;reports.clear();health.values.forEach { it.reset() } }
                     runtime.reap()
                     cancellation = MobileFeedback.cancelToken()
+                    revision = MobileFeedback.requestVersion()
                     for (target in ServiceTargets.individual) {
-                        if (!same(profile) || cancellation != MobileFeedback.cancelToken()) break
+                        if (!same(profile) || cancellation != MobileFeedback.cancelToken() || superseded()) break
                         val id = target.id
                         val store = MobileHistory.store(context,id,profile)
                         if (prefs.getString("mobile_reset.$id",null) == profile) {
@@ -84,7 +87,7 @@ class MobileMonitor(private val context: Context,private val scope: CoroutineSco
                         prefs.edit().putLong(key,System.currentTimeMillis()).commit()
                         val previousCommand = MobilePlan.command(active,id)
                         val current = if (!store.excluded(previousCommand)) probe(id,previousCommand) else JSONObject().put("error","Исключённый вариант не проверяется")
-                        if (!same(profile) || MobileFeedback.token(id) != token || cancellation != MobileFeedback.cancelToken()) continue
+                        if (!same(profile) || MobileFeedback.token(id) != token || cancellation != MobileFeedback.cancelToken() || superseded()) continue
                         reports[id] = current
                         val results = mutableListOf<Pair<String,JSONObject>>()
                         if (ProbeAssessment.evaluate(id,current).eligible) {
@@ -94,17 +97,17 @@ class MobileMonitor(private val context: Context,private val scope: CoroutineSco
                             else MobileStrategyPolicy.window(context,target)
                         for ((index,command) in commands.withIndex()) {
                             if (command == previousCommand && !runtime.fault(id)) continue
-                            if (!same(profile) || MobileFeedback.token(id) != token || cancellation != MobileFeedback.cancelToken() || (!forced && !automatic())) break
+                            if (!same(profile) || MobileFeedback.token(id) != token || cancellation != MobileFeedback.cancelToken() || superseded() || (!forced && !automatic())) break
                             publish("${target.name}: ${index+1}/${commands.size}; рабочая стратегия второго сервиса сохраняется")
                             val result = try { awaitResult(id,profile,token) { withTimeout(170000) { MobileCandidate.run(context,id,command) { progress("${target.name}: $it") } } } }
                                 catch (e: TimeoutCancellationException) { currentCoroutineContext().ensureActive();JSONObject().put("error","Лимит процесса проверки") }
                                 catch (e: CancellationException) { throw e }
                                 catch (e: Exception) { JSONObject().put("error",e.javaClass.simpleName) }
-                            if (!same(profile) || MobileFeedback.token(id) != token || cancellation != MobileFeedback.cancelToken()) break
+                            if (!same(profile) || MobileFeedback.token(id) != token || cancellation != MobileFeedback.cancelToken() || superseded()) break
                             if (store.accept(command,result)) results.add(command to result)
                             MobileStrategyPolicy.advance(context,id,command)
                         }
-                        if (!same(profile) || MobileFeedback.token(id) != token || cancellation != MobileFeedback.cancelToken()) continue
+                        if (!same(profile) || MobileFeedback.token(id) != token || cancellation != MobileFeedback.cancelToken() || superseded()) continue
                         if (!forced && !automatic()) continue
                         val best = if (selected != null) results.firstOrNull { it.first == selected } else MobileScanPolicy.fastest(results,id)
                         prefs.edit().remove("mobile_selected.$id").remove("mobile_imported.$id").remove("mobile_force_replace.$id").apply()
@@ -116,7 +119,7 @@ class MobileMonitor(private val context: Context,private val scope: CoroutineSco
                     }
                     val wait = if (automatic()) ServiceTargets.individual.minOf { MobileScanPolicy.remaining(prefs.getLong(scanKey(it.id,profile),0),System.currentTimeMillis()) } else Long.MAX_VALUE
                     publish(if (automatic()) "Следующий автоподбор через ${wait/3600000} ч; по требованию — сразу" else "Проверки только по требованию")
-                    if (!same(profile) || ServiceTargets.individual.any { MobileFeedback.token(it.id) != (consumed[it.id] ?: 0L) }) MobileFeedback.wake()
+                    if (!same(profile) || superseded() || ServiceTargets.individual.any { MobileFeedback.token(it.id) != (consumed[it.id] ?: 0L) }) MobileFeedback.wake()
                     MobileFeedback.waitFor(wait.coerceAtLeast(1000))
                 } catch (e: CancellationException) { throw e }
                 catch (e: Exception) { publish("Ошибка контроля: ${e.javaClass.simpleName}");MobileFeedback.waitFor(60000) }
@@ -137,7 +140,7 @@ class MobileMonitor(private val context: Context,private val scope: CoroutineSco
             publish("${ServiceTargets.target(id).name}: испытание до 2 минут; второй сервис не перезапускается")
             var verified = probe(id,command)
             fun decision() = TrialGuard.decide(SystemClock.elapsedRealtime(),deadline,ProbeAssessment.evaluate(id,verified).eligible,
-                health.getValue(id).stalled,!runtime.fault(id),same(profile),MobileFeedback.token(id) == token && cancellation == MobileFeedback.cancelToken())
+                health.getValue(id).stalled,!runtime.fault(id),same(profile),MobileFeedback.token(id) == token && cancellation == MobileFeedback.cancelToken() && !superseded())
             while (decision() == TrialGuard.Decision.WAIT) MobileFeedback.waitFor(minOf(10000,deadline-SystemClock.elapsedRealtime()).coerceAtLeast(1))
             if (decision() == TrialGuard.Decision.CONFIRM) verified = probe(id,command)
             if (decision() == TrialGuard.Decision.CONFIRM) {
@@ -145,7 +148,7 @@ class MobileMonitor(private val context: Context,private val scope: CoroutineSco
                 MobileStrategyPolicy.apply(prefs,MobilePlan.BOTH,active);MobileStrategyPolicy.remember(context,id,command)
                 store.accept(command,verified,(health.getValue(id).usefulMillis-usefulBefore).coerceAtLeast(0));runtime.commit(previous)
                 reports[id] = verified;accepted = true
-            } else failed = same(profile) && MobileFeedback.token(id) == token && cancellation == MobileFeedback.cancelToken()
+            } else failed = same(profile) && MobileFeedback.token(id) == token && cancellation == MobileFeedback.cancelToken() && !superseded()
             return accepted
         } finally {
             prefs.edit().remove("mobile_trial.$id").apply()
@@ -166,7 +169,7 @@ class MobileMonitor(private val context: Context,private val scope: CoroutineSco
         }
         try {
             while (!pending.isCompleted) {
-                if (!same(profile) || MobileFeedback.token(id) != token || cancellation != MobileFeedback.cancelToken()) {
+                if (!same(profile) || MobileFeedback.token(id) != token || cancellation != MobileFeedback.cancelToken() || superseded()) {
                     session?.cancel();pending.cancelAndJoin();return@coroutineScope JSONObject().put("cancelled",true)
                 }
                 delay(200)
