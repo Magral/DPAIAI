@@ -156,8 +156,8 @@ class MainActivity : AppCompatActivity() {
             registerReceiver(receiver, intentFilter)
         }
 
-        binding.youtubeProblem.setOnClickListener { MobileFeedback.request("youtube"); Toast.makeText(this,"Запрошена замена стратегии YouTube",Toast.LENGTH_SHORT).show() }
-        binding.instagramProblem.setOnClickListener { MobileFeedback.request("instagram"); Toast.makeText(this,"Запрошена замена стратегии Instagram",Toast.LENGTH_SHORT).show() }
+        binding.youtubeProblem.setOnClickListener { getPreferences().edit().putString("mobile_force_replace.youtube",MobileStrategyPolicy.profile(this)).apply();MobileFeedback.request("youtube"); Toast.makeText(this,"Запрошена замена стратегии YouTube",Toast.LENGTH_SHORT).show() }
+        binding.instagramProblem.setOnClickListener { getPreferences().edit().putString("mobile_force_replace.instagram",MobileStrategyPolicy.profile(this)).apply();MobileFeedback.request("instagram"); Toast.makeText(this,"Запрошена замена стратегии Instagram",Toast.LENGTH_SHORT).show() }
         binding.serviceTuningButton.setOnClickListener { startActivity(Intent(this, ServiceTuningActivity::class.java)) }
         binding.statusButton.setOnClickListener {
             val (status, _) = appStatus

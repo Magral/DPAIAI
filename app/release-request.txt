@@ -1,1 +1,2 @@
 Mobile 0.9.0: three-day persisted per-service schedule, strict complete tests, permanent network-scoped exclusions and latency-sorted manual choices. Parallel host checks and first-failure cancellation; independent trials and retained other-app streams. Permanent signing.
+Preserve explicit problem-button replacement intent separately from ordinary checks.

@@ -70,6 +70,7 @@ class MobileMonitor(private val context: Context,private val scope: CoroutineSco
                         val selection = runCatching { JSONObject(prefs.getString("mobile_selected.$id",null).orEmpty()) }.getOrNull()
                         val selected = selection?.takeIf { it.optString("profile") == profile }?.optString("command")
                         if (selection != null && selected == null) prefs.edit().remove("mobile_selected.$id").apply()
+                        val replaceRequested = prefs.getString("mobile_force_replace.$id",null) == profile && selected == null
                         val forced = token != (consumed[id] ?: 0L) || selected != null || prefs.contains("mobile_imported.$id")
                         val key = scanKey(id,profile)
                         // Native worker recovery is local maintenance and does not bypass the probe budget.
@@ -87,7 +88,7 @@ class MobileMonitor(private val context: Context,private val scope: CoroutineSco
                         reports[id] = current
                         val results = mutableListOf<Pair<String,JSONObject>>()
                         if (ProbeAssessment.evaluate(id,current).eligible) {
-                            store.accept(previousCommand,current);results.add(previousCommand to current)
+                            store.accept(previousCommand,current);if (!replaceRequested) results.add(previousCommand to current)
                         } else if (!store.excluded(previousCommand)) store.reject(previousCommand,current)
                         val commands = if (selected != null) listOf(selected).filter { !store.excluded(it) && io.github.dovecoteescapee.byedpi.catalog.CatalogProtocol.validCommand(it) }
                             else MobileStrategyPolicy.window(context,target)
@@ -106,7 +107,7 @@ class MobileMonitor(private val context: Context,private val scope: CoroutineSco
                         if (!same(profile) || MobileFeedback.token(id) != token || cancellation != MobileFeedback.cancelToken()) continue
                         if (!forced && !automatic()) continue
                         val best = if (selected != null) results.firstOrNull { it.first == selected } else MobileScanPolicy.fastest(results,id)
-                        prefs.edit().remove("mobile_selected.$id").remove("mobile_imported.$id").apply()
+                        prefs.edit().remove("mobile_selected.$id").remove("mobile_imported.$id").remove("mobile_force_replace.$id").apply()
                         if (best == null) { publish("${target.name}: полного результата нет; неудачные варианты исключены");continue }
                         if (best.first == previousCommand && !runtime.fault(id)) {
                             MobileStrategyPolicy.remember(context,id,previousCommand);publish("${target.name}: текущая стратегия быстрее остальных полных результатов");continue
