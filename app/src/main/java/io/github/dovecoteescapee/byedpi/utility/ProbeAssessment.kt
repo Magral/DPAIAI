@@ -5,9 +5,14 @@ import org.json.JSONObject
 /** Evidence about public endpoints, never a claim that an account or video playback works. */
 object ProbeAssessment {
     data class Result(val requiredSuccess: Int,val requiredTotal: Int,val extraSuccess: Int,val extraTotal: Int) {
-        val eligible get() = requiredTotal > 0 && requiredSuccess == requiredTotal
+        val eligible get() = requiredTotal > 0 && requiredSuccess == requiredTotal && extraSuccess == extraTotal
         val complete get() = eligible && extraSuccess == extraTotal
-        fun text() = "основные $requiredSuccess/$requiredTotal"+if (extraTotal > 0) "; дополнительные $extraSuccess/$extraTotal" else ""
+        fun text() = "полный тест ${requiredSuccess+extraSuccess}/${requiredTotal+extraTotal}"
+    }
+    fun latency(result: JSONObject): Long {
+        val rows = result.optJSONArray("rows") ?: return Long.MAX_VALUE
+        val values = (0 until rows.length()).mapNotNull { rows.optJSONObject(it)?.optLong("elapsedMs")?.takeIf { n -> n > 0 } }.sorted()
+        return values.getOrNull(values.size/2) ?: result.optLong("elapsed",Long.MAX_VALUE).takeIf { it > 0 } ?: Long.MAX_VALUE
     }
     fun evaluate(target: String,result: JSONObject): Result {
         val specs = ServiceTargets.target(target).endpoints

@@ -6,6 +6,14 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
 
 object MobileFeedback {
+    private val cancelled = AtomicLong()
+    fun cancelToken() = cancelled.get()
+    fun cancelScans(context: android.content.Context) {
+        val profile = MobileStrategyPolicy.profile(context)
+        val edit = context.getPreferences().edit()
+        listOf("instagram","youtube").forEach { id -> edit.putLong("mobile_scan.$id.$profile",System.currentTimeMillis()).remove("mobile_selected.$id").remove("mobile_imported.$id") }
+        edit.apply();cancelled.incrementAndGet();acknowledgeAll();wake()
+    }
     private val signals = Channel<Unit>(Channel.CONFLATED)
     private val requested = ConcurrentHashMap<String,AtomicLong>()
     val consumed = ConcurrentHashMap<String,Long>()

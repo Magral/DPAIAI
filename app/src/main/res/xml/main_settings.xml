@@ -23,9 +23,9 @@
             android:defaultValue="vpn"
             app:useSimpleSummaryProvider="true" />
 
-        <SwitchPreference android:key="mobile_periodic" android:title="Периодическая проверка сервисов"
-            android:summary="Выключено: проверка только при запуске, смене сети и по запросу. Включено: дополнительная проверка раз в час и наблюдение обмена."
-            android:defaultValue="false" />
+        <SwitchPreference android:key="mobile_auto_three_days" android:title="Автоподбор раз в 3 дня"
+            android:summary="Срок сохраняется после перезагрузки. Между циклами сетевых проверок нет; проверку можно запросить вручную."
+            android:defaultValue="true" />
         <SwitchPreference android:key="mobile_recovery" android:title="Восстанавливать ранее включённый VPN"
             android:summary="После перезагрузки или остановки системой. Ручное выключение запоминается. Android может ограничить фоновый запуск."
             android:defaultValue="true" />

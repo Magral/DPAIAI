@@ -31,15 +31,14 @@ object MobileStrategyPolicy {
         val rest = commands.indices.map { (start+it)%commands.size }.filter { it !in priority }
         return (priority+rest).take(limit)
     }
-    fun window(context: Context,target: ServiceTargets.Target): List<String> {
-        val prefs = context.getPreferences(); val key = "${target.id}.${profile(context)}"
-        val saved = prefs.getString("mobile_good.$key",null) ?: prefs.getString("tuned_${target.id}",null)?.let { CatalogProtocol.id(it) }
-        val commands = RuntimeCatalog.commands; val ids = RuntimeCatalog.ids.take(commands.size)
+    fun window(context: Context,target: ServiceTargets.Target,limit: Int = Int.MAX_VALUE): List<String> {
+        val prefs = context.getPreferences()
+        val store = MobileHistory.store(context,target.id)
+        val excluded = store.excludedIds()
+        val commands = RuntimeCatalog.commands.toList()
         val imported = prefs.getString("mobile_imported.${target.id}",null)?.takeIf { CatalogProtocol.validCommand(it) }
-        val backups = MobileHistory.backups(context,target.id)
-        val ordered = ordered(ids,target.preferred,commands,saved,prefs.getInt("mobile_cursor.$key",0),backups = backups.map { CatalogProtocol.id(it) }).map { commands[it] }
-        val extra = (listOfNotNull(imported)+backups.filter { it !in commands }.take(2)).distinct()
-        return (extra+ordered.take((9-extra.size).coerceAtLeast(1))+ordered.takeLast(3)).distinct().take(12)
+        return (listOfNotNull(imported)+store.choices().map { it.getString("command") }+target.preferred+commands)
+            .distinct().filter { CatalogProtocol.id(it) !in excluded }.take(limit)
     }
     fun advance(context: Context,target: String,command: String) {
         val i = RuntimeCatalog.ids.indexOf(CatalogProtocol.id(command))

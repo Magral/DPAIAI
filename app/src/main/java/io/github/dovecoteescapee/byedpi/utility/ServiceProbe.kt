@@ -10,11 +10,11 @@ import javax.net.ssl.*
 
 object ServiceProbe {
     class Session {
-        private val raw = java.util.concurrent.atomic.AtomicReference<java.net.Socket?>()
+        private val sockets = java.util.Collections.newSetFromMap(java.util.concurrent.ConcurrentHashMap<java.net.Socket,Boolean>())
         private val stopped = java.util.concurrent.atomic.AtomicBoolean(false)
-        fun register(socket: java.net.Socket) { raw.set(socket); checkActive(); }
-        fun checkActive() { if (stopped.get()) { raw.get()?.close(); throw java.util.concurrent.CancellationException() } }
-        fun cancel() { stopped.set(true); runCatching { raw.get()?.close() } }
+        fun register(socket: java.net.Socket) { sockets.add(socket);checkActive() }
+        fun checkActive() { if (stopped.get()) { sockets.forEach { runCatching { it.close() } };throw java.util.concurrent.CancellationException() } }
+        fun cancel() { stopped.set(true);sockets.forEach { runCatching { it.close() } } }
     }
     fun publicResponse(kind: String,status: Int,type: String,body: ByteArray): Boolean = when (kind) {
         "youtube" -> status == 204
@@ -23,67 +23,72 @@ object ServiceProbe {
             (body[0].toInt() and 255) == 255 && (body[1].toInt() and 255) == 216 && (body[2].toInt() and 255) == 255
         else -> false
     }
+
     fun check(id: String,command: String,port: Int,session: Session = Session(),onProgress: (String)->Unit = {}): JSONObject {
-        val target = ServiceTargets.target(id); val rows = JSONArray(); var success = 0; var publicSuccess = 0; var publicTotal = 0
+        val target = ServiceTargets.target(id)
         val start = System.nanoTime()
-        val failed = mutableSetOf<String>()
-        val expectedTotal = target.endpoints.size*2
-        fun remaining() = 180000L-(System.nanoTime()-start)/1000000
-        repeat(2) { round ->
-            for (spec in target.endpoints) {
+        val rows = mutableListOf<JSONObject>()
+        try {
+            for (round in 1..2) {
                 session.checkActive()
-                var transport = false; var content = false; var detail = ""; var stage = "start"
-                val prefix = "${rows.length()+1}/$expectedTotal · ${spec.host} · раунд ${round+1}"
-                fun progress(value: String) { stage = value; onProgress("$prefix: $value") }
-                if (spec.kind != "tls") publicTotal++
-                val skip = spec.host in failed || remaining() <= 0
-                val effectiveCommand = if (MobilePlan.dual(command)) MobilePlan.command(command,if (spec in ServiceTargets.target("instagram").endpoints) "instagram" else "youtube") else command
-                val readTimeout = MobileStrategyPolicy.timeout(effectiveCommand)
-                val budget = minOf(readTimeout.toLong()+3000,remaining()).coerceAtLeast(1)
-                val deadline = ProbeDeadline(budget)
-                try {
-                    if (skip) throw IOException(if (spec.host in failed) "Повтор пропущен: предыдущая проверка узла не пройдена" else "Общий лимит стратегии 180 с")
-                    progress("подключение; лимит узла ${budget/1000} с")
-                    TargetProbe.socket(spec.host,443,port,readTimeout,{
-                        session.register(it); deadline.register(it)
-                    }) { value -> progress(when (value) {
-                        "local proxy connect" -> "соединение с локальным движком"
-                        "SOCKS authentication" -> "согласование SOCKS5"
-                        else -> "DNS / TCP к серверу через SOCKS5"
-                    }) }.use { raw ->
-                        ((SSLSocketFactory.getDefault() as SSLSocketFactory).createSocket(raw,spec.host,443,true) as SSLSocket).use { tls ->
-                            tls.soTimeout = readTimeout
-                            if (Build.VERSION.SDK_INT >= 24) tls.sslParameters = tls.sslParameters.apply { endpointIdentificationAlgorithm = "HTTPS" }
-                            progress("TLS: ожидаем защищённое соединение")
-                            tls.startHandshake()
-                            if (Build.VERSION.SDK_INT < 24 && !HttpsURLConnection.getDefaultHostnameVerifier().verify(spec.host,tls.session)) throw IOException("TLS hostname mismatch")
-                            transport = true; detail = "TLS OK"
-                            if (spec.kind != "tls") {
-                                val range = if (spec.kind == "image") "Range: bytes=0-1023\r\n" else ""
-                                tls.outputStream.write(("GET ${spec.path} HTTP/1.1\r\nHost: ${spec.host}\r\nUser-Agent: Mozilla/5.0 (Android) DPI-Pilot\r\nAccept-Encoding: identity\r\n${range}Connection: close\r\n\r\n").toByteArray(Charsets.US_ASCII)); tls.outputStream.flush()
-                                progress("HTTP: ожидаем публичный ответ")
-                                val response = HttpCodec.read(BufferedInputStream(tls.inputStream),1024)
-                                content = publicResponse(spec.kind,response.status,response.headers["content-type"].orEmpty(),response.body)
-                                detail = "TLS OK; HTTP ${response.status}"+(if (!content) "; публичный контент не подтверждён" else "; публичный ответ OK")
-                            }
-                        }
-                    }
-                    deadline.check()
-                } catch (e: Exception) { detail += if (deadline.timedOut) "; $stage: общий лимит узла ${budget/1000} с" else "; $stage: ${e.javaClass.simpleName}: ${e.message?.take(160)}" }
-                finally { deadline.close() }
-                session.checkActive()
-                // Instagram's anonymous HTTP restrictions do not negate a successful TLS session.
-                val ok = transport && (spec.kind == "instagram" || spec.kind == "tls" || content)
-                if (ok) success++ else failed.add(spec.host)
-                if (content) publicSuccess++
-                onProgress("$prefix: ${if (ok) "OK" else "FAIL"}; $detail")
-                rows.put(JSONObject().put("host",spec.host).put("kind",spec.kind).put("required",spec.required).put("ok",ok).put("public",content).put("detail",detail).put("stage",stage).put("skipped",skip).put("round",round+1))
+                val children = java.util.Collections.synchronizedList(mutableListOf<Session>())
+                val completed = ParallelProbe.round(target.endpoints.size,session::checkActive,{ it.optBoolean("ok") },
+                    { synchronized(children) { children.forEach { it.cancel() } } }) { index ->
+                    val child = Session();children.add(child)
+                    // New children cannot outlive a concurrently cancelled round.
+                    if (Thread.currentThread().isInterrupted) child.cancel()
+                    request(target.endpoints[index],command,port,round,index,target.endpoints.size*2,session,child,onProgress)
+                }
+                rows.addAll(completed.map { it.value })
+                if (completed.size != target.endpoints.size || completed.any { !it.value.optBoolean("ok") }) break
             }
-        }
-        val result = JSONObject().put("success",success).put("total",rows.length()).put("publicSuccess",publicSuccess).put("publicTotal",publicTotal)
-            .put("elapsed",(System.nanoTime()-start)/1000000).put("rows",rows)
-        val assessment = ProbeAssessment.evaluate(id,result)
-        return result.put("requiredSuccess",assessment.requiredSuccess).put("requiredTotal",assessment.requiredTotal)
-            .put("extraSuccess",assessment.extraSuccess).put("extraTotal",assessment.extraTotal).put("publicEndpointsPassed",assessment.eligible)
+            session.checkActive()
+            val success = rows.count { it.optBoolean("ok") }
+            val result = JSONObject().put("success",success).put("total",target.endpoints.size*2).put("tested",rows.size)
+                .put("elapsed",(System.nanoTime()-start)/1000000).put("rows",JSONArray(rows))
+                .put("publicSuccess",rows.count { it.optBoolean("public") }).put("publicTotal",target.endpoints.count { it.kind in listOf("youtube","image") }*2)
+            val a = ProbeAssessment.evaluate(id,result)
+            return result.put("requiredSuccess",a.requiredSuccess).put("requiredTotal",a.requiredTotal)
+                .put("extraSuccess",a.extraSuccess).put("extraTotal",a.extraTotal).put("publicEndpointsPassed",a.eligible)
+                .put("latencyMs",if (a.eligible) ProbeAssessment.latency(result) else 0)
+        } finally { session.cancel() }
+    }
+    private fun request(spec: ServiceTargets.Endpoint,command: String,port: Int,round: Int,index: Int,total: Int,
+        parent: Session,child: Session,progress: (String)->Unit): JSONObject {
+        val start = System.nanoTime()
+        val readTimeout = MobileStrategyPolicy.timeout(command)
+        val deadline = ProbeDeadline(readTimeout.toLong()+3000)
+        var stage = "start";var detail = "";var transport = false;var content = false;var failed = false
+        val prefix = "${(round-1)*(total/2)+index+1}/$total · ${spec.host} · раунд $round"
+        fun report(value: String) { stage = value;progress("$prefix: $value") }
+        try {
+            report("DNS / TCP через локальный SOCKS5")
+            TargetProbe.socket(spec.host,443,port,readTimeout,{ parent.register(it);child.register(it);deadline.register(it) }).use { raw ->
+                ((SSLSocketFactory.getDefault() as SSLSocketFactory).createSocket(raw,spec.host,443,true) as SSLSocket).use { tls ->
+                    tls.soTimeout = readTimeout
+                    if (Build.VERSION.SDK_INT >= 24) tls.sslParameters = tls.sslParameters.apply { endpointIdentificationAlgorithm = "HTTPS" }
+                    report("TLS");tls.startHandshake()
+                    if (Build.VERSION.SDK_INT < 24 && !HttpsURLConnection.getDefaultHostnameVerifier().verify(spec.host,tls.session)) throw IOException("TLS hostname mismatch")
+                    transport = true;detail = "TLS OK"
+                    // Instagram eligibility is transport-only: avoid an HTTP wait that cannot change that verdict.
+                    if (spec.kind in listOf("youtube","image")) {
+                        val range = if (spec.kind == "image") "Range: bytes=0-1023\r\n" else ""
+                        tls.outputStream.write(("GET ${spec.path} HTTP/1.1\r\nHost: ${spec.host}\r\nUser-Agent: DPI-Pilot\r\nAccept-Encoding: identity\r\n${range}Connection: close\r\n\r\n").toByteArray(Charsets.US_ASCII));tls.outputStream.flush()
+                        report("HTTP")
+                        val response = HttpCodec.read(BufferedInputStream(tls.inputStream),1024)
+                        content = publicResponse(spec.kind,response.status,response.headers["content-type"].orEmpty(),response.body)
+                        detail += "; HTTP ${response.status}"
+                    }
+                }
+            }
+            deadline.check()
+        } catch (e: java.util.concurrent.CancellationException) { throw e }
+        catch (e: Exception) { failed = true;detail += "; $stage: ${e.javaClass.simpleName}: ${e.message?.take(100)}" }
+        finally { deadline.close() }
+        parent.checkActive();child.checkActive()
+        val ok = !failed && transport && (spec.kind !in listOf("youtube","image") || content)
+        progress("$prefix: ${if (ok) "OK" else "FAIL"}; $detail")
+        return JSONObject().put("host",spec.host).put("kind",spec.kind).put("round",round).put("ok",ok).put("public",content)
+            .put("skipped",false).put("detail",detail).put("stage",stage).put("elapsedMs",((System.nanoTime()-start)/1000000).coerceAtLeast(1))
     }
 }

@@ -11,9 +11,10 @@ object MobileSetup {
         var plan = MobilePlan.saved(prefs)
         for (id in listOf("instagram","youtube")) {
             val good = prefs.getString("mobile_good.$id.${MobileStrategyPolicy.profile(context)}",null)
-            val preferred = MobileHistory.entries(context,id).firstOrNull { it.optInt("good") > 0 && io.github.dovecoteescapee.byedpi.catalog.CatalogProtocol.id(it.optString("command")) == good }?.optString("command")
+            val preferred = MobileHistory.store(context,id).choices().firstOrNull { io.github.dovecoteescapee.byedpi.catalog.CatalogProtocol.id(it.optString("command")) == good }?.optString("command")
                 ?: MobileHistory.backups(context,id).firstOrNull()
-            preferred?.let { plan = MobilePlan.replace(plan,id,it) }
+            val fallback = preferred ?: if (MobileHistory.store(context,id).excluded(MobilePlan.command(plan,id))) MobileStrategyPolicy.window(context,ServiceTargets.target(id)).firstOrNull() else null
+            fallback?.let { plan = MobilePlan.replace(plan,id,it) }
         }
         prefs.edit().putStringSet(TargetApps.KEY,selected).apply()
         MobileStrategyPolicy.apply(prefs,MobilePlan.BOTH,plan)

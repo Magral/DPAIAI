@@ -14,10 +14,10 @@ class ProbeAssessmentTest {
             .put("host",endpoint.host).put("kind",endpoint.kind).put("round",round).put("skipped",false)
             .put("ok",endpoint.required || extra).put("public",endpoint.kind in listOf("youtube","image","instagram")))
     }
-    @Test fun successfulSiteAndJpegAreNotRejectedByAnUnresponsiveRedirector() {
+    @Test fun partialSiteAndJpegCannotQualifyWithoutCompleteApiAndCdnChecks() {
         val result = JSONObject().put("rows",rows("youtube",false))
         val score = ProbeAssessment.evaluate("youtube",result)
-        assertTrue(score.eligible); assertFalse(score.complete)
+        assertFalse(score.eligible); assertFalse(score.complete)
         assertEquals(4,score.requiredSuccess); assertEquals(4,score.requiredTotal)
         assertEquals(0,score.extraSuccess); assertEquals(4,score.extraTotal)
     }
@@ -38,7 +38,7 @@ class ProbeAssessmentTest {
         assertTrue(ProbeAssessment.evaluate("instagram",JSONObject().put("rows",instagram)).eligible)
         instagram.getJSONObject(1).put("ok",false)
         val combined = JSONArray(instagram.toString())
-        val youtube = rows("youtube",false)
+        val youtube = rows("youtube")
         for (i in 0 until youtube.length()) combined.put(youtube.getJSONObject(i))
         val result = JSONObject().put("rows",combined)
         assertTrue(ProbeAssessment.evaluate("youtube",result).eligible)
