@@ -40,7 +40,7 @@ class KnownStrategiesTest {
         val restored = QualityStore(prefs).apply { network("wifi-a") }
         assertEquals((1..6).toSet(),restored.choices(emptyList()).toSet())
         assertFalse(7 in restored.choices(emptyList()))
-        assertTrue(restored.describe(1).contains("1/1"))
+        assertTrue(restored.describe(1).contains("6/6 · пройдена"))
         restored.network("wifi-b")
         assertTrue(restored.choices(emptyList()).isEmpty())
         restored.network("wifi-a")
@@ -63,6 +63,8 @@ class KnownStrategiesTest {
         restored.network("wifi-a")
         assertEquals(setOf(2),restored.excluded())
         restored.resetExclusions()
+        assertEquals(listOf(1,3),restored.choices(emptyList()))
+        restored.approved(2,ProbeQuality(true,6,40),3000)
         assertEquals(listOf(2,1,3),restored.choices(emptyList()))
         assertTrue(QualityStore(prefs).apply { network("wifi-a") }.excluded().isEmpty())
     }
@@ -74,6 +76,32 @@ class KnownStrategiesTest {
         val saved = org.json.JSONObject(prefs.getString("quality.wifi-a","{}").orEmpty())
         assertTrue(saved.getJSONObject("removed-command").getBoolean("excluded"))
         assertFalse(store.summary().contains("№0"))
+    }
+    @Test fun oldCountersAndLegacyHistoryNeverQualifyWithoutAnExplicitCompleteResult() {
+        val prefs = preferences()
+        val id = RuntimeCatalog.ids[1]
+        prefs.edit().putString("quality.wifi-a",org.json.JSONObject().put(id,
+            org.json.JSONObject().put("ok",3).put("fail",3).put("latency",1).put("excluded",false)).toString()).apply()
+        val store = QualityStore(prefs).apply { network("wifi-a") }
+        assertTrue(store.choices(listOf(1,2)).isEmpty())
+        store.approved(1,ProbeQuality(true,6,100),1000)
+        assertEquals(listOf(1),store.choices(listOf(2)))
+        assertTrue(store.describe(1).contains("Последняя проверка: 6/6"))
+        assertTrue(store.describe(1).contains("успешных 4, отказов 3"))
+    }
+    @Test fun partialFastCandidateCannotEnterMenuOrReturnAfterResetAndRestart() {
+        val prefs = preferences()
+        val store = QualityStore(prefs).apply { network("wifi-a") }
+        store.approved(1,ProbeQuality(true,6,200),1000)
+        store.approved(2,ProbeQuality(true,3,1),1000)
+        assertEquals(listOf(1),store.choices(listOf(2)))
+        assertTrue(store.describe(2).contains("3/6 · не пройдена"))
+        store.failed(1,quality=ProbeQuality(false,3,1))
+        store.resetExclusions()
+        assertTrue(store.choices(listOf(1,2)).isEmpty())
+        assertTrue(QualityStore(prefs).apply { network("wifi-a") }.choices(listOf(1,2)).isEmpty())
+        store.approved(2,ProbeQuality(true,6,50),2000)
+        assertEquals(listOf(2),store.choices(emptyList()))
     }
     @Test fun missingStableIdsCannotSelectAnotherCommandAndLegacySuccessIsIncludedOnce() {
         val ids = RuntimeCatalog.ids

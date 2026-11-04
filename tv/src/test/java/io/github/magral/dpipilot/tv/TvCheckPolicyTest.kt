@@ -16,6 +16,20 @@ class TvCheckPolicyTest {
         assertFalse(TvCheckPolicy.shouldCheck(true,false,started,started-1))
         assertEquals(TvCheckPolicy.INTERVAL,TvCheckPolicy.remaining(started,started-1))
     }
+    @Test fun completeResultIsMandatoryRegardlessOfBooleanOrLowLatency() {
+        val good = ProbeQuality(true,6,200)
+        for (passed in listOf(0,1,3,5,7)) {
+            val partial = ProbeQuality(true,passed,1)
+            assertFalse(partial.eligible)
+            assertFalse(TvProbe.Result(true,"partial",passed,partial).ok)
+            assertFalse(TvProbe.Result(true,"inconsistent",passed,good).ok)
+            assertFalse(QualityPolicy.better(partial,good,true))
+            assertTrue(QualityPolicy.regression(good,partial))
+            assertEquals(1,TvCheckPolicy.fastest(1 to good,listOf(2 to partial)))
+        }
+        assertFalse(TvProbe.Result(false,"failed",6,good).ok)
+        assertTrue(TvProbe.Result(true,"complete",6,good).ok)
+    }
     @Test fun minimumUsesUnclampedMillisecondsNotOldRankAndNeverSelectsPartialOrUnknownLatency() {
         val current = 1 to ProbeQuality(true,6,40000)
         val candidates = listOf(2 to ProbeQuality(true,6,35000),3 to ProbeQuality(false,5,1),4 to ProbeQuality(true,6,0))

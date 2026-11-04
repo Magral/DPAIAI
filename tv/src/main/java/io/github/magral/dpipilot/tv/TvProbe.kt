@@ -14,7 +14,9 @@ object TvProbe {
         Spec("youtube","www.youtube.com","/generate_204"),
         Spec("image","i.ytimg.com","/vi/jNQXAC9IVRw/hqdefault.jpg"),
         Spec("cdn","redirector.googlevideo.com","/"))
-    data class Result(val ok: Boolean,val detail: String,val score: Int = 0,val quality: ProbeQuality = ProbeQuality(ok,score,0))
+    class Result(ok: Boolean,val detail: String,val score: Int = 0,val quality: ProbeQuality = ProbeQuality(ok,score,0)) {
+        val ok: Boolean = ok && score == 6 && quality.eligible
+    }
     class Session {
         private val socket = java.util.concurrent.atomic.AtomicReference<java.net.Socket?>()
         private val stopped = java.util.concurrent.atomic.AtomicBoolean(false)

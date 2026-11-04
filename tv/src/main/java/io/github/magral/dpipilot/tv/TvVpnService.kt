@@ -391,7 +391,7 @@ class TvVpnService : VpnService() {
         if (latest.ok && !manual) {
             confirm(pending.candidate,latest.quality)
             if (chosenManually) prefs.edit().putString("manual_id.$profile",RuntimeCatalog.ids[pending.candidate]).apply()
-        } else if (!latest.ok) reputation.failed(pending.candidate)
+        } else if (!latest.ok) reputation.failed(pending.candidate,quality=latest.quality)
         TvState.update(this,"Испытание №${pending.candidate+1} завершено: ${if (latest.ok) "пробы пройдены; полезный обмен учтён отдельно" else "успех не подтверждён"}")
         if (latest.ok && !manual) { waitForCheck(3600000); return true }
         return false
@@ -449,7 +449,7 @@ class TvVpnService : VpnService() {
         finally { next.close(); scoutLease = null }
         if (!sameNetwork(network) || prefs.contains("manual_request")) { requested.set(true); return true }
         if (!result.ok) {
-            reputation.failed(index)
+            reputation.failed(index,quality=result.quality)
             TvState.update(this,"Выбранная №${index+1} не прошла проверку; №${active+1} сохранена. ${result.detail}")
             if (trial == null) { waitForCheck(3600000); return true }
             return false
@@ -531,7 +531,7 @@ class TvVpnService : VpnService() {
                 if (!sameNetwork(network) || prefs.contains("manual_request")) { requested.set(true); continue }
                 if (reviewTrial(result,network,stallRequested.getAndSet(false))) continue
                 if (!result.ok) {
-                    reputation.failed(active); loadQuarantine()
+                    reputation.failed(active,quality=result.quality); loadQuarantine()
                     val reserve = reputation.choices(history).firstOrNull { it != active }
                     if (reserve != null) {
                         beginTrial(active,reserve,ProbeQuality(false,0,0),false)
@@ -553,7 +553,7 @@ class TvVpnService : VpnService() {
             val current = if (active !in blocked) healthy(active) else TvProbe.Result(false,"Вариант исключён; повторная проверка пропущена")
             if (!sameNetwork(network) || prefs.contains("manual_request")) { requested.set(true); continue }
             if (current.ok) confirm(active,current.quality)
-            else { reputation.failed(active); loadQuarantine(); TvState.verified = false }
+            else { reputation.failed(active,quality=current.quality); loadQuarantine(); TvState.verified = false }
             val candidates = mutableListOf<Pair<Int,ProbeQuality>>()
             val window = TvPolicy.scanWindow(known,active,blocked.keys,0,TvPolicy.strategies.size)
             TvState.update(this,"Редкий фоновый подбор: ${window.size} вариантов; ${blocked.size} исключены. Выбирается минимальная задержка HTTPS")
@@ -572,7 +572,7 @@ class TvVpnService : VpnService() {
                 if (result.ok) {
                     reputation.approved(index,result.quality,System.currentTimeMillis()); candidates.add(index to result.quality)
                 } else {
-                    reputation.failed(index); loadQuarantine()
+                    reputation.failed(index,quality=result.quality); loadQuarantine()
                     TvState.update(this,"№${index+1} исключена для этой сети; больше не проверяется до сброса. ${result.detail.take(180)}")
                 }
             }

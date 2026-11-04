@@ -1,2 +1,1 @@
-TV 0.6.4: persisted three-day per-network scan budget, on-demand checks, permanent failed-command exclusions with explicit reset, HTTPS-latency sorted picker and minimum-latency automatic selection. Quiet between cycles; signed update.
-Handle bounded active-probe timeouts as strategy failures without discarding the scan cycle.
+TV 0.6.5: require explicit latest 6/6 success in menu, persistence and automatic selection; reject partial results independently of flags/latency. Distinguish last subtests from historical cycles. Legacy/reset records must requalify. Permanent signing.
