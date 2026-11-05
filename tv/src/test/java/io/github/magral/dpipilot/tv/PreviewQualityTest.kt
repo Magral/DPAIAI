@@ -2,20 +2,28 @@ package io.github.magral.dpipilot.tv
 
 import org.junit.Assert.*
 import org.junit.Test
-import java.awt.image.BufferedImage
 import java.io.ByteArrayOutputStream
 import java.io.ByteArrayInputStream
-import javax.imageio.ImageIO
 
 class PreviewQualityTest {
+    // Android's compile API omits java.desktop. Reflection keeps the fixture codec on the host JVM only.
+    private val codec get() = Class.forName("javax.imageio.ImageIO")
     private fun jpeg(width: Int = 480,height: Int = 360): ByteArray {
-        val image = BufferedImage(width,height,BufferedImage.TYPE_INT_RGB)
-        for(y in 0 until height) for(x in 0 until width) image.setRGB(x,y,(x*37+y*13)*123457)
-        return ByteArrayOutputStream().also { ImageIO.write(image,"jpeg",it) }.toByteArray()
+        val type = Class.forName("java.awt.image.BufferedImage")
+        val n = java.lang.Integer.TYPE
+        val image = type.getConstructor(n,n,n).newInstance(width,height,1)
+        val pixel = type.getMethod("setRGB",n,n,n)
+        for(y in 0 until height) for(x in 0 until width) pixel.invoke(image,x,y,(x*37+y*13)*123457)
+        val out = ByteArrayOutputStream()
+        codec.getMethod("write",Class.forName("java.awt.image.RenderedImage"),String::class.java,java.io.OutputStream::class.java).invoke(null,image,"jpeg",out)
+        return out.toByteArray()
     }
     private fun response(body: ByteArray,status: Int = 200,capped: Boolean = false) =
         HttpCodec.Response(status,mapOf("content-type" to "image/jpeg"),body,capped)
-    private fun decode(bytes: ByteArray): PreviewBody.Size? = ImageIO.read(ByteArrayInputStream(bytes))?.let { PreviewBody.Size(it.width,it.height) }
+    private fun decode(bytes: ByteArray): PreviewBody.Size? {
+        val image = codec.getMethod("read",java.io.InputStream::class.java).invoke(null,ByteArrayInputStream(bytes)) ?: return null
+        return PreviewBody.Size(image.javaClass.getMethod("getWidth").invoke(image) as Int,image.javaClass.getMethod("getHeight").invoke(image) as Int)
+    }
     @Test fun completeDecodableImagesPassButTheOldOneKilobytePrefixAndPlaceholdersDoNot() {
         val full = jpeg()
         assertTrue(full.size > 1024)
