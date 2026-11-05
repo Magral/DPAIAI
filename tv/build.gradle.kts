@@ -13,6 +13,9 @@ val copyShared by tasks.registering(Sync::class) {
         include("io/github/dovecoteescapee/byedpi/core/TProxyService.kt")
         include("io/github/dovecoteescapee/byedpi/utility/ArgumentsUtils.kt")
         include("io/github/dovecoteescapee/byedpi/utility/TargetProbe.kt")
+        include("io/github/dovecoteescapee/byedpi/utility/ParallelProbe.kt")
+        include("io/github/dovecoteescapee/byedpi/utility/ProbeSession.kt")
+        include("io/github/dovecoteescapee/byedpi/utility/ProbeDeadline.kt")
     }
     into(sharedSources)
 }
@@ -24,8 +27,8 @@ android {
         applicationId = "io.github.magral.dpipilot.tv"
         minSdk = 21
         targetSdk = 34
-        versionCode = 15
-        versionName = "0.6.5"
+        versionCode = 16
+        versionName = "0.6.6"
         ndk { abiFilters.addAll(listOf("armeabi-v7a","arm64-v8a","x86","x86_64")) }
     }
     buildFeatures { buildConfig = true }

@@ -1,1 +1,2 @@
-TV 0.6.5: require explicit latest 6/6 success in menu, persistence and automatic selection; reject partial results independently of flags/latency. Distinguish last subtests from historical cycles. Legacy/reset records must requalify. Permanent signing.
+DPI Pilot 0.6.6
+Shared race-safe probe cancellation; TV parallel fail-fast host checks and whole-request deadlines. Strict complete results and three-day schedules retained.

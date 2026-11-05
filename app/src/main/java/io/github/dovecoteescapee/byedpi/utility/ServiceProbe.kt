@@ -9,13 +9,7 @@ import java.io.IOException
 import javax.net.ssl.*
 
 object ServiceProbe {
-    class Session {
-        private val sockets = java.util.Collections.newSetFromMap(java.util.concurrent.ConcurrentHashMap<java.net.Socket,Boolean>())
-        private val stopped = java.util.concurrent.atomic.AtomicBoolean(false)
-        fun register(socket: java.net.Socket) { sockets.add(socket);checkActive() }
-        fun checkActive() { if (stopped.get()) { sockets.forEach { runCatching { it.close() } };throw java.util.concurrent.CancellationException() } }
-        fun cancel() { stopped.set(true);sockets.forEach { runCatching { it.close() } } }
-    }
+    class Session : ProbeSession()
     fun publicResponse(kind: String,status: Int,type: String,body: ByteArray): Boolean = when (kind) {
         "youtube" -> status == 204
         "instagram" -> status in listOf(200,204,301,302,303,307,308)
@@ -31,12 +25,10 @@ object ServiceProbe {
         try {
             for (round in 1..2) {
                 session.checkActive()
-                val children = java.util.Collections.synchronizedList(mutableListOf<Session>())
+                val child = Session()
                 val completed = ParallelProbe.round(target.endpoints.size,session::checkActive,{ it.optBoolean("ok") },
-                    { synchronized(children) { children.forEach { it.cancel() } } }) { index ->
-                    val child = Session();children.add(child)
-                    // New children cannot outlive a concurrently cancelled round.
-                    if (Thread.currentThread().isInterrupted) child.cancel()
+                    child::cancel) { index ->
+                    session.checkActive();child.checkActive()
                     request(target.endpoints[index],command,port,round,index,target.endpoints.size*2,session,child,onProgress)
                 }
                 rows.addAll(completed.map { it.value })
