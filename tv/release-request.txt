@@ -1,2 +1,1 @@
-DPI Pilot 0.6.6
-Shared race-safe probe cancellation; TV parallel fail-fast host checks and whole-request deadlines. Strict complete results and three-day schedules retained.
+TV 0.6.7: full JPEG/WebP previews, repeated transfer timing and stall limits; stability-first ranking instead of ping-only selection. User playback feedback excludes the strategy and tests a reserve promptly. Three-day cadence retained; permanent signing.

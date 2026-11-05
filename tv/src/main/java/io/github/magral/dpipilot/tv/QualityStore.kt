@@ -18,7 +18,7 @@ class QualityStore(private val prefs: SharedPreferences) {
             records[id] = QualityRecord(r.optInt("ok").coerceAtLeast(0),r.optInt("fail").coerceAtLeast(0),r.optInt("stall").coerceAtLeast(0),r.optInt("rollback").coerceAtLeast(0),
                 r.optLong("useful").coerceAtLeast(0),r.optLong("active").coerceAtLeast(0),r.optLong("latency").coerceAtLeast(0),r.optLong("seen").coerceAtLeast(0),
                 r.optBoolean("excluded",r.optInt("fail") > 0 && r.optInt("ok") == 0),
-                r.optInt("last_passed",-1),r.optBoolean("last_complete",false))
+                r.optInt("last_passed",-1),r.optBoolean("last_complete",false),PreviewQuality.decode(r.optJSONArray("previews")),r.optInt("reports"))
         }
     }
     private fun record(index: Int) = records.getOrPut(RuntimeCatalog.ids[index]) { QualityRecord() }
@@ -26,11 +26,12 @@ class QualityStore(private val prefs: SharedPreferences) {
         if (!quality.eligible) { failed(index,quality=quality); return }
         val r = record(index); if (r.excluded) return
         r.successes++; r.lastSeen = now; r.latencyMs = quality.latencyMs
-        r.lastPassed = quality.passed; r.lastComplete = true
+        r.lastPassed = quality.passed; r.lastComplete = true; r.preview = quality.preview
         flush()
     }
-    fun failed(index: Int,stall: Boolean = false,rollback: Boolean = false,quality: ProbeQuality? = null) {
+    fun failed(index: Int,stall: Boolean = false,rollback: Boolean = false,quality: ProbeQuality? = null,user: Boolean = false) {
         val r = record(index); r.lastComplete = false; r.lastPassed = quality?.passed?.coerceIn(0,6) ?: -1
+        r.preview = quality?.preview ?: PreviewQuality(); if (user) r.reports++
         r.lastSeen = System.currentTimeMillis(); r.excluded = true; r.failures++; if (stall) r.stalls++; if (rollback) r.rollbacks++
         flush()
     }
@@ -43,23 +44,26 @@ class QualityStore(private val prefs: SharedPreferences) {
     fun exclude(index: Int) { record(index).apply { excluded = true; lastComplete = false }; flush() }
     fun resetExclusions() { records.values.forEach { it.excluded = false }; flush() }
     fun latency(index: Int): Long = records[RuntimeCatalog.ids[index]]?.latencyMs ?: 0L
+    fun quality(index: Int): ProbeQuality = records[RuntimeCatalog.ids[index]]?.let { ProbeQuality(it.lastComplete,it.lastPassed,it.latencyMs,it.preview) } ?: ProbeQuality(false,0,0)
+    fun preview(index: Int) = quality(index).preview
     fun preferred(legacy: List<Int>): List<Int> = choices(legacy).take(3)
-    fun choices(legacy: List<Int>): List<Int> = TvCheckPolicy.ordered(TvPolicy.selectable(
-        records.entries.filter { it.value.fullSuccess }.map { it.key },
-        emptyList()),::latency) // Legacy history alone cannot prove a complete six-step test.
+    fun choices(legacy: List<Int>): List<Int> = records.entries.filter { it.value.fullSuccess }
+        .mapNotNull { TvPolicy.indexOfId(it.key) }
+        .sortedWith(compareBy<Int> { preview(it).score }.thenBy { latency(it) }.thenBy { it })
     fun describe(index: Int): String {
         val r = records[RuntimeCatalog.ids[index]] ?: return "Последняя полная проверка: не подтверждена"
-        val last = if (r.lastComplete && r.lastPassed == 6) "6/6 · пройдена" else if (r.lastPassed >= 0) "${r.lastPassed}/6 · не пройдена" else "не подтверждена"
-        return "Последняя проверка: $last; задержка HTTPS: ${r.latencyMs.takeIf { it > 0 }?.let { "$it мс" } ?: "не измерена"}; история полных проверок: успешных ${r.successes}, отказов ${r.failures}; полезный обмен: ${r.usefulSeconds/60} мин; откаты: ${r.rollbacks}"
+        val last = if (r.lastPassed >= 0) "узлы ${r.lastPassed}/6" else "узлы не проверены"
+        return "Последняя проверка: $last; ${r.preview.text()}; ${if (r.fullSuccess) "качество превью подтверждено" else "новая проверка качества не пройдена"}; жалоб ${r.reports}; задержка HTTPS: ${r.latencyMs} мс; в истории успешных ${r.successes}, отказов ${r.failures}; полезный обмен ${r.usefulSeconds/60} мин"
+
     }
-    fun summary(): String = records.entries.filter { it.value.fullSuccess && TvPolicy.indexOfId(it.key) != null }.sortedBy { it.value.latencyMs.takeIf { n -> n > 0 } ?: Long.MAX_VALUE }.take(5).joinToString("\n") { (id,r) ->
-        "№${(TvPolicy.indexOfId(id) ?: -1)+1}: последний тест 6/6; в истории успешных ${r.successes}, отказов ${r.failures}; полезный обмен ${r.usefulSeconds/60} мин; зависания ${r.stalls}; откаты ${r.rollbacks}; задержка ${r.latencyMs} мс"
+    fun summary(): String = records.entries.filter { it.value.fullSuccess && TvPolicy.indexOfId(it.key) != null }.sortedWith(compareBy<Map.Entry<String,QualityRecord>> { it.value.preview.score }.thenBy { it.value.latencyMs }).take(5).joinToString("\n") { (id,r) ->
+        "№${(TvPolicy.indexOfId(id) ?: -1)+1}: последний тест 6/6; ${r.preview.text()}; в истории успешных ${r.successes}, отказов ${r.failures}; полезный обмен ${r.usefulSeconds/60} мин; зависания ${r.stalls}; откаты ${r.rollbacks}; задержка ${r.latencyMs} мс"
     }.ifEmpty { "История качества ещё не накоплена" }
     fun flush() {
         if (profile.isEmpty()) return
         val root = JSONObject()
         for ((id,r) in records) root.put(id,JSONObject().put("ok",r.successes).put("fail",r.failures).put("stall",r.stalls).put("rollback",r.rollbacks)
-            .put("useful",r.usefulSeconds).put("active",r.activeSeconds).put("latency",r.latencyMs).put("seen",r.lastSeen).put("excluded",r.excluded).put("last_passed",r.lastPassed).put("last_complete",r.lastComplete))
+            .put("useful",r.usefulSeconds).put("active",r.activeSeconds).put("latency",r.latencyMs).put("seen",r.lastSeen).put("excluded",r.excluded).put("last_passed",r.lastPassed).put("last_complete",r.lastComplete).put("previews",r.preview.encode()).put("reports",r.reports))
         prefs.edit().putString("quality.$profile",root.toString()).apply()
         TvState.qualityHistory = summary()
     }

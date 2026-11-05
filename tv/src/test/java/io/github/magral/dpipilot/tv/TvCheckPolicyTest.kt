@@ -17,9 +17,9 @@ class TvCheckPolicyTest {
         assertEquals(TvCheckPolicy.INTERVAL,TvCheckPolicy.remaining(started,started-1))
     }
     @Test fun completeResultIsMandatoryRegardlessOfBooleanOrLowLatency() {
-        val good = ProbeQuality(true,6,200)
+        val good = PreviewFixtures.quality(true,6,200)
         for (passed in listOf(0,1,3,5,7)) {
-            val partial = ProbeQuality(true,passed,1)
+            val partial = PreviewFixtures.quality(true,passed,1)
             assertFalse(partial.eligible)
             assertFalse(TvProbe.Result(true,"partial",passed,partial).ok)
             assertFalse(TvProbe.Result(true,"inconsistent",passed,good).ok)
@@ -31,11 +31,11 @@ class TvCheckPolicyTest {
         assertTrue(TvProbe.Result(true,"complete",6,good).ok)
     }
     @Test fun minimumUsesUnclampedMillisecondsNotOldRankAndNeverSelectsPartialOrUnknownLatency() {
-        val current = 1 to ProbeQuality(true,6,40000)
-        val candidates = listOf(2 to ProbeQuality(true,6,35000),3 to ProbeQuality(false,5,1),4 to ProbeQuality(true,6,0))
+        val current = 1 to PreviewFixtures.quality(true,6,40000)
+        val candidates = listOf(2 to PreviewFixtures.quality(true,6,35000),3 to PreviewFixtures.quality(false,5,1),4 to PreviewFixtures.quality(true,6,0))
         assertEquals(2,TvCheckPolicy.fastest(current,candidates))
         assertEquals(1,TvCheckPolicy.fastest(current,listOf(2 to current.second)))
-        assertNull(TvCheckPolicy.fastest(null,listOf(3 to ProbeQuality(false,5,1))))
+        assertNull(TvCheckPolicy.fastest(null,listOf(3 to PreviewFixtures.quality(false,5,1))))
         assertEquals(listOf(2,1,3,4),TvCheckPolicy.ordered(listOf(3,1,2,4,1)) { mapOf(1 to 100L,2 to 40L,3 to 0L,4 to -1L).getValue(it) })
     }
 }

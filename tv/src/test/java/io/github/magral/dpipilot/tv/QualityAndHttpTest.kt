@@ -28,16 +28,16 @@ class QualityAndHttpTest {
         assertFalse(TvPolicy.acceptsPreview(200,"image/jpeg",jpeg.take(2).toByteArray()))
     }
     @Test fun validReachabilityNeedsNoPublicVideoLinkAndLatencyNoiseCannotTriggerReplacement() {
-        val baseline = ProbeQuality(true,6,2000)
+        val baseline = PreviewFixtures.quality(true,6,2000)
         assertTrue(baseline.eligible)
-        assertFalse(QualityPolicy.better(ProbeQuality(true,6,1800),baseline,false))
-        assertTrue(QualityPolicy.better(ProbeQuality(true,6,300),baseline,false))
-        assertFalse(QualityPolicy.better(ProbeQuality(false,5,1),baseline,true))
-        assertTrue(QualityPolicy.regression(baseline,ProbeQuality(false,4,100)))
-        assertFalse(QualityPolicy.regression(baseline,ProbeQuality(true,6,6000)))
+        assertFalse(QualityPolicy.better(PreviewFixtures.quality(true,6,1800),baseline,false))
+        assertTrue(QualityPolicy.better(PreviewFixtures.quality(true,6,300),baseline,false))
+        assertFalse(QualityPolicy.better(PreviewFixtures.quality(false,5,1),baseline,true))
+        assertTrue(QualityPolicy.regression(baseline,PreviewFixtures.quality(false,4,100)))
+        assertFalse(QualityPolicy.regression(baseline,PreviewFixtures.quality(true,6,6000)))
     }
     @Test fun rollbackNeedsEvidenceAndNeverReturnsToAKnownStalledPredecessor() {
-        val trial=Trial(1,2,1000,true,ProbeQuality(true,6,100))
+        val trial=Trial(1,2,1000,true,PreviewFixtures.quality(true,6,100))
         assertFalse(trial.rollback(2000,false,true))
         assertTrue(trial.rollback(46000,false,true))
         assertTrue(trial.rollback(2000,true,false))

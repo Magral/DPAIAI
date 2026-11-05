@@ -19,6 +19,7 @@ object TvState {
     @Volatile var phase = "Остановлено"
     @Volatile var networkProfile = ""
     @Volatile var network = "ещё не определена"
+    @Volatile var deliveryStatus = "Полная загрузка превью ещё не проверялась"
     @Volatile var qualityHistory = "История качества ещё не накоплена"
     @Volatile var trialDetail = "Пробное переключение не выполняется"
     @Volatile var stallDetail = "Признаков зависания нет"

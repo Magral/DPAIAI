@@ -3,8 +3,8 @@ package io.github.magral.dpipilot.tv
 import kotlin.math.ln
 
 /** Ranks bounded reachability checks; never claims to measure the viewer's video bitrate. */
-data class ProbeQuality(val controlOk: Boolean,val passed: Int,val latencyMs: Long) {
-    val eligible: Boolean get() = controlOk && passed == 6
+data class ProbeQuality(val controlOk: Boolean,val passed: Int,val latencyMs: Long,val preview: PreviewQuality = PreviewQuality()) {
+    val eligible: Boolean get() = controlOk && passed == 6 && preview.usable
     fun value(): Double = if (!eligible) passed.toDouble() else
         100.0-(latencyMs.coerceIn(0,30000)/1000.0)
 }
@@ -12,12 +12,15 @@ object QualityPolicy {
     fun better(candidate: ProbeQuality,current: ProbeQuality,forced: Boolean): Boolean {
         if (!candidate.eligible) return false
         if (forced || !current.eligible) return true
+        if (candidate.preview.score < current.preview.score*0.8) return true
+        if (candidate.preview.score > current.preview.score*1.2) return false
         // Useful live traffic is protected by PlaybackGuard before this comparison.
         // Only a large latency improvement can justify an optional idle trial.
         return candidate.latencyMs+500 < current.latencyMs*0.65
     }
     fun regression(previous: ProbeQuality,current: ProbeQuality): Boolean =
-        previous.eligible && !current.eligible
+        previous.eligible && (!current.eligible ||
+            (current.preview.score > previous.preview.score*1.8 && current.preview.worstMs > previous.preview.worstMs+1500))
 }
 
 data class Trial(val previous: Int,val candidate: Int,val started: Long,val restorable: Boolean,val baseline: ProbeQuality) {
@@ -27,8 +30,8 @@ data class Trial(val previous: Int,val candidate: Int,val started: Long,val rest
 }
 
 data class QualityRecord(var successes: Int = 0,var failures: Int = 0,var stalls: Int = 0,var rollbacks: Int = 0,
-    var usefulSeconds: Long = 0,var activeSeconds: Long = 0,var latencyMs: Long = 0,var lastSeen: Long = 0,var excluded: Boolean = false,var lastPassed: Int = -1,var lastComplete: Boolean = false) {
-    val fullSuccess: Boolean get() = !excluded && successes > 0 && lastComplete && lastPassed == 6
+    var usefulSeconds: Long = 0,var activeSeconds: Long = 0,var latencyMs: Long = 0,var lastSeen: Long = 0,var excluded: Boolean = false,var lastPassed: Int = -1,var lastComplete: Boolean = false,var preview: PreviewQuality = PreviewQuality(),var reports: Int = 0) {
+    val fullSuccess: Boolean get() = !excluded && successes > 0 && lastComplete && lastPassed == 6 && preview.usable
     fun rank(): Double = (successes+1.0)/(successes+failures+2.0)*100+
         ln(1+usefulSeconds.coerceIn(0,36000).toDouble())*8-
         stalls.coerceAtMost(20)*12-rollbacks.coerceAtMost(20)*20

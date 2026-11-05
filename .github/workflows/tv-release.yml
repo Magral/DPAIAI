@@ -54,6 +54,8 @@ jobs:
         run: python3 tv/src/test/python/native_auto_test.py
       - name: Prepare actual published catalog verification fixture
         run: python3 tv/strategies/prepare_fixture.py
+      - name: Validate public preview test fixtures
+        run: python3 scripts/verify-tv-preview-fixtures.py
       - name: Build and test TV release
         run: bash gradlew :tv:assembleRelease :tv:testReleaseUnitTest --stacktrace
       - name: Verify permanent certificate and prepare APK
@@ -102,7 +104,7 @@ jobs:
               release = (await github.rest.repos.createRelease({
                 owner,repo,tag_name:tag,target_commitish:context.sha,name:'DPI Pilot TV '+version,
                 draft:true,prerelease:false,make_latest:'false',
-                body:'ТВ: три узла одной стратегии проверяются параллельно в двух раундах. При первом отказе остальные запросы закрываются, второй раунд пропускается; только полный результат 6/6 допускается в рабочие. Задержка считается по времени отдельных запросов. Общий предел времени ограничивает DNS/SOCKS, TLS и HTTP, включая медленную передачу. Отмена закрывает все соединения и не позволяет поздним запросам продолжить работу. Расписание раз в три дня, ручной выбор и исключения сохранены. Установите поверх предыдущей ТВ-версии. Проверки узлов не гарантируют воспроизведение каждого ролика.\n\nSource: '+context.sha+'\nSHA-256 APK: '+digest.slice(7)
+                body:'ТВ: проверка теперь загружает целиком несколько JPEG/WebP-превью вместо первых 1024 байт одной картинки. Проверяются HTTP-фрейминг, декодирование, размеры изображения, время каждой загрузки и длинные паузы. Для годной стратегии нужны узлы 6/6 и шесть полных устойчивых загрузок превью. Стабильность загрузки имеет приоритет перед низким пингом.\n\nНовая кнопка «YouTube тормозит — сменить стратегию» исключает указанный вариант для этой сети по реальному отзыву и проверяет рабочий резерв без ожидания полного перебора. При испытании учитывается и повторное ухудшение загрузки превью, с откатом. Если тестовый файл отсутствует на сервере, стратегии массово не исключаются.\n\nАвтоподбор остаётся раз в три дня или по запросу. Прежний рабочий туннель сохраняется во время фоновых тестов; на обновлении сохранённая команда не заменяется только из-за новой схемы оценки. Старые 6/6 требуют повторной проверки качества превью. Для первого обновления списка нажмите «Проверить сейчас».\n\nПолные превью не являются проверкой битрейта каждого видео; ограничения провайдера, Wi-Fi и возможности декодирования приставки могут влиять на просмотр. Установить поверх ТВ-версии с постоянной подписью. Подробности: docs/TV_067.md.\n\nSource: '+context.sha+'\nSHA-256 APK: '+digest.slice(7)
               })).data;
             }
             const assets = (await github.rest.repos.listReleaseAssets({owner,repo,release_id:release.id})).data;
@@ -116,4 +118,3 @@ jobs:
             }
             if (release.draft) await github.rest.repos.updateRelease({owner,repo,release_id:release.id,draft:false,make_latest:'false'});
             core.notice(release.html_url);
-
