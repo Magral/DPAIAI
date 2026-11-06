@@ -19,6 +19,15 @@ object MobileStrategyPolicy {
             .mapNotNull { cm.getLinkProperties(it) }.map { "${it.interfaceName}|${it.dnsServers.mapNotNull { a -> a.hostAddress }.sorted()}" }.sorted().joinToString(";")
         return MessageDigest.getInstance("SHA-256").digest(links.toByteArray()).take(12).joinToString("") { "%02x".format(it.toInt() and 255) }
     }
+    /** Ephemeral identity: never used as a persisted profile or sent off device. */
+    fun connection(context: Context): String {
+        val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        return cm.allNetworks.filter {
+            val c = cm.getNetworkCapabilities(it)
+            c?.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_VPN) == true &&
+                c.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+        }.map { it.toString() }.sorted().joinToString(",")
+    }
     fun connected(context: Context): Boolean {
         val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
         return cm.allNetworks.any { val c = cm.getNetworkCapabilities(it); c?.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_VPN) == true && c.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) }

@@ -1,2 +1,1 @@
-DPI Pilot 0.9.1
-Shared race-safe probe cancellation; TV parallel fail-fast host checks and whole-request deadlines. Strict complete results and three-day schedules retained.
+Shared probe optimization: reusable bounded workers, interruptible cancellation and discard results after physical network replacement. Permanent signing.

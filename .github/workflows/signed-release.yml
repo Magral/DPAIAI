@@ -98,7 +98,7 @@ jobs:
               release = (await github.rest.repos.createRelease({
                 owner,repo,tag_name:tag,target_commitish:context.sha,name:'DPI Pilot '+version,
                 draft:true,prerelease:false,
-                body:'Смартфон: устранена гонка при отмене параллельной проверки. Все соединения текущего раунда закрываются, включая запросы, начатые одновременно с отменой. Сохранены Instagram и YouTube вместе, независимые стратегии, полные результаты 6/6 и 8/8, исключения для сети, ручной выбор и автоподбор раз в три дня. Установите поверх предыдущей телефонной версии. Проверки узлов не гарантируют работу аккаунта, Reels и каждого ролика.\n\nSource: '+context.sha+'\nSHA-256 APK: '+digest.slice(7)
+                body:"Оптимизированы проверки: общий пул до четырёх потоков с освобождением после простоя, отмена блокирующих проверок, отбрасывание результатов при смене подключения. Полные критерии допуска и редкое расписание сохранены. Установить поверх предыдущей версии с постоянной подписью. Подробности: docs/PROBE_OPTIMIZATION.md.\n\n"+'Source: '+context.sha+'\nSHA-256 APK: '+digest.slice(7)
               })).data;
             }
             const assets = (await github.rest.repos.listReleaseAssets({owner,repo,release_id:release.id})).data;

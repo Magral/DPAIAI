@@ -1,1 +1,1 @@
-TV 0.6.9: single bounded confirmation before excluding known or partially responsive strategies; zero-response unknowns stay fast; strict independent 6/6; no repeated preview downloads on confirmation. Permanent signing.
+Shared probe optimization: reusable bounded workers, interruptible cancellation and discard results after physical network replacement. Permanent signing.

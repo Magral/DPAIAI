@@ -19,9 +19,11 @@ open class ProbeSession {
     fun checkActive() { if (stopped) throw CancellationException() }
     fun cancelled(): Boolean = stopped
 
-    @Synchronized fun cancel() {
-        stopped = true
-        sockets.forEach { runCatching { it.close() } }
-        sockets.clear()
+    fun cancel() {
+        val closing = synchronized(this) {
+            stopped = true
+            sockets.toList().also { sockets.clear() }
+        }
+        closing.forEach { runCatching { it.close() } }
     }
 }

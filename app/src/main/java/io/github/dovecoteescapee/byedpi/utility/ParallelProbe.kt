@@ -2,15 +2,25 @@ package io.github.dovecoteescapee.byedpi.utility
 
 import java.util.concurrent.*
 
-/** Parallel hosts, one strategy. First failure closes siblings; unfinished probes never qualify. */
+/** Reused bounded workers; idle threads expire and every round owns only its own futures. */
 object ParallelProbe {
+    private val pool = ThreadPoolExecutor(4,4,30,TimeUnit.SECONDS,LinkedBlockingQueue<Runnable>(128),
+        ThreadFactory { r -> Thread(r,"service-probe").apply { isDaemon = true } }).apply { allowCoreThreadTimeOut(true) }
     data class Item<T>(val index: Int,val value: T)
     fun <T> round(size: Int,checkActive: ()->Unit,accept: (T)->Boolean,abort: ()->Unit,run: (Int)->T): List<Item<T>> {
-        val pool = Executors.newFixedThreadPool(minOf(4,size).coerceAtLeast(1)) { r -> Thread(r,"service-probe").apply { isDaemon = true } }
-        val completed = ExecutorCompletionService<Item<T>>(pool)
-        val futures = (0 until size).map { i -> completed.submit(Callable { Item(i,run(i)) }) }
+        require(size in 0..32)
+        val completed = LinkedBlockingQueue<FutureTask<Item<T>>>()
+        val futures = mutableListOf<FutureTask<Item<T>>>()
         val rows = mutableListOf<Item<T>>()
         try {
+            checkActive()
+            for (i in 0 until size) {
+                checkActive()
+                val task = object : FutureTask<Item<T>>(Callable { checkActive();Item(i,run(i)) }) {
+                    override fun done() { completed.offer(this) }
+                }
+                futures.add(task);pool.execute(task)
+            }
             while (rows.size < size) {
                 checkActive()
                 val next = completed.poll(100,TimeUnit.MILLISECONDS) ?: continue
@@ -20,7 +30,9 @@ object ParallelProbe {
             }
             return rows.sortedBy { it.index }
         } finally {
-            abort();futures.forEach { it.cancel(true) };pool.shutdownNow()
+            try { abort() } finally {
+                futures.forEach { it.cancel(true);pool.remove(it) }
+            }
         }
     }
 }

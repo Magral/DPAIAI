@@ -22,7 +22,8 @@ class MobileMonitor(private val context: Context,private val scope: CoroutineSco
     private val prefs get() = context.getPreferences()
     private fun automatic() = prefs.getBoolean("mobile_auto_three_days",true)
     private fun scanKey(id: String,profile: String) = "mobile_scan.$id.$profile"
-    private fun same(profile: String) = MobileStrategyPolicy.connected(context) && MobileStrategyPolicy.profile(context) == profile
+    private var connection = ""
+    private fun same(profile: String) = connection == MobileStrategyPolicy.connection(context) && MobileStrategyPolicy.connected(context) && MobileStrategyPolicy.profile(context) == profile
     private fun publish(message: String = "") {
         MobileStrategyPolicy.state = ServiceTargets.individual.joinToString("; ") { t ->
             reports[t.id]?.let { "${t.name}: ${ProbeAssessment.evaluate(t.id,it).text()}" } ?: "${t.name}: сохранённый маршрут"
@@ -57,6 +58,7 @@ class MobileMonitor(private val context: Context,private val scope: CoroutineSco
                 try {
                     if (!MobileStrategyPolicy.modern(prefs)) { publish("Перезапустите VPN после изменения настроек");return@launch }
                     if (!MobileStrategyPolicy.connected(context)) { publish("Нет физической сети; исключения не меняются");MobileFeedback.waitFor(15000);continue }
+                    connection = MobileStrategyPolicy.connection(context)
                     val currentProfile = MobileStrategyPolicy.profile(context)
                     if (profile != currentProfile) { profile = currentProfile;reports.clear();health.values.forEach { it.reset() } }
                     runtime.reap()
@@ -182,7 +184,7 @@ class MobileMonitor(private val context: Context,private val scope: CoroutineSco
         val profile = MobileStrategyPolicy.profile(context);val token = MobileFeedback.token(id)
         return try {
             awaitResult(id,profile,token) { withContext(Dispatchers.IO) {
-                withTimeout(150000) { ServiceProbe.check(id,command,1080,current) { text -> scope.launch { progress("${ServiceTargets.target(id).name}: $text") } } }
+                withTimeout(150000) { runInterruptible { ServiceProbe.check(id,command,1080,current) { text -> scope.launch { progress("${ServiceTargets.target(id).name}: $text") } } } }
             } }
         } finally { current.cancel();session = null }
     }

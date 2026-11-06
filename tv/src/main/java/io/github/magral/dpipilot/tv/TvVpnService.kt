@@ -277,14 +277,19 @@ class TvVpnService : VpnService() {
         TvState.nextCheckAt = 0
         TvState.probeDetail = "Проверка началась; порт $port"
         val session = TvProbe.Session()
+        val probeNetwork = physical()
         try {
             val pending = async(Dispatchers.IO) {
-                TvProbe.check(port,index,session,previews) { row ->
+                runInterruptible { TvProbe.check(port,index,session,previews) { row ->
                     TvState.probeDetail = "№${index+1}: $row"
                     TvState.update(this@TvVpnService,"Тест №${index+1}: $row")
-                }
+                } }
             }
             while (!pending.isCompleted) {
+                if (probeNetwork == null || !sameNetwork(probeNetwork)) {
+                    session.cancel();pending.cancelAndJoin()
+                    return@coroutineScope TvProbe.Result(false,"Сеть изменилась; результат отброшен",inconclusive=true)
+                }
                 TvState.beat(this@TvVpnService); sampleTraffic()
                 if (port == 19080 && trial?.rollback(SystemClock.elapsedRealtime(),false,stallRequested.get()) == true) {
                     session.cancel(); pending.cancel(); pending.join()
@@ -298,6 +303,7 @@ class TvVpnService : VpnService() {
             }
             val result = pending.await()
             currentCoroutineContext().ensureActive()
+            if (probeNetwork == null || !sameNetwork(probeNetwork)) return@coroutineScope TvProbe.Result(false,"Сеть изменилась; результат отброшен",inconclusive=true)
             TvState.lastCheckAt = System.currentTimeMillis()
             TvState.probeDetail = result.detail
             TvState.resultTimes[index] = System.currentTimeMillis()
