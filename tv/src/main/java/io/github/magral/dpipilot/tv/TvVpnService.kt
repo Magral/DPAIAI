@@ -614,8 +614,9 @@ class TvVpnService : VpnService() {
                 TvState.update(this,"Тестовое превью отсутствует на сервере; рабочий туннель сохранён, исключения не менялись")
                 waitForCheck(0);continue
             }
+            val failures = mutableListOf<Pair<Int,TvProbe.Result>>()
             if (current.ok) confirm(active,current.quality)
-            else { reputation.failed(active,quality=current.quality); loadQuarantine(); TvState.verified = false }
+            else { reputation.defer(active,current.quality);failures.add(active to current); TvState.verified = false }
             if (repair && current.ok) {
                 TvState.update(this,"Рабочая №${active+1} восстановлена: 6/6. Медленная или недоступная оценка превью не блокирует доступ")
                 waitForCheck(0);continue
@@ -639,10 +640,10 @@ class TvVpnService : VpnService() {
                 if (result.inconclusive) { sourcesUnavailable = true;break }
                 if (result.ok) {
                     reputation.approved(index,result.quality,System.currentTimeMillis()); candidates.add(index to result.quality)
-                    if (urgent) break // A complaint gets a working reserve promptly, not after a full-bank sweep.
+                    if (urgent || !current.ok) break // Restore failed access with the first fully verified reserve.
                 } else {
-                    reputation.failed(index,quality=result.quality); loadQuarantine()
-                    TvState.update(this,"№${index+1} исключена для этой сети; больше не проверяется до сброса. ${result.detail.take(180)}")
+                    reputation.defer(index,result.quality);failures.add(index to result)
+                    TvState.update(this,"№${index+1} не прошла; исключение ожидает контрольной проверки. ${result.detail.take(300)}")
                 }
             }
             if (!sameNetwork(network) || (prefs.contains("manual_request") || prefs.contains("manual_bad_request")) || explicitCheck.get()) { requested.set(true); continue }
@@ -651,6 +652,18 @@ class TvVpnService : VpnService() {
                 TvState.update(this,"Источник превью недоступен; подбор остановлен без массового исключения стратегий")
                 waitForCheck(0);continue
             }
+            if (failures.isNotEmpty() && current.ok) {
+                val control = healthy(active)
+                if (!sameNetwork(network) || prefs.contains("manual_request") || prefs.contains("manual_bad_request") || explicitCheck.get()) { requested.set(true);continue }
+                if (control.ok) {
+                    failures.forEach { (index,result) -> reputation.failed(index,quality=result.quality) }
+                    loadQuarantine()
+                } else {
+                    reputation.defer(active,control.quality);TvState.verified = false
+                    TvState.update(this,"Контрольная стратегия перестала отвечать; массовые исключения отменены, возможен общий сбой сети")
+                    waitForCheck(0);continue
+                }
+            }
             val best = TvCheckPolicy.fastest(if (current.ok) active to current.quality else null,candidates)
             if (best != null && best != active) {
                 beginTrial(active,best,current.quality,current.ok)
@@ -658,7 +671,7 @@ class TvVpnService : VpnService() {
                 release(); open(best); establish(network); networkId = network.toString()
                 continue
             }
-            TvState.update(this,if (best == active) "№${active+1} — лучший результат полной загрузки превью среди проверенных; туннель сохранён" else "Рабочих вариантов не найдено; исключения сохранены. Следующий автоподбор не раньше чем через 3 дня или по требованию")
+            TvState.update(this,if (best == active) "№${active+1} — лучший результат полной загрузки превью среди проверенных; туннель сохранён" else "Рабочих вариантов не найдено; новые исключения не записаны — возможен общий сбой сети. Следующий автоподбор не раньше чем через 3 дня или по требованию")
             waitForCheck(0)
         }
     }

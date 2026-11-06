@@ -45,6 +45,10 @@ class QualityStore(private val prefs: SharedPreferences) {
         r.lastPassed = quality.passed; r.lastComplete = true; r.preview = quality.preview
         flush()
     }
+    fun defer(index: Int,quality: ProbeQuality) {
+        val r = record(index);r.lastComplete = false;r.lastPassed = quality.passed
+        r.preview = quality.preview;flush()
+    }
     fun failed(index: Int,stall: Boolean = false,rollback: Boolean = false,quality: ProbeQuality? = null,user: Boolean = false) {
         val r = record(index); r.lastComplete = false; r.lastPassed = quality?.passed?.coerceIn(0,6) ?: -1
         r.preview = quality?.preview ?: PreviewQuality(); if (user) r.reports++

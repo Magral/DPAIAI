@@ -35,14 +35,28 @@ class MobileStrategyStore(private val prefs: SharedPreferences,private val id: S
             .put("latencyMs",ProbeAssessment.latency(result)).put("good",it.optInt("good")+1).put("usefulMillis",it.optLong("usefulMillis")+useful.coerceAtLeast(0)) }
         return true
     }
+    fun defer(command: String,result: JSONObject) {
+        update(command) { it.put("verified",false).put("reason",probeFailureDetail(result)) }
+    }
     fun reject(command: String,result: JSONObject = JSONObject(),rollback: Boolean = false) {
         val a = ProbeAssessment.evaluate(id,result)
         update(command) { it.put("schema",2).put("verified",false).put("excluded",true).put("passed",a.requiredSuccess+a.extraSuccess).put("total",a.requiredTotal+a.extraTotal)
-            .put("bad",it.optInt("bad")+1).put("rollbacks",it.optInt("rollbacks")+if (rollback) 1 else 0) }
+            .put("reason",probeFailureDetail(result)).put("bad",it.optInt("bad")+1).put("rollbacks",it.optInt("rollbacks")+if (rollback) 1 else 0) }
     }
     fun resetExclusions() {
         val rows = entries()
         rows.forEach { if (isExcluded(it)) it.put("excluded",false).put("verified",false) }
         prefs.edit().putString(key,JSONArray(rows).toString()).apply()
     }
+}
+
+// Include failed endpoints first; successful rows must not hide the cause.
+fun probeFailureDetail(result: JSONObject): String {
+    val error = result.optString("error").takeIf { it.isNotBlank() }
+    val rows = result.optJSONArray("rows")
+    val failed = if (rows == null) emptyList() else (0 until rows.length()).mapNotNull { rows.optJSONObject(it) }
+        .filter { !it.optBoolean("ok") }.take(4).map {
+            "${it.optString("host","узел")}: ${it.optString("detail","нет успешного ответа")}"
+        }
+    return (listOfNotNull(error)+failed).joinToString("; ").ifBlank { "Полная проверка не пройдена" }.take(1200)
 }

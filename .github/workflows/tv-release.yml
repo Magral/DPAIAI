@@ -105,7 +105,7 @@ jobs:
               release = (await github.rest.repos.createRelease({
                 owner,repo,tag_name:tag,target_commitish:context.sha,name:'DPI Pilot TV '+version,
                 draft:true,prerelease:false,make_latest:'false',
-                body:"Оптимизированы проверки: общий пул до четырёх потоков с освобождением после простоя, отмена блокирующих проверок, отбрасывание результатов при смене подключения. Полные критерии допуска и редкое расписание сохранены. Установить поверх предыдущей версии с постоянной подписью. Подробности: docs/PROBE_OPTIMIZATION.md.\n\n"+'Source: '+context.sha+'\nSHA-256 APK: '+digest.slice(7)
+                body:"Отказы при подборе накапливаются временно: постоянные исключения записываются только после успешной повторной проверки текущей стратегии. При общем сбое результаты не портят список исключений. Если текущая стратегия не работает, применяется первый полностью прошедший резерв без ожидания полного перебора. Причины отказов показаны в ходе подбора; смартфон сохраняет подробности в истории. Установить поверх предыдущей версии.\n\n"+'Source: '+context.sha+'\nSHA-256 APK: '+digest.slice(7)
               })).data;
             }
             const assets = (await github.rest.repos.listReleaseAssets({owner,repo,release_id:release.id})).data;

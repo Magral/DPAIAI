@@ -92,9 +92,11 @@ class MobileMonitor(private val context: Context,private val scope: CoroutineSco
                         if (!same(profile) || MobileFeedback.token(id) != token || cancellation != MobileFeedback.cancelToken() || superseded()) continue
                         reports[id] = current
                         val results = mutableListOf<Pair<String,JSONObject>>()
+                        val failures = mutableListOf<Pair<String,JSONObject>>()
+                        val currentGood = ProbeAssessment.evaluate(id,current).eligible
                         if (ProbeAssessment.evaluate(id,current).eligible) {
                             store.accept(previousCommand,current);if (!replaceRequested) results.add(previousCommand to current)
-                        } else if (!store.excluded(previousCommand)) store.reject(previousCommand,current)
+                        } else if (!store.excluded(previousCommand)) { store.defer(previousCommand,current);failures.add(previousCommand to current) }
                         val commands = if (selected != null) listOf(selected).filter { !store.excluded(it) && io.github.dovecoteescapee.byedpi.catalog.CatalogProtocol.validCommand(it) }
                             else MobileStrategyPolicy.window(context,target)
                         for ((index,command) in commands.withIndex()) {
@@ -106,14 +108,28 @@ class MobileMonitor(private val context: Context,private val scope: CoroutineSco
                                 catch (e: CancellationException) { throw e }
                                 catch (e: Exception) { JSONObject().put("error",e.javaClass.simpleName) }
                             if (!same(profile) || MobileFeedback.token(id) != token || cancellation != MobileFeedback.cancelToken() || superseded()) break
-                            if (store.accept(command,result)) results.add(command to result)
+                            if (ProbeAssessment.evaluate(id,result).eligible) {
+                                if (store.accept(command,result)) results.add(command to result)
+                                if (!currentGood) break // Restore access promptly; do not finish the whole bank first.
+                            } else {
+                                store.defer(command,result);failures.add(command to result)
+                                publish("${target.name}: вариант не прошёл; ${probeFailureDetail(result)}")
+                            }
                             MobileStrategyPolicy.advance(context,id,command)
                         }
                         if (!same(profile) || MobileFeedback.token(id) != token || cancellation != MobileFeedback.cancelToken() || superseded()) continue
                         if (!forced && !automatic()) continue
                         val best = if (selected != null) results.firstOrNull { it.first == selected } else MobileScanPolicy.fastest(results,id)
                         prefs.edit().remove("mobile_selected.$id").remove("mobile_imported.$id").remove("mobile_force_replace.$id").apply()
-                        if (best == null) { publish("${target.name}: полного результата нет; неудачные варианты исключены");continue }
+                        if (best == null) { publish("${target.name}: полного результата нет; исключения не записаны — возможен общий сбой сети");continue }
+                        // Commit negative evidence only beside a fresh successful control on this same network.
+                        if (currentGood && failures.isNotEmpty()) {
+                            val control = probe(id,previousCommand)
+                            if (!same(profile) || MobileFeedback.token(id) != token || cancellation != MobileFeedback.cancelToken() || superseded()) continue
+                            if (ProbeAssessment.evaluate(id,control).eligible)
+                                failures.forEach { (command,result) -> store.reject(command,result) }
+                            else { store.defer(previousCommand,control);publish("${target.name}: контроль не прошёл; массовые исключения отменены");continue }
+                        }
                         if (best.first == previousCommand && !runtime.fault(id)) {
                             MobileStrategyPolicy.remember(context,id,previousCommand);publish("${target.name}: текущая стратегия быстрее остальных полных результатов");continue
                         }
