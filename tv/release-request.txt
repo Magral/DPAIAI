@@ -1,1 +1,1 @@
-TV 0.6.8 regression fix: strict six-node access independent of advisory preview QoS; original prefix check restores adaptive timeout budgets. One-time recovery of automatic legacy exclusions preserves user reports and fresh dead-strategy exclusions. Permanent signing.
+TV 0.6.9: single bounded confirmation before excluding known or partially responsive strategies; zero-response unknowns stay fast; strict independent 6/6; no repeated preview downloads on confirmation. Permanent signing.

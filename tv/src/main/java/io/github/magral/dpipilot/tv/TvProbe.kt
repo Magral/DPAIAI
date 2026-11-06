@@ -29,7 +29,7 @@ object TvProbe {
     class Session : ProbeSession()
     private data class Payload(val error: String?,val bytes: Int = 0,val gap: Long = 0,val unavailable: Boolean = false)
     private data class Sample(val error: String?,val elapsedMs: Long,val row: String,val preview: PreviewSample?,val unavailable: Boolean)
-    fun check(port: Int,index: Int,session: Session,progress: (String)->Unit = {}): Result {
+    fun check(port: Int,index: Int,session: Session,previews: Boolean = true,progress: (String)->Unit = {}): Result {
         val nodes = mutableListOf<Sample>()
         val images = mutableListOf<Sample>()
         fun runBatch(items: List<Pair<Spec,Int>>): List<Sample> {
@@ -57,7 +57,7 @@ object TvProbe {
                 if(rows.size != specs.size || rows.any { it.error != null }) break
             }
             val score = nodes.count { it.error == null }
-            if(score == 6) images.addAll(runBatch((1..2).flatMap { round -> previewSpecs.map { it to round } }))
+            if(score == 6 && previews) images.addAll(runBatch((1..2).flatMap { round -> previewSpecs.map { it to round } }))
             session.checkActive()
             val all = nodes+images
             val preview = PreviewQuality(all.mapNotNull { it.preview })

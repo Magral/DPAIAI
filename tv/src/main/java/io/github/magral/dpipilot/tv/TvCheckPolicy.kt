@@ -2,6 +2,9 @@ package io.github.magral.dpipilot.tv
 
 /** Wall-clock, persisted per network: restarting the process never resets the three-day budget. */
 object TvCheckPolicy {
+    /** Retry partial reachability or a previously confirmed strategy; zero unknown responses stay fast. */
+    fun confirmFailure(ok: Boolean,inconclusive: Boolean,passed: Int,known: Boolean): Boolean =
+        !ok && !inconclusive && (known || passed in 1..5)
     const val INTERVAL = 3L*24*60*60*1000
     fun remaining(started: Long,now: Long): Long = when {
         started <= 0L -> 0L

@@ -4,6 +4,19 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class TvCheckPolicyTest {
+    @Test fun oneFailureConfirmationProtectsKnownAndPartialStrategiesWithoutRevivingDeadUnknowns() {
+        assertTrue(TvCheckPolicy.confirmFailure(false,false,0,true))
+        for (passed in 1..5) assertTrue(TvCheckPolicy.confirmFailure(false,false,passed,false))
+        assertFalse(TvCheckPolicy.confirmFailure(false,false,0,false))
+        assertFalse(TvCheckPolicy.confirmFailure(true,false,6,true))
+        assertFalse(TvCheckPolicy.confirmFailure(false,true,3,true))
+        // Repeated partial tests remain failures: their successes must never be summed.
+        val first = TvProbe.Result(false,"first",3,ProbeQuality(false,3,1))
+        val second = TvProbe.Result(false,"second",3,ProbeQuality(false,3,1))
+        assertFalse(first.ok)
+        assertFalse(second.ok)
+        assertTrue(TvProbe.Result(true,"confirmed",6,ProbeQuality(true,6,200)).ok)
+    }
     @Test fun samePersistedStartBlocksChecksAcrossRebootAndFailuresForThreeDays() {
         val started = 100000L
         assertFalse(TvCheckPolicy.shouldCheck(true,false,started,started+3600000))

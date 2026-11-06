@@ -247,14 +247,31 @@ class TvVpnService : VpnService() {
         }
         TvState.nextCheckAt = 0
     }
-    private suspend fun healthy(index: Int,port: Int = 19080): TvProbe.Result = try {
-        probe(index,port)
-    } catch (e: TimeoutCancellationException) {
+    /** One confirmation only; never combine successes from separate incomplete attempts. */
+    private suspend fun healthy(index: Int,port: Int = 19080): TvProbe.Result {
+        val network = physical()
+        val known = reputation.quality(index).eligible
+        suspend fun attempt(previews: Boolean): TvProbe.Result = try {
+            probe(index,port,previews)
+        } catch (e: TimeoutCancellationException) {
+            currentCoroutineContext().ensureActive()
+            TvProbe.Result(false,"Таймаут проверки стратегии")
+        } catch (e: CancellationException) { throw e }
+        catch (e: Exception) { TvProbe.Result(false,"${e.javaClass.simpleName}: ${e.message?.take(160)}") }
+        val first = attempt(true)
+        if (!TvCheckPolicy.confirmFailure(first.ok,first.inconclusive,first.score,known)) return first
+        if (network == null || !sameNetwork(network) || !prefs.getBoolean("enabled",false) ||
+            prefs.contains("manual_request") || prefs.contains("manual_bad_request")) return first
+        TvState.update(this,"№${index+1}: первый тест ${first.score}/6; один подтверждающий повтор перед исключением")
+        delay(750)
         currentCoroutineContext().ensureActive()
-        TvProbe.Result(false,"Таймаут проверки стратегии")
-    } catch (e: CancellationException) { throw e }
-    catch (e: Exception) { TvProbe.Result(false,"${e.javaClass.simpleName}: ${e.message?.take(160)}") }
-    private suspend fun probe(index: Int,port: Int): TvProbe.Result = withTimeout(180000) { coroutineScope {
+        if (!sameNetwork(network) || prefs.contains("manual_request") || prefs.contains("manual_bad_request")) return first
+        // No extra picture downloads on a failure confirmation: access remains the only gate.
+        val confirmed = attempt(false)
+        return TvProbe.Result(confirmed.ok,
+            "Повтор после ${first.score}/6: ${confirmed.detail}",confirmed.score,confirmed.quality,confirmed.inconclusive)
+    }
+    private suspend fun probe(index: Int,port: Int,previews: Boolean = true): TvProbe.Result = withTimeout(180000) { coroutineScope {
         TvState.phase = if (port == 19081) "Фоновая проверка стратегии №${index+1}" else "Проверка текущей стратегии №${index+1}"
         TvState.probeIndex = index
         TvState.nextCheckAt = 0
@@ -262,7 +279,7 @@ class TvVpnService : VpnService() {
         val session = TvProbe.Session()
         try {
             val pending = async(Dispatchers.IO) {
-                TvProbe.check(port,index,session) { row ->
+                TvProbe.check(port,index,session,previews) { row ->
                     TvState.probeDetail = "№${index+1}: $row"
                     TvState.update(this@TvVpnService,"Тест №${index+1}: $row")
                 }
@@ -379,7 +396,7 @@ class TvVpnService : VpnService() {
     }
     private suspend fun reviewTrial(result: TvProbe.Result,network: Network,stalled: Boolean,manual: Boolean = false): Boolean {
         val pending = trial ?: return false
-        var latest = result
+        val latest = result
         if (result.inconclusive) {
             TvState.update(this,"Источник тестового превью недоступен; вариант не объявляется нерабочим")
             if (pending.restorable && rollback(network,exclude=false)) return true
@@ -387,17 +404,9 @@ class TvVpnService : VpnService() {
         }
         if (pending.candidate != activeIndex) { clearTrial(); return false }
         if (pending.rollback(SystemClock.elapsedRealtime(),false,stalled)) return rollback(network)
-        if (pending.restorable && QualityPolicy.regression(pending.baseline,result.quality)) {
-            delay(1500)
-            val repeat = healthy(pending.candidate)
-            latest = repeat
-            if (repeat.inconclusive) {
-                if (pending.restorable && rollback(network,exclude=false)) return true
-                clearTrial();waitForCheck(0);return true
-            }
-            if (!sameNetwork(network) || (prefs.contains("manual_request") || prefs.contains("manual_bad_request"))) { requested.set(true); return true }
-            if (pending.rollback(SystemClock.elapsedRealtime(),QualityPolicy.regression(pending.baseline,repeat.quality),false)) return rollback(network)
-        }
+        // healthy() has already confirmed an eligible-to-failed regression once.
+        if (pending.restorable && pending.rollback(SystemClock.elapsedRealtime(),
+                QualityPolicy.regression(pending.baseline,result.quality),false)) return rollback(network)
         if (!pending.expired(SystemClock.elapsedRealtime()) && !manual) {
             TvState.trialDetail = "Наблюдаю пробную №${pending.candidate+1}; при ухудшении вернусь к №${pending.previous+1}"
             waitForCheck((120000L-(SystemClock.elapsedRealtime()-pending.started)).coerceIn(1000L,120000L))
