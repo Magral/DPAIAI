@@ -20,6 +20,22 @@ class QualityStore(private val prefs: SharedPreferences) {
                 r.optBoolean("excluded",r.optInt("fail") > 0 && r.optInt("ok") == 0),
                 r.optInt("last_passed",-1),r.optBoolean("last_complete",false),PreviewQuality.decode(r.optJSONArray("previews")),r.optInt("reports"))
         }
+        // v0.6.7 mixed preview quality failures with transport exclusions. Repair these once.
+        val marker = "quality_access_schema.$profile"
+        if (prefs.getString(marker,null) != "4") {
+            var restored = 0
+            for ((id,r) in records) if (TvPolicy.indexOfId(id) != null && r.excluded && r.reports == 0) {
+                r.excluded = false;r.lastComplete = false;restored++
+            }
+            val edit = prefs.edit().putString(marker,"4")
+            if (restored > 0) edit.putString("quality_repair_pending.$profile","1")
+            flush(edit)
+        }
+    }
+    fun consumeRepair(): Boolean {
+        val key = "quality_repair_pending.$profile"
+        if (prefs.getString(key,null) != "1") return false
+        prefs.edit().remove(key).apply();return true
     }
     private fun record(index: Int) = records.getOrPut(RuntimeCatalog.ids[index]) { QualityRecord() }
     fun approved(index: Int,quality: ProbeQuality,now: Long) {
@@ -53,18 +69,18 @@ class QualityStore(private val prefs: SharedPreferences) {
     fun describe(index: Int): String {
         val r = records[RuntimeCatalog.ids[index]] ?: return "Последняя полная проверка: не подтверждена"
         val last = if (r.lastPassed >= 0) "узлы ${r.lastPassed}/6" else "узлы не проверены"
-        return "Последняя проверка: $last; ${r.preview.text()}; ${if (r.fullSuccess) "качество превью подтверждено" else "новая проверка качества не пройдена"}; жалоб ${r.reports}; задержка HTTPS: ${r.latencyMs} мс; в истории успешных ${r.successes}, отказов ${r.failures}; полезный обмен ${r.usefulSeconds/60} мин"
+        return "Последняя проверка: $last; ${r.preview.text()}; ${if (r.fullSuccess) "проверки доступности пройдены" else "проверки доступности не пройдены"}; жалоб ${r.reports}; задержка HTTPS: ${r.latencyMs} мс; в истории успешных ${r.successes}, отказов ${r.failures}; полезный обмен ${r.usefulSeconds/60} мин"
 
     }
     fun summary(): String = records.entries.filter { it.value.fullSuccess && TvPolicy.indexOfId(it.key) != null }.sortedWith(compareBy<Map.Entry<String,QualityRecord>> { it.value.preview.score }.thenBy { it.value.latencyMs }).take(5).joinToString("\n") { (id,r) ->
         "№${(TvPolicy.indexOfId(id) ?: -1)+1}: последний тест 6/6; ${r.preview.text()}; в истории успешных ${r.successes}, отказов ${r.failures}; полезный обмен ${r.usefulSeconds/60} мин; зависания ${r.stalls}; откаты ${r.rollbacks}; задержка ${r.latencyMs} мс"
     }.ifEmpty { "История качества ещё не накоплена" }
-    fun flush() {
+    fun flush(edit: SharedPreferences.Editor = prefs.edit()) {
         if (profile.isEmpty()) return
         val root = JSONObject()
         for ((id,r) in records) root.put(id,JSONObject().put("ok",r.successes).put("fail",r.failures).put("stall",r.stalls).put("rollback",r.rollbacks)
             .put("useful",r.usefulSeconds).put("active",r.activeSeconds).put("latency",r.latencyMs).put("seen",r.lastSeen).put("excluded",r.excluded).put("last_passed",r.lastPassed).put("last_complete",r.lastComplete).put("previews",r.preview.encode()).put("reports",r.reports))
-        prefs.edit().putString("quality.$profile",root.toString()).apply()
+        edit.putString("quality.$profile",root.toString()).apply()
         TvState.qualityHistory = summary()
     }
 }

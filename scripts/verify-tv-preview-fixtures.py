@@ -37,7 +37,7 @@ def dimensions(data, mime):
     raise AssertionError("image dimensions missing")
 
 source=Path("tv/src/main/java/io/github/magral/dpipilot/tv/TvProbe.kt").read_text()
-fixtures=re.findall(r'Spec\("image[^"]*","([^"]+)","([^"]+)"\)',source)
+fixtures=list(dict.fromkeys(re.findall(r'Spec\("image[^"]*","([^"]+)","([^"]+)"\)',source)))
 assert len(fixtures) == 3
 for host,path in fixtures:
     url="https://"+host+path

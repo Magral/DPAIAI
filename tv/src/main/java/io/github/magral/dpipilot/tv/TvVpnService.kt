@@ -364,7 +364,7 @@ class TvVpnService : VpnService() {
         if (!pending.restorable || pending.previous in reputation.excluded()) { clearTrial();return false }
         clearTrial()
         if (exclude) { quarantine(pending.candidate); reputation.failed(pending.candidate,rollback=true) }
-        TvState.update(this,"Откат №${pending.candidate+1} → №${pending.previous+1}; ${if (exclude) "новый вариант исключён для этой сети до ручного сброса" else "источник теста недоступен, исключения не менялись"}")
+        TvState.update(this,"Откат №${pending.candidate+1} → №${pending.previous+1}; ${if (exclude) "новый вариант исключён для этой сети до ручного сброса" else "дополнительная оценка не подтверждена, исключения не менялись"}")
         release(); open(pending.previous); establish(network); networkId = network.toString()
         val result = healthy(pending.previous)
         if (!sameNetwork(network)) { requested.set(true); return true }
@@ -504,6 +504,7 @@ class TvVpnService : VpnService() {
             val profileChanged = profile != nextProfile
             var recovered: Int? = null
             var urgent = urgentRequested.getAndSet(false)
+            var repair = false
             if (profileChanged) {
                 trial = null; manualChoice = null; profile = nextProfile
                 reputation.network(profile); loadQuarantine()
@@ -529,13 +530,21 @@ class TvVpnService : VpnService() {
                         TvState.update(this,"Жалоба на №${bad+1}: тормоза/превью; стратегия исключена для этой сети")
                         urgent = true;explicitCheck.set(true)
                     }
-                    if (trial?.candidate == TvPolicy.indexOfId(complaint.optString("id")) && trial?.restorable == true) {
-                        explicitCheck.set(false)
-                        if (rollback(network)) continue
+                    if (trial?.candidate == TvPolicy.indexOfId(complaint.optString("id"))) {
+                        val previous = trial
+                        if (previous?.restorable == true && previous.previous !in reputation.excluded()) {
+                            explicitCheck.set(false)
+                            if (rollback(network)) continue
+                        }
+                        clearTrial();explicitCheck.set(true)
                     }
                 }
             }
             loadQuarantine()
+            if (reputation.consumeRepair()) {
+                repair = true;urgent = true;explicitCheck.set(true)
+                TvState.update(this,"Исправлены автоматические исключения старого теста; повторная проверка доступности без порогов скорости")
+            }
             val history = TvPolicy.savedHistory(prefs.getString("history_ids.$profile",null),prefs.getString("history.$profile",null).orEmpty())
             val known = reputation.preferred(history)
             if (tun == null || !TvState.engineReady || networkId != network.toString() || profileChanged) {
@@ -592,6 +601,10 @@ class TvVpnService : VpnService() {
             }
             if (current.ok) confirm(active,current.quality)
             else { reputation.failed(active,quality=current.quality); loadQuarantine(); TvState.verified = false }
+            if (repair && current.ok) {
+                TvState.update(this,"Рабочая №${active+1} восстановлена: 6/6. Медленная или недоступная оценка превью не блокирует доступ")
+                waitForCheck(0);continue
+            }
             val candidates = mutableListOf<Pair<Int,ProbeQuality>>()
             var sourcesUnavailable = false
             val window = TvPolicy.scanWindow((known+history).distinct(),active,blocked.keys,0,TvPolicy.strategies.size)

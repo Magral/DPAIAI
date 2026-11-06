@@ -4,7 +4,7 @@ import kotlin.math.ln
 
 /** Ranks bounded reachability checks; never claims to measure the viewer's video bitrate. */
 data class ProbeQuality(val controlOk: Boolean,val passed: Int,val latencyMs: Long,val preview: PreviewQuality = PreviewQuality()) {
-    val eligible: Boolean get() = controlOk && passed == 6 && preview.usable
+    val eligible: Boolean get() = controlOk && passed == 6
     fun value(): Double = if (!eligible) passed.toDouble() else
         100.0-(latencyMs.coerceIn(0,30000)/1000.0)
 }
@@ -18,9 +18,8 @@ object QualityPolicy {
         // Only a large latency improvement can justify an optional idle trial.
         return candidate.latencyMs+500 < current.latencyMs*0.65
     }
-    fun regression(previous: ProbeQuality,current: ProbeQuality): Boolean =
-        previous.eligible && (!current.eligible ||
-            (current.preview.score > previous.preview.score*1.8 && current.preview.worstMs > previous.preview.worstMs+1500))
+    fun regression(previous: ProbeQuality,current: ProbeQuality): Boolean = previous.eligible && !current.eligible
+
 }
 
 data class Trial(val previous: Int,val candidate: Int,val started: Long,val restorable: Boolean,val baseline: ProbeQuality) {
@@ -31,7 +30,7 @@ data class Trial(val previous: Int,val candidate: Int,val started: Long,val rest
 
 data class QualityRecord(var successes: Int = 0,var failures: Int = 0,var stalls: Int = 0,var rollbacks: Int = 0,
     var usefulSeconds: Long = 0,var activeSeconds: Long = 0,var latencyMs: Long = 0,var lastSeen: Long = 0,var excluded: Boolean = false,var lastPassed: Int = -1,var lastComplete: Boolean = false,var preview: PreviewQuality = PreviewQuality(),var reports: Int = 0) {
-    val fullSuccess: Boolean get() = !excluded && successes > 0 && lastComplete && lastPassed == 6 && preview.usable
+    val fullSuccess: Boolean get() = !excluded && successes > 0 && lastComplete && lastPassed == 6
     fun rank(): Double = (successes+1.0)/(successes+failures+2.0)*100+
         ln(1+usefulSeconds.coerceIn(0,36000).toDouble())*8-
         stalls.coerceAtMost(20)*12-rollbacks.coerceAtMost(20)*20

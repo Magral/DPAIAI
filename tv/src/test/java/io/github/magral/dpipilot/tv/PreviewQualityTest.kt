@@ -35,25 +35,34 @@ class PreviewQualityTest {
         assertFalse(PreviewBody.accepts(response(full.copyOf(full.size-20)),::decode))
         assertFalse(PreviewBody.accepts(response(full)) { null })
     }
-    @Test fun sixSuccessfulNodesCannotQualifyMissingDuplicatedSlowOrStallingPreviews() {
+    @Test fun optionalPreviewQualityNeverVetoesSixAccessibleNodes() {
         val good = PreviewFixtures.transfers()
-        assertTrue(ProbeQuality(true,6,100,good).eligible)
-        assertFalse(ProbeQuality(true,6,1).eligible)
-        assertFalse(ProbeQuality(true,6,1,good.copy(samples=good.samples.dropLast(1))).eligible)
-        assertFalse(ProbeQuality(true,6,1,good.copy(samples=List(6) { good.samples.first() })).eligible)
-        assertFalse(ProbeQuality(true,6,1,PreviewFixtures.transfers(8100)).eligible)
-        assertFalse(ProbeQuality(true,6,1,PreviewFixtures.transfers(100,3001)).eligible)
-        val partial = good.copy(samples=good.samples.mapIndexed { i,s -> if(i==2) s.copy(valid=false) else s })
-        assertFalse(TvProbe.Result(true,"nodes pass",6,ProbeQuality(true,6,1,partial)).ok)
+        val variants = listOf(PreviewQuality(),good.copy(samples=good.samples.dropLast(1)),
+            good.copy(samples=List(6) { good.samples.first() }),PreviewFixtures.transfers(8100),
+            PreviewFixtures.transfers(100,3001),
+            good.copy(samples=good.samples.mapIndexed { i,s -> if(i==2) s.copy(valid=false) else s }))
+        for (preview in variants) {
+            assertTrue(ProbeQuality(true,6,1,preview).eligible)
+            assertTrue(TvProbe.Result(true,"nodes pass",6,ProbeQuality(true,6,1,preview)).ok)
+        }
+        assertFalse(variants[1].usable)
+        assertFalse(variants[2].usable)
+        assertFalse(variants[3].responsive)
+        assertFalse(variants[4].responsive)
+        assertFalse(variants[5].usable)
+        assertTrue(variants[3].score > good.score)
+        assertFalse(ProbeQuality(true,3,1,good).eligible)
+        assertFalse(ProbeQuality(false,6,1,good).eligible)
     }
-    @Test fun stablePreviewTransfersOutrankLowerPingAndRepeatedPerformanceRegressionRollsBack() {
+    @Test fun stablePreviewTransfersRankFirstButTimingAloneNeverBansWorkingAccess() {
         val stable = ProbeQuality(true,6,800,PreviewFixtures.transfers(100))
         val slow = ProbeQuality(true,6,1,PreviewFixtures.transfers(2200))
         assertTrue(slow.eligible)
         assertFalse(QualityPolicy.better(slow,stable,false))
         assertFalse(TvProbe.Result(true,"fixture unavailable",6,stable,inconclusive=true).ok)
         assertEquals(1,TvCheckPolicy.fastest(1 to stable,listOf(2 to slow)))
-        assertTrue(QualityPolicy.regression(stable,slow))
+        assertFalse(QualityPolicy.regression(stable,slow))
+        assertTrue(QualityPolicy.regression(stable,slow.copy(passed=3)))
         assertFalse(QualityPolicy.regression(stable,stable.copy(preview=PreviewFixtures.transfers(110))))
         val saved = PreviewQuality.decode(stable.preview.encode())
         assertEquals(stable.preview,saved)

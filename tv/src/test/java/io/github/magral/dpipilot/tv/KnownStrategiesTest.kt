@@ -40,7 +40,7 @@ class KnownStrategiesTest {
         val restored = QualityStore(prefs).apply { network("wifi-a") }
         assertEquals((1..6).toSet(),restored.choices(emptyList()).toSet())
         assertFalse(7 in restored.choices(emptyList()))
-        assertTrue(restored.describe(1).contains("качество превью подтверждено"))
+        assertTrue(restored.describe(1).contains("проверки доступности пройдены"))
         restored.network("wifi-b")
         assertTrue(restored.choices(emptyList()).isEmpty())
         restored.network("wifi-a")
@@ -103,11 +103,11 @@ class KnownStrategiesTest {
         store.approved(2,PreviewFixtures.quality(true,6,50),2000)
         assertEquals(listOf(2),store.choices(emptyList()))
     }
-    @Test fun oldSixOfSixWithoutDeliveryProofIsHiddenAndAUserComplaintOverridesSyntheticSuccess() {
+    @Test fun explicitSixOfSixRemainsSelectableButAUserComplaintOverridesSyntheticSuccess() {
         val prefs = preferences();val id = RuntimeCatalog.ids[1]
         prefs.edit().putString("quality.wifi-a",org.json.JSONObject().put(id,org.json.JSONObject().put("ok",2).put("last_complete",true).put("last_passed",6)).toString()).apply()
         val store = QualityStore(prefs).apply { network("wifi-a") }
-        assertTrue(store.choices(listOf(1)).isEmpty())
+        assertEquals(listOf(1),store.choices(listOf(1)))
         store.approved(1,PreviewFixtures.quality(true,6,100),1000)
         assertEquals(listOf(1),store.choices(emptyList()))
         store.failed(1,user=true)
@@ -115,6 +115,30 @@ class KnownStrategiesTest {
         store.resetExclusions()
         assertTrue(store.choices(listOf(1)).isEmpty())
         assertTrue(store.describe(1).contains("жалоб 1"))
+    }
+    @Test fun legacyAutomaticExclusionsAreRepairedOnceButManualReportsAndFreshFailuresPersist() {
+        val prefs = preferences()
+        val root = org.json.JSONObject()
+        root.put(RuntimeCatalog.ids[1],org.json.JSONObject().put("ok",2).put("last_complete",true).put("last_passed",6).put("excluded",true))
+        root.put(RuntimeCatalog.ids[2],org.json.JSONObject().put("excluded",true).put("reports",1))
+        prefs.edit().putString("quality.wifi-a",root.toString()).apply()
+        val first = QualityStore(prefs).apply { network("wifi-a") }
+        assertFalse(1 in first.excluded())
+        assertTrue(2 in first.excluded())
+        assertTrue(first.choices(emptyList()).isEmpty())
+        val restarted = QualityStore(prefs).apply { network("wifi-a") }
+        assertTrue(restarted.consumeRepair())
+        assertFalse(restarted.consumeRepair())
+        restarted.approved(1,ProbeQuality(true,6,100),1000)
+        assertEquals(listOf(1),restarted.choices(emptyList()))
+        restarted.failed(1,quality=ProbeQuality(false,3,1))
+        val again = QualityStore(prefs).apply { network("wifi-a") }
+        assertEquals(setOf(1,2),again.excluded())
+        assertFalse(again.consumeRepair())
+        again.network("wifi-b")
+        assertTrue(again.excluded().isEmpty())
+        again.network("wifi-a")
+        assertEquals(setOf(1,2),again.excluded())
     }
     @Test fun missingStableIdsCannotSelectAnotherCommandAndLegacySuccessIsIncludedOnce() {
         val ids = RuntimeCatalog.ids

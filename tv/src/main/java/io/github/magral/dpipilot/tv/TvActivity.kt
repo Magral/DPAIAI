@@ -67,7 +67,7 @@ class TvActivity : Activity() {
             if (prefs.getBoolean("enabled",false)) disable() else configure()
         }
         open = button(primary,"Открыть YouTube") { openYouTube() }
-        button(row(),"Рабочие стратегии · стабильность и задержка") { chooseStrategy() }
+        button(row(),"Рабочие стратегии · 6/6 и задержка") { chooseStrategy() }
         button(row(),"YouTube тормозит — сменить стратегию") { reportPlaybackProblem() }
         val actions = row()
         check = button(actions,"Проверить сейчас") { requestCheck(false) }
@@ -186,7 +186,7 @@ class TvActivity : Activity() {
         val ids = store.choices(history).map { RuntimeCatalog.ids[it] }
         if (ids.isEmpty()) {
             AlertDialog.Builder(this).setTitle("Найденные стратегии")
-                .setMessage("Нет вариантов с подтверждёнными узлами 6/6 и полной стабильной загрузкой превью. Старые записи требуют новой проверки. Включите VPN и нажмите «Проверить сейчас» в дополнительных настройках.")
+                .setMessage("Нет вариантов с подтверждённой доступностью 6/6. Оценка скорости превью влияет на порядок, но не запрещает стратегию. Включите VPN и нажмите «Проверить сейчас» в дополнительных настройках.")
                 .setNeutralButton("Сбросить исключения") { _,_ -> resetExclusions(profile) }
                 .setPositiveButton("Закрыть",null).show(); return
         }
@@ -194,7 +194,7 @@ class TvActivity : Activity() {
             val index = TvPolicy.indexOfId(id)!!
             "№${index+1} · ${store.latency(index).takeIf { it > 0 }?.let { "$it мс" } ?: "задержка не измерена"}${if (index == TvState.strategyIndex) " · включена" else ""}\n${store.describe(index)}"
         }.toTypedArray()
-        AlertDialog.Builder(this).setTitle("6/6 + превью · сначала стабильность · исключено ${store.excluded().size}")
+        AlertDialog.Builder(this).setTitle("Доступность 6/6 · оценка превью отдельно · исключено ${store.excluded().size}")
             .setItems(labels) { _,which ->
                 val id = ids[which]
                 val index = TvPolicy.indexOfId(id) ?: return@setItems

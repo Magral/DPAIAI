@@ -17,14 +17,15 @@ data class PreviewQuality(val samples: List<PreviewSample> = emptyList()) {
     val complete: Boolean get() = samples.size == 6 && sources.all { source -> (1..2).all { round ->
         samples.count { it.source == source && it.round == round } == 1
     } }
-    val passed: Int get() = samples.count { it.valid && it.bytes in 1024..LIMIT && it.elapsedMs in 1..8000 && it.gapMs in 0..3000 }
+    val passed: Int get() = samples.count { it.valid && it.bytes in 1024..LIMIT && it.elapsedMs > 0 && it.gapMs >= 0 }
     val medianMs: Long get() = samples.map { it.elapsedMs }.sorted().takeIf { it.size == 6 }?.let { it[2]+(it[3]-it[2])/2 } ?: Long.MAX_VALUE
     val worstMs: Long get() = samples.maxOfOrNull { it.elapsedMs } ?: Long.MAX_VALUE
     val gapMs: Long get() = samples.maxOfOrNull { it.gapMs } ?: Long.MAX_VALUE
-    val usable: Boolean get() = complete && passed == 6 && medianMs <= 4000
-    val score: Long get() = if (usable) medianMs*2+worstMs+gapMs else Long.MAX_VALUE
-    fun text(): String = if (!complete) "полная загрузка превью ещё не подтверждена" else
-        "превью $passed/6; обычно ${medianMs} мс, максимум ${worstMs} мс; пауза ${gapMs} мс"
+    val usable: Boolean get() = complete && passed == 6
+    val responsive: Boolean get() = usable && medianMs <= 4000 && worstMs <= 8000 && gapMs <= 3000
+    val score: Long get() = if (usable) medianMs.coerceAtMost(60000)*2+worstMs.coerceAtMost(60000)+gapMs.coerceAtMost(60000) else Long.MAX_VALUE
+    fun text(): String = if (!complete) "оценка превью не завершена" else
+        "превью $passed/6${if (usable && !responsive) " · медленно" else ""}; обычно ${medianMs} мс, максимум ${worstMs} мс; пауза ${gapMs} мс"
     fun encode(): JSONArray = JSONArray(samples.map { s -> JSONObject().put("source",s.source).put("round",s.round)
         .put("bytes",s.bytes).put("ms",s.elapsedMs).put("gap",s.gapMs).put("valid",s.valid) })
 }

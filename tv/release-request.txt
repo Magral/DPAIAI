@@ -1,2 +1,1 @@
-TV 0.6.7: full JPEG/WebP previews, repeated transfer timing and stall limits; stability-first ranking instead of ping-only selection. User playback feedback excludes the strategy and tests a reserve promptly. Three-day cadence retained; permanent signing.
-Use host-JVM-only reflection for image test fixture codecs outside the Android compile API.
+TV 0.6.8 regression fix: strict six-node access independent of advisory preview QoS; original prefix check restores adaptive timeout budgets. One-time recovery of automatic legacy exclusions preserves user reports and fresh dead-strategy exclusions. Permanent signing.
