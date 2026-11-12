@@ -19,14 +19,16 @@ class TuningWorkerService : Service() {
             val reply = message.replyTo
             val target = message.data.getString("target").orEmpty()
             val command = message.data.getString("command")
+            val known = message.data.getBoolean("known")
+            val previews = message.data.getBoolean("previews",true)
             executor.execute {
-                fun progress(text: String) { runCatching { reply.send(Message.obtain().apply {
-                    what = PROGRESS; data = Bundle().apply { putString("progress",text) }
+                fun progress(value: ProbeProgress) { runCatching { reply.send(Message.obtain().apply {
+                    what = PROGRESS; data = Bundle().apply { putString("progress",value.encode()) }
                 }) } }
                 val result = try {
                     require(command != null && MobilePlan.valid(command))
                     ServiceTargets.target(target)
-                    progress("Запуск движка 17.3 на 127.0.0.1:19080 (до 10 с)")
+                    progress(ProbeProgress(0,ServiceTargets.target(target).endpoints.size*2))
                     val ready = java.util.concurrent.CountDownLatch(1)
                     val bound = java.util.concurrent.atomic.AtomicBoolean(false)
                     Thread {
@@ -34,8 +36,7 @@ class TuningWorkerService : Service() {
                         ready.countDown()
                     }.start()
                     check(ready.await(10,java.util.concurrent.TimeUnit.SECONDS) && bound.get()) { "Native listener did not start within 10s" }
-                    progress("Локальный движок готов; проверяем сеть")
-                    ServiceProbe.check(target,command,19080,onProgress = ::progress)
+                    ServiceProbe.check(target,command,19080,known=known,previews=previews,onProgress = ::progress)
                 } catch (e: Exception) { JSONObject().put("success",0).put("total",0).put("error",e.javaClass.simpleName+": "+e.message.orEmpty().take(200)) }
                 runCatching { reply.send(Message.obtain().apply { what = RESULT; data = Bundle().apply { putString("result",result.toString()) } }) }
             }

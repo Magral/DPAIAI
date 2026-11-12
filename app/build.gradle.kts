@@ -11,7 +11,7 @@ val releaseSigningReady = releaseStore.isPresent && releasePassword.isPresent
 val sharedCatalog = layout.buildDirectory.dir("generated/catalog")
 val copyCatalog by tasks.registering(Sync::class) {
     from("../tv/src/main/java/io/github/magral/dpipilot/tv") {
-        include("CatalogProtocol.kt","StrategyCatalog.kt","HttpCodec.kt","ProfileWire.kt","CheckSchedule.kt")
+        include("CatalogProtocol.kt","StrategyCatalog.kt","HttpCodec.kt","ProfileWire.kt","CheckSchedule.kt","PreviewBody.kt","PreviewQuality.kt")
         filter { line -> line.replace("package io.github.magral.dpipilot.tv","package io.github.dovecoteescapee.byedpi.catalog") }
     }
     into(sharedCatalog)
@@ -25,8 +25,8 @@ android {
         applicationId = "io.github.magral.dpipilot"
         minSdk = 21
         targetSdk = 34
-        versionCode = 18
-        versionName = "0.9.3"
+        versionCode = 19
+        versionName = "0.10.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 

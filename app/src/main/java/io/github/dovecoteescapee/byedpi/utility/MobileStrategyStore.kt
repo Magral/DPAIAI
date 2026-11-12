@@ -15,10 +15,13 @@ class MobileStrategyStore(private val prefs: SharedPreferences,private val id: S
     private fun isExcluded(row: JSONObject) = row.optBoolean("excluded",row.optInt("bad") > 0 && row.optInt("good") == 0)
     fun excludedIds(): Set<String> = entries().filter { isExcluded(it) }.map { CatalogProtocol.id(it.optString("command")) }.toSet()
     fun excluded(command: String) = CatalogProtocol.id(command) in excludedIds()
+    fun known(command: String) = entries().any { it.optString("command") == command && it.optInt("good") > 0 }
     fun choices(): List<JSONObject> {
         val expected = ServiceTargets.target(id).endpoints.size*2
         return entries().filter { !isExcluded(it) && it.optBoolean("verified") && it.optInt("passed") == expected && it.optInt("total") == expected && it.optInt("schema") == 2 }
-            .sortedWith(compareBy<JSONObject> { it.optLong("latencyMs",Long.MAX_VALUE).takeIf { n -> n > 0 } ?: Long.MAX_VALUE }.thenBy { CatalogProtocol.id(it.optString("command")) })
+            .sortedWith(compareBy<JSONObject> { MobileScanPolicy.previewScore(id,it) }
+                .thenBy { it.optLong("latencyMs",Long.MAX_VALUE).takeIf { n -> n > 0 } ?: Long.MAX_VALUE }
+                .thenBy { CatalogProtocol.id(it.optString("command")) })
     }
     private fun update(command: String,edit: (JSONObject)->Unit) {
         require(CatalogProtocol.validCommand(command))
@@ -32,8 +35,14 @@ class MobileStrategyStore(private val prefs: SharedPreferences,private val id: S
         if (excluded(command)) return false
         val a = ProbeAssessment.evaluate(id,result)
         update(command) { it.put("schema",2).put("verified",true).put("passed",a.requiredSuccess+a.extraSuccess).put("total",a.requiredTotal+a.extraTotal)
-            .put("latencyMs",ProbeAssessment.latency(result)).put("good",it.optInt("good")+1).put("usefulMillis",it.optLong("usefulMillis")+useful.coerceAtLeast(0)) }
+            .put("latencyMs",ProbeAssessment.latency(result)).put("good",it.optInt("good")+1).put("usefulMillis",it.optLong("usefulMillis")+useful.coerceAtLeast(0))
+            result.optJSONArray("preview")?.let { preview -> it.put("preview",preview) }
+        }
         return true
+    }
+    fun report(command: String) {
+        update(command) { it.put("verified",false).put("excluded",true).put("reported",true)
+            .put("reason","Пользователь сообщил о проблеме").put("reports",it.optInt("reports")+1) }
     }
     fun defer(command: String,result: JSONObject) {
         update(command) { it.put("verified",false).put("reason",probeFailureDetail(result)) }

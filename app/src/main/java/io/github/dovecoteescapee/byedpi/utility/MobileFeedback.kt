@@ -14,7 +14,7 @@ object MobileFeedback {
         val profile = MobileStrategyPolicy.profile(context)
         val edit = context.getPreferences().edit()
         listOf("instagram","youtube").forEach { id -> edit.putLong("mobile_scan.$id.$profile",System.currentTimeMillis()).remove("mobile_selected.$id").remove("mobile_imported.$id") }
-        edit.apply();cancelled.incrementAndGet();acknowledgeAll();wake()
+        edit.apply();cancelled.incrementAndGet();MobilePresentation.pause();acknowledgeAll();wake()
     }
     private val signals = Channel<Unit>(Channel.CONFLATED)
     private val requested = ConcurrentHashMap<String,AtomicLong>()

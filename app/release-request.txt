@@ -1,1 +1,1 @@
-Defer scan exclusions until fresh working control; restore failed access with first full reserve; expose failure detail. Permanent release.
+Android 0.10.0: TV preview quality and single confirming retry; simple strategy progress; fixed YouTube + Instagram; permanent signed APK.

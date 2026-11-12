@@ -1,5 +1,8 @@
 name: Android APK
 on:
+  pull_request:
+    branches: [main]
+    paths: ['app/**', 'tv/src/main/java/**', '.github/workflows/android.yml']
   push:
     branches: [main]
     paths-ignore: [.github/workflows/publish-apk.yml, 'windows/**', .github/workflows/windows.yml]
