@@ -38,6 +38,7 @@ def extract(text):
         parser=Text();parser.feed(text);text=''.join(parser.parts)
     text=html.unescape(text).replace('\\-','-')
     found=[]
+    found.extend(re.findall(r'<item[^>]*>\s*(-{1,2}[^<\n]{1,4096})</item>',text))
     # Kotlin/list/document snippets are strings or complete command lines, never scripts.
     found.extend(re.findall(r'["`“](-{1,2}[^"`”\n\r]{1,4096})["`”]',text))
     for line in text.splitlines():
