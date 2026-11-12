@@ -54,6 +54,7 @@ class MobileStrategyStore(private val prefs: SharedPreferences,private val id: S
         update(command) { it.put("verified",false).put("reason",probeFailureDetail(result)) }
     }
     fun reject(command: String,result: JSONObject = JSONObject(),rollback: Boolean = false) {
+        if (!rollback && result.length() > 0 && !MobileSearchPolicy.conclusiveFailure(result)) { defer(command,result);return }
         val a = ProbeAssessment.evaluate(id,result)
         update(command) { it.put("schema",2).put("verified",false).put("excluded",true).put("passed",a.requiredSuccess+a.extraSuccess).put("total",a.requiredTotal+a.extraTotal)
             .put("reason",probeFailureDetail(result)).put("bad",it.optInt("bad")+1).put("rollbacks",it.optInt("rollbacks")+if (rollback) 1 else 0) }
