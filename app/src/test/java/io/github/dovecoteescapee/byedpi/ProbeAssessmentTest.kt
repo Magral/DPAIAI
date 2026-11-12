@@ -19,12 +19,14 @@ class ProbeAssessmentTest {
         val score = ProbeAssessment.evaluate("youtube",result)
         assertFalse(score.eligible); assertFalse(score.complete)
         assertEquals(4,score.requiredSuccess); assertEquals(4,score.requiredTotal)
-        assertEquals(0,score.extraSuccess); assertEquals(4,score.extraTotal)
+        assertEquals(0,score.extraSuccess); assertEquals(22,score.extraTotal)
     }
     @Test fun missingDuplicateSkippedOrInvalidContentCannotPassRequiredChecks() {
         val good = rows("youtube")
         fun score(rows: JSONArray) = ProbeAssessment.evaluate("youtube",JSONObject().put("rows",rows))
         assertTrue(score(good).complete)
+        for(status in listOf("unavailable","failed"))assertFalse(ProbeAssessment.evaluate("youtube",JSONObject().put("rows",good).put("media",JSONObject().put("status",status))).eligible)
+        assertTrue(ProbeAssessment.evaluate("youtube",JSONObject().put("rows",good).put("media",JSONObject().put("status","confirmed"))).eligible)
         val skipped = JSONArray(good.toString()); skipped.getJSONObject(0).put("skipped",true); assertFalse(score(skipped).eligible)
         val html = JSONArray(good.toString()); html.getJSONObject(1).put("public",false); assertFalse(score(html).eligible)
         val missing = JSONArray(good.toString()); missing.remove(0); assertFalse(score(missing).eligible)

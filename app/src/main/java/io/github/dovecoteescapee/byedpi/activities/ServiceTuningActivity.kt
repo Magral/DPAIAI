@@ -85,7 +85,7 @@ class ServiceTuningActivity : AppCompatActivity() {
                 MobileFeedback.wake()
             }
         } }
-        TextView(this).apply { text="Годна только стратегия, прошедшая все проверки: YouTube — 8 из 8, Instagram — 6 из 6.";setPadding(0,16,0,16);box.addView(this) }
+        TextView(this).apply { text="Годна только стратегия, прошедшая все проверки: YouTube — 26 из 26 и медиадиапазоны, Instagram — 6 из 6.";setPadding(0,16,0,16);box.addView(this) }
         button("Проверить сейчас") {
             if (appStatus.first == AppStatus.Halted) Toast.makeText(this,"Включите VPN на главном экране; проверка выполняется в фоне",Toast.LENGTH_LONG).show()
             else {
@@ -96,8 +96,13 @@ class ServiceTuningActivity : AppCompatActivity() {
         }
         button("Остановить подбор") { MobileFeedback.cancelScans(this);Toast.makeText(this,"Подбор остановлен",Toast.LENGTH_LONG).show() }
         ServiceTargets.individual.forEach { target -> button("${target.name}: годные стратегии") { choose(target) } }
-        ServiceTargets.individual.forEach { target -> button("Открыть ${target.name}") { openApp(target) } }
+        button("Перепроверить все сохранённые результаты") {
+            ServiceTargets.individual.forEach { t ->
+                MobileHistory.store(this,t.id).expireCache();MobileFeedback.request(t.id)
+            }
+        }
         button("Генератор стратегий") { startActivity(Intent(this,StrategyGeneratorActivity::class.java)) }
+        button("DNS: автоматический подбор / настройки") { dnsSettings() }
         button("Дополнительно") { advanced() }
         lifecycleScope.launch(Dispatchers.IO) { MobileCatalogUpdater.refresh(this@ServiceTuningActivity) }
     }
@@ -115,7 +120,7 @@ class ServiceTuningActivity : AppCompatActivity() {
                     .setNegativeButton("Отмена",null).show()
             }.setNegativeButton("Закрыть",null)
         if (choices.isEmpty()) dialog.setMessage("Нет подтверждённых полных результатов. Старые записи требуют новой проверки. Включите VPN и нажмите «Проверить сейчас».")
-        else dialog.setItems(choices.map { row -> "${MobilePresentation.strategy(row.optString("command"))} · ${row.optInt("passed")} из ${row.optInt("total")}" }.toTypedArray()) { _,index ->
+        else dialog.setItems(choices.map { row -> "${row.optLong("latencyMs")} мс · ${MobilePresentation.strategy(row.optString("command"))} · ${row.optInt("passed")}/${row.optInt("total")} · DNS ${row.optJSONObject("result")?.optString("dns")?.ifBlank { "сети" } ?: "сети"} · ${java.text.DateFormat.getDateTimeInstance(java.text.DateFormat.SHORT,java.text.DateFormat.SHORT).format(java.util.Date(row.optLong("checkedAt")))}" }.toTypedArray()) { _,index ->
             val row = choices[index];val command = row.getString("command")
             val fresh = store.freshResult(command) != null
             androidx.appcompat.app.AlertDialog.Builder(this).setTitle(target.name)
@@ -135,6 +140,33 @@ class ServiceTuningActivity : AppCompatActivity() {
         }
         Toast.makeText(this,"Приложение ${target.name} не установлено или недоступно",Toast.LENGTH_LONG).show()
     }
+    private fun dnsSettings() {
+        val prefs=getPreferences()
+        val names=arrayOf("Автоподбор DNS вместе со стратегиями","DNS текущей сети","Указать IPv4 или HTTPS DoH","Список DNS и источники")
+        androidx.appcompat.app.AlertDialog.Builder(this).setTitle("DNS только для YouTube и Instagram").setItems(names) { _,i ->
+            fun setMode(mode: String) {
+                prefs.edit().putString("mobile_dns_mode",mode).apply()
+                ServiceTargets.individual.forEach { prefs.edit().remove("mobile_dns_candidates.${it.id}.${MobileStrategyPolicy.profile(this)}").apply() }
+                Toast.makeText(this,"Настройка сохранена. Нажмите «Проверить сейчас»: рабочая связка сохраняется до успешной проверки новой.",Toast.LENGTH_LONG).show()
+            }
+            when(i) {
+                0 -> setMode("auto")
+                1 -> setMode("network")
+                2 -> {
+                    val input=EditText(this).apply { setSingleLine();setText(prefs.getString("mobile_dns_manual","1.1.1.1")) }
+                    val d=androidx.appcompat.app.AlertDialog.Builder(this).setTitle("IPv4 или https://…/dns-query").setView(input).setPositiveButton("Сохранить",null).setNegativeButton("Отмена",null).create()
+                    d.setOnShowListener { d.getButton(-1).setOnClickListener {
+                        val value=input.text.toString().trim()
+                        if(value.isNotEmpty() && DnsResolver.valid(value)) { prefs.edit().putString("mobile_dns_manual",value).apply();setMode("manual");d.dismiss() }
+                        else input.error="Введите IPv4 или HTTPS-адрес DNS"
+                    } };d.show()
+                }
+                3 -> androidx.appcompat.app.AlertDialog.Builder(this).setTitle("База DNS: UDP с TCP-резервом и DoH")
+                    .setMessage(DnsResolver.providers.joinToString("\n\n") { "${it.name}: ${it.address.ifBlank { "системный DNS физической сети" }}\n${it.source}" }+"\n\n"+MobileDns.status)
+                    .setPositiveButton("Закрыть",null).show()
+            }
+        }.setNegativeButton("Закрыть",null).show()
+    }
     private fun advanced() {
         val items = arrayOf("Обновить базу","Источники базы","Сохранить профиль","Импорт профиля с ТВ","Скопировать диагностику")
         androidx.appcompat.app.AlertDialog.Builder(this).setTitle("Дополнительно").setItems(items) { _,index ->
@@ -146,7 +178,7 @@ class ServiceTuningActivity : AppCompatActivity() {
                 3 -> importProfile.launch(arrayOf("application/json","text/plain"))
                 4 -> {
                     val detail = "DPI Pilot ${io.github.dovecoteescapee.byedpi.BuildConfig.VERSION_NAME}\n"+
-                        MobileStrategyPolicy.state+"\n"+MobileNetwork.summary(this)+"\n"+MobileStrategyPolicy.lastProbe+"\n"+
+                        MobileStrategyPolicy.state+"\n"+MobileNetwork.summary(this)+"\n"+MobileDns.status+"\n"+MobileStrategyPolicy.lastProbe+"\n"+
                         MobileFeedback.traffic+"\n"+MobileHistory.summary(this)
                     (getSystemService(CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("DPI Pilot",detail))
                     Toast.makeText(this,"Диагностика скопирована",Toast.LENGTH_SHORT).show()

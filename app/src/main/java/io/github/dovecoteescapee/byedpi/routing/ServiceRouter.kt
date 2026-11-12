@@ -40,6 +40,7 @@ class ServiceRouter(private val bindPort: Int = 1080) : AutoCloseable {
             } catch (_: IOException) { if (running.get()) Thread.yield() }
         },"socks-accept").apply { isDaemon = true; start() }
     }
+    @Volatile var resolve: ((String,String)->String)? = null
     fun route(service: String,value: Route) { require(service in listOf("instagram","youtube")); routes[service] = value }
     fun active(service: String): Route? = routes[service]
     fun connections(route: Route) = flows.count { it.route == route }
@@ -91,7 +92,11 @@ class ServiceRouter(private val bindPort: Int = 1080) : AutoCloseable {
                 upstreamPeer.connect(InetSocketAddress("127.0.0.1",route.port),2000); upstreamPeer.soTimeout = 65000
                 val upstream = DataInputStream(upstreamPeer.inputStream); val request = upstreamPeer.outputStream
                 request.write(byteArrayOf(5,1,0)); request.flush(); require(upstream.readUnsignedByte() == 5 && upstream.readUnsignedByte() == 0)
-                request.write(byteArrayOf(5,1,0)+encoded+byteArrayOf((targetPort ushr 8).toByte(),targetPort.toByte())); request.flush()
+                val resolved = if (service != null && prefix.host != null && resolve != null) {
+                    val ip=InetAddress.getByName(resolve!!.invoke(prefix.host,service)).address
+                    byteArrayOf(if(ip.size==4) 1 else 4)+ip
+                } else encoded
+                request.write(byteArrayOf(5,1,0)+resolved+byteArrayOf((targetPort ushr 8).toByte(),targetPort.toByte())); request.flush()
                 require(upstream.readUnsignedByte() == 5 && upstream.readUnsignedByte() == 0); upstream.readUnsignedByte(); address(upstream); upstream.readUnsignedShort()
             } else upstreamPeer.connect(InetSocketAddress(host,targetPort),10000)
             upstreamPeer.soTimeout = 0; client.soTimeout = 0

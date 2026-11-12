@@ -15,9 +15,15 @@ object ServiceTargets {
         Target("instagram","Instagram",listOf(Endpoint("www.instagram.com","instagram"),Endpoint("i.instagram.com","tls"),Endpoint("static.cdninstagram.com","tls")),
             listOf("--split 1","--tlsrec 1+s","--disorder 1 --tlsrec 1+s","--disorder 1"),setOf("com.instagram.android","com.instagram.lite"),
             "Приоритет — Instagram. Проверяются HTTPS сайта и TLS к API/CDN, затем наблюдается реальный трафик выбранного клиента. Вход, лента, Reels и Direct без аккаунта не проверяются. Проверяется транспорт ко всем трём узлам в двух раундах (6/6)."),
-        Target("youtube","YouTube",listOf(Endpoint("www.youtube.com","youtube","/generate_204"),Endpoint("i.ytimg.com","image","/vi/jNQXAC9IVRw/hqdefault.jpg"),Endpoint("redirector.googlevideo.com","tls",required = false),Endpoint("youtubei.googleapis.com","tls",required = false)),
+        Target("youtube","YouTube",listOf(Endpoint("youtube.com","youtube","/generate_204"),Endpoint("i.ytimg.com","image","/vi/jNQXAC9IVRw/hqdefault.jpg"),
+            Endpoint("youtu.be","tls",required=false),Endpoint("i9.ytimg.com","tls",required=false),
+            Endpoint("yt3.ggpht.com","tls",required=false),Endpoint("yt4.ggpht.com","tls",required=false),
+            Endpoint("googleapis.com","tls",required=false),Endpoint("jnn-pa.googleapis.com","tls",required=false),
+            Endpoint("googleusercontent.com","tls",required=false),Endpoint("signaler-pa.youtube.com","tls",required=false),
+            Endpoint("youtubei.googleapis.com","tls",required=false),Endpoint("manifest.googlevideo.com","tls",required=false),
+            Endpoint("yt3.googleusercontent.com","tls",required=false)),
             (youtubeTvPreferred+listOf("--disorder 1","--split 1","--disorder 1 --tlsrec 1+s","--tlsrec 1+s")),setOf("com.google.android.youtube","com.google.android.youtube.tv"),
-            "Основные проверки: сайт YouTube и JPEG-превью в двух раундах. Для полного отбора также обязательны TLS к API и redirector.googlevideo.com в двух раундах (всего 8/8). Это не проверка видеодоставки. В приоритете варианты из отчёта работающего ТВ.")
+            "Основные проверки: сайт YouTube и JPEG-превью в двух раундах. Полная проверка охватывает 13 адресов в двух раундах (26/26), затем выполняется загрузка публичных медиадиапазонов. Если YouTube не выдаёт тестовый адрес, результат остаётся неподтверждённым, рабочий маршрут сохраняется. В приоритете варианты из отчёта работающего ТВ.")
     )
     val combined = Target(MobilePlan.BOTH,"Instagram + YouTube",individual.flatMap { it.endpoints },emptyList(),individual.flatMap { it.packages }.toSet(),
         "Оба приложения работают через один VPN одновременно. Для каждого сервиса сохраняется собственная стратегия; подбор и фоновая проверка выполняются отдельно. Выбор сервиса не требует переключения VPN. Лента, Reels и воспроизведение проверяются в самих приложениях.")

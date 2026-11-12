@@ -129,7 +129,7 @@ class ByeDpiVpnService : LifecycleVpnService() {
                             if (next.isEmpty() || next == signature) return@launch
                             try {
                                 mutex.withLock { stopTun2Socks(); startTun2Socks() }
-                                signature = next; MobileFeedback.wake()
+                                DnsResolver.clear();signature = next; MobileFeedback.wake()
                                 MobileStrategyPolicy.state = "Сеть изменилась; VPN и DNS обновлены"
                             } catch (e: CancellationException) { throw e }
                             catch (_: Exception) { lifecycleScope.launch { updateStatus(ServiceStatus.Failed); stop() } }

@@ -10,7 +10,7 @@ class MobileRuntime(private val context: Context) {
     private data class Slot(val id: String,val port: Int,val type: Class<out MobileEngineService>,var command: String? = null,var lease: MobileEngineLease? = null,var generation: Long = 0,@Volatile var alive: Boolean = false)
     private val slots = listOf(Slot("instagram",19410,InstagramAService::class.java),Slot("instagram",19411,InstagramBService::class.java),
         Slot("youtube",19420,YoutubeAService::class.java),Slot("youtube",19421,YoutubeBService::class.java))
-    val router = ServiceRouter()
+    val router = ServiceRouter().apply { resolve = { host,id -> DnsResolver.resolve(host,MobileDns.selected(context,id)) } }
     private var serial = 0L
     private val maintenance = CoroutineScope(SupervisorJob()+Dispatchers.Main)
     private val protectedRoutes = mutableSetOf<ServiceRouter.Route>()

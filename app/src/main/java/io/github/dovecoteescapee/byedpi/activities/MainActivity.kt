@@ -163,6 +163,15 @@ class MainActivity : AppCompatActivity() {
             prefs.edit().putString("mobile_force_replace.$id",profile).apply();MobileFeedback.request(id)
             Toast.makeText(this,"Ищем другую стратегию",Toast.LENGTH_SHORT).show()
         }
+        fun shortcut(button: android.widget.ImageButton,id: String) {
+            val client = ServiceTargets.target(id).packages.firstOrNull { packageManager.getLaunchIntentForPackage(it) != null }
+            button.isEnabled = client != null
+            if (client != null) {
+                button.setImageDrawable(packageManager.getApplicationIcon(client))
+                button.setOnClickListener { packageManager.getLaunchIntentForPackage(client)?.let { startActivity(it) } }
+            } else { button.setImageResource(android.R.drawable.ic_menu_view);button.alpha=0.4f }
+        }
+        shortcut(binding.openYoutube,"youtube");shortcut(binding.openInstagram,"instagram")
         binding.youtubeProblem.setOnClickListener { report("youtube") }
         binding.instagramProblem.setOnClickListener { report("instagram") }
         binding.serviceTuningButton.setOnClickListener { startActivity(Intent(this, ServiceTuningActivity::class.java)) }

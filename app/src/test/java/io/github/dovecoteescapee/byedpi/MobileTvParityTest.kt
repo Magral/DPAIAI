@@ -33,16 +33,16 @@ class MobileTvParityTest {
     }
     @Test fun fullMobileThresholdRemainsIndependentFromOptionalTvPreview() {
         for (quality in listOf(PreviewQuality(),preview(),preview(12000),preview().copy(samples=preview().samples.drop(1)))) {
-            assertTrue(ProbeAssessment.evaluate("youtube",result("youtube",8).put("preview",quality.encode())).eligible)
-            assertFalse(ProbeAssessment.evaluate("youtube",result("youtube",7).put("preview",quality.encode())).eligible)
+            assertTrue(ProbeAssessment.evaluate("youtube",result("youtube",26).put("preview",quality.encode())).eligible)
+            assertFalse(ProbeAssessment.evaluate("youtube",result("youtube",25).put("preview",quality.encode())).eligible)
         }
     }
     @Test fun latencyRanksFullResultsAndNeverPartialNodes() {
         val a = StrategyCatalog.commands[1];val b = StrategyCatalog.commands[2]
-        val stable = result("youtube",8,800).put("preview",preview(100).encode())
-        val slow = result("youtube",8,1).put("preview",preview(2200).encode())
+        val stable = result("youtube",26,800).put("preview",preview(100).encode())
+        val slow = result("youtube",26,1).put("preview",preview(2200).encode())
         assertEquals(b,MobileScanPolicy.fastest(listOf(b to slow,a to stable),"youtube")!!.first)
-        val partial = result("youtube",7,1).put("preview",preview(1).encode())
+        val partial = result("youtube",25,1).put("preview",preview(1).encode())
         assertEquals(a,MobileScanPolicy.fastest(listOf(b to partial,a to stable),"youtube")!!.first)
         assertEquals(a,MobileScanPolicy.fastest(listOf(a to stable,b to stable),"youtube")!!.first)
     }
@@ -60,9 +60,9 @@ class MobileTvParityTest {
             MobilePresentation.progress("youtube",command,progress)
             assertTrue(MobilePresentation.summary().contains("$passed из 8"))
         }
-        MobilePresentation.finish("youtube",command,result("youtube",7))
+        MobilePresentation.finish("youtube",command,result("youtube",25))
         assertTrue(MobilePresentation.summary().contains("Не прошла"))
-        MobilePresentation.finish("youtube",command,result("youtube",8))
+        MobilePresentation.finish("youtube",command,result("youtube",26))
         assertTrue(MobilePresentation.summary().contains("Годна"))
         MobilePresentation.start("youtube",command);MobilePresentation.pause()
         assertTrue(MobilePresentation.summary().contains("Подбор остановлен"))

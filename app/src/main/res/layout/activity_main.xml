@@ -48,9 +48,16 @@
         android:layout_width="match_parent" android:layout_height="wrap_content"
         android:layout_below="@id/proxy_address" android:layout_margin="20dp"
         android:gravity="center" android:textSize="18sp" android:text="Instagram + YouTube" />
+    <LinearLayout android:id="@+id/app_shortcuts" android:layout_width="wrap_content" android:layout_height="wrap_content"
+        android:layout_below="@id/targets_summary" android:layout_centerHorizontal="true" android:orientation="horizontal">
+        <ImageButton android:id="@+id/open_youtube" android:layout_width="56dp" android:layout_height="56dp" android:padding="10dp"
+            android:scaleType="fitCenter" android:background="?attr/selectableItemBackgroundBorderless" android:contentDescription="Открыть YouTube" />
+        <ImageButton android:id="@+id/open_instagram" android:layout_width="56dp" android:layout_height="56dp" android:padding="10dp"
+            android:scaleType="fitCenter" android:background="?attr/selectableItemBackgroundBorderless" android:contentDescription="Открыть Instagram" />
+    </LinearLayout>
     <com.google.android.material.button.MaterialButton
         android:id="@+id/youtube_problem" android:layout_width="match_parent" android:layout_height="wrap_content"
-        android:layout_below="@id/targets_summary" android:layout_marginHorizontal="20dp" android:textAllCaps="false" android:text="YouTube не работает" />
+        android:layout_below="@id/app_shortcuts" android:layout_marginHorizontal="20dp" android:textAllCaps="false" android:text="YouTube не работает" />
     <com.google.android.material.button.MaterialButton
         android:id="@+id/instagram_problem" android:layout_width="match_parent" android:layout_height="wrap_content"
         android:layout_below="@id/youtube_problem" android:layout_marginHorizontal="20dp" android:textAllCaps="false" android:text="Instagram не работает" />

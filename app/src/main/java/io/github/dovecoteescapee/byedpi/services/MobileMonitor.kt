@@ -84,6 +84,7 @@ class MobileMonitor(private val context: Context,private val scope: CoroutineSco
                             prefs.edit().remove("mobile_selected.$id").apply()
                             continue
                         }
+                        val dnsCandidates=MobileDns.shortlist(context,id)
                         val commands = if (selected != null) listOf(selected).filter { !store.excluded(it) && io.github.dovecoteescapee.byedpi.catalog.CatalogProtocol.validCommand(it) }
                             else MobileStrategyPolicy.window(context,target)
                         val planned = ((if (!store.excluded(previousCommand)) listOf(previousCommand) else emptyList())+commands).distinct()
@@ -95,9 +96,17 @@ class MobileMonitor(private val context: Context,private val scope: CoroutineSco
                         var firstApplied = false
                         fun validScan() = permitted(id) && same(profile) && MobileFeedback.token(id) == token && cancellation == MobileFeedback.cancelToken() && !superseded() && (forced || automatic())
                         suspend fun test(command: String,fast: Boolean): JSONObject {
-                            if (command == MobilePlan.command(active,id) && !runtime.fault(id)) return probe(id,command,fast=fast)
+                            if (command == MobilePlan.command(active,id) && !runtime.fault(id) && MobileDns.selected(context,id) in dnsCandidates) {
+                                val current=probe(id,command,fast=fast).put("dns",MobileDns.selected(context,id))
+                                if (ProbeAssessment.evaluate(id,current).eligible) return current
+                            }
                             MobilePresentation.start(id,command)
-                            val result = candidate(id,command,profile,token,fast)
+                            var result=JSONObject()
+                            for (dns in dnsCandidates) {
+                                if(!validScan()) break
+                                result=candidate(id,command,profile,token,fast,dns)
+                                if(ProbeAssessment.evaluate(id,result).eligible) break
+                            }
                             if (validScan()) MobilePresentation.finish(id,command,result)
                             return result
                         }
@@ -112,7 +121,7 @@ class MobileMonitor(private val context: Context,private val scope: CoroutineSco
                         // Fast failures are never exclusions, and no confirming retry blocks this pass.
                         for (command in planned) {
                             if (!validScan()) break
-                            val result = test(command,true)
+                            val result = store.freshResult(command) ?: test(command,true)
                             if (!validScan()) break
                             if (ProbeAssessment.evaluate(id,result).eligible) accept(command,result)
                             else { deferred.add(command);store.defer(command,result) }
@@ -145,7 +154,7 @@ class MobileMonitor(private val context: Context,private val scope: CoroutineSco
                             else { store.defer(controlCommand,control);prefs.edit().remove("mobile_selected.$id").remove("mobile_imported.$id").remove("mobile_force_replace.$id").apply();publish("${target.name}: контроль не прошёл; массовые исключения отменены");continue }
                         }
                         if (best.first == MobilePlan.command(active,id) && !runtime.fault(id)) {
-                            MobileStrategyPolicy.remember(context,id,best.first);MobilePresentation.finish(id,best.first,best.second)
+                            MobileDns.save(context,id,best.second);MobileStrategyPolicy.remember(context,id,best.first);MobilePresentation.finish(id,best.first,best.second)
                             publish("${target.name}: текущая стратегия выбрана среди полных результатов")
                         } else applyVerified(id,best.first,best.second,profile,token,waitForSlot=true)
                         // Optional image quality is measured after application; never repeat the full test.
@@ -167,9 +176,9 @@ class MobileMonitor(private val context: Context,private val scope: CoroutineSco
             }
         }
     }
-    private suspend fun candidate(id: String,command: String,profile: String,token: Long,fast: Boolean): JSONObject =
+    private suspend fun candidate(id: String,command: String,profile: String,token: Long,fast: Boolean,dns: String = ""): JSONObject =
         awaitResult(id,profile,token) { withTimeout(if (fast) 30000L else 215000L) {
-            MobileCandidate.run(context,id,command,known=MobileHistory.store(context,id,profile).known(command),previews=false,fast=fast) {
+            MobileCandidate.run(context,id,command,known=MobileHistory.store(context,id,profile).known(command),previews=false,fast=fast,dns=dns) {
                 MobilePresentation.progress(id,command,it)
             }
         } }
@@ -180,6 +189,7 @@ class MobileMonitor(private val context: Context,private val scope: CoroutineSco
         val id = request.target
         val token = MobileFeedback.token(id)
         val store = MobileHistory.store(context,id,profile)
+        val dnsCandidates=MobileDns.shortlist(context,id)
         val seeds = store.choices().map { it.optString("command") }+ServiceTargets.target(id).preferred
         val excluded = store.entries().filter { store.excluded(it.optString("command")) }.map { it.optString("command") }
         val commands = StrategyGenerator.candidates(seeds,io.github.dovecoteescapee.byedpi.catalog.RuntimeCatalog.commands.toSet()+excluded)
@@ -193,7 +203,13 @@ class MobileMonitor(private val context: Context,private val scope: CoroutineSco
             if (!valid() || SystemClock.elapsedRealtime() >= deadline) return null
             MobilePresentation.start(id,command)
             val result = store.freshResult(command) ?: withTimeoutOrNull((deadline-SystemClock.elapsedRealtime()).coerceAtLeast(1)) {
-                candidate(id,command,profile,token,fast)
+                var tested=JSONObject()
+                for(dns in dnsCandidates) {
+                    if(!valid())break
+                    tested=candidate(id,command,profile,token,fast,dns)
+                    if(ProbeAssessment.evaluate(id,tested).eligible)break
+                }
+                tested
             }
             if (result != null && valid()) MobilePresentation.finish(id,command,result)
             return result
@@ -206,7 +222,7 @@ class MobileMonitor(private val context: Context,private val scope: CoroutineSco
         try {
             update("Быстрый проход")
             for (command in commands) {
-                val result = test(command,true) ?: break
+                val result = store.freshResult(command) ?: test(command,true) ?: break
                 if (!valid()) break
                 checked++
                 if (ProbeAssessment.evaluate(id,result).eligible) accept(command,result) else { deferred.add(command);store.defer(command,result) }
@@ -229,7 +245,7 @@ class MobileMonitor(private val context: Context,private val scope: CoroutineSco
     private suspend fun applyVerified(id: String,command: String,result: JSONObject,profile: String,token: Long,waitForSlot: Boolean = false): Boolean {
         fun valid() = permitted(id) && same(profile) && MobileFeedback.token(id) == token && cancellation == MobileFeedback.cancelToken() && !superseded()
         if (!ProbeAssessment.evaluate(id,result).eligible || !valid()) return false
-        if (MobilePlan.command(active,id) == command && !runtime.fault(id)) { MobilePresentation.applied(id);return true }
+        if (MobilePlan.command(active,id) == command && !runtime.fault(id)) { MobileDns.save(context,id,result);MobilePresentation.applied(id);return true }
         val previous = runtime.router.active(id) ?: return false
         var candidate = runtime.stage(id,command)
         // Keep established connections alive until the retired native slot drains.
@@ -241,6 +257,7 @@ class MobileMonitor(private val context: Context,private val scope: CoroutineSco
         var applied = false
         try {
             if (!valid()) return false
+            MobileDns.save(context,id,result)
             runtime.activate(id,route)
             MobilePresentation.applied(id)
             val next = MobilePlan.replace(active,id,command)

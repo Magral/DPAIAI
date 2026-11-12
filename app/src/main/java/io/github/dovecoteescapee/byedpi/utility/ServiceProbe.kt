@@ -63,9 +63,15 @@ object ServiceProbe {
                 .put("publicSuccess",rows.count { it.optBoolean("public") }).put("publicTotal",target.endpoints.count { it.kind in listOf("youtube","image") }*2)
                 .put("inconclusive",rows.any { it.optBoolean("unavailable") || it.optBoolean("timeout") })
                 .put("deferred",fast && success != target.endpoints.size*2)
+            val transportAssessment = ProbeAssessment.evaluate(id,result)
+            if(id=="youtube" && transportAssessment.eligible) {
+                onProgress(ProbeProgress(target.endpoints.size*2,target.endpoints.size*2,"video"))
+                val media=MobileVideoProbe.check(port,session);result.put("media",media)
+                if(media.optString("status")!="confirmed")result.put("inconclusive",true)
+            }
             val a = ProbeAssessment.evaluate(id,result)
             if (id == "youtube" && a.eligible && previews) {
-                onProgress(ProbeProgress(8,8,"preview"))
+                onProgress(ProbeProgress(target.endpoints.size*2,target.endpoints.size*2,"preview"))
                 result.put("preview",MobilePreviewProbe.check(port,MobileStrategyPolicy.timeout(command),session).encode())
             }
             return result.put("requiredSuccess",a.requiredSuccess).put("requiredTotal",a.requiredTotal)

@@ -26,6 +26,8 @@ class MobileStrategyStore(private val prefs: SharedPreferences,private val id: S
     fun freshResult(command: String,now: Long = System.currentTimeMillis()): JSONObject? {
         val row = choices().firstOrNull { it.optString("command") == command } ?: return null
         val checked = row.optLong("checkedAt")
+        val config=prefs.getString("mobile_dns_mode","auto")+"|"+prefs.getString("mobile_dns_manual","1.1.1.1")
+        if(row.optString("dnsConfig", "auto|1.1.1.1")!=config)return null
         if (checked <= 0 || now < checked || now-checked >= MobileScanPolicy.INTERVAL) return null
         return row.optJSONObject("result")?.takeIf { ProbeAssessment.evaluate(id,it).eligible }
     }
@@ -40,7 +42,8 @@ class MobileStrategyStore(private val prefs: SharedPreferences,private val id: S
         if (!ProbeAssessment.evaluate(id,result).eligible) { reject(command,result);return false }
         if (excluded(command)) return false
         val a = ProbeAssessment.evaluate(id,result)
-        update(command) { it.put("checkedAt",System.currentTimeMillis()).put("result",JSONObject(result.toString())).put("schema",2).put("verified",true).put("passed",a.requiredSuccess+a.extraSuccess).put("total",a.requiredTotal+a.extraTotal)
+        if(!result.has("checkedAt"))result.put("checkedAt",System.currentTimeMillis())
+        update(command) { it.put("dnsConfig",prefs.getString("mobile_dns_mode","auto")+"|"+prefs.getString("mobile_dns_manual","1.1.1.1")).put("checkedAt",result.optLong("checkedAt")).put("result",JSONObject(result.toString())).put("schema",2).put("verified",true).put("passed",a.requiredSuccess+a.extraSuccess).put("total",a.requiredTotal+a.extraTotal)
             .put("latencyMs",ProbeAssessment.latency(result)).put("good",it.optInt("good")+1).put("usefulMillis",it.optLong("usefulMillis")+useful.coerceAtLeast(0))
             result.optJSONArray("preview")?.let { preview -> it.put("preview",preview) }
         }
@@ -51,13 +54,18 @@ class MobileStrategyStore(private val prefs: SharedPreferences,private val id: S
             .put("reason","Пользователь сообщил о проблеме").put("reports",it.optInt("reports")+1) }
     }
     fun defer(command: String,result: JSONObject) {
-        update(command) { it.put("verified",false).put("reason",probeFailureDetail(result)) }
+        update(command) { it.put("lastFailureAt",System.currentTimeMillis()).put("reason",probeFailureDetail(result)) }
     }
     fun reject(command: String,result: JSONObject = JSONObject(),rollback: Boolean = false) {
         if (!rollback && result.length() > 0 && !MobileSearchPolicy.conclusiveFailure(result)) { defer(command,result);return }
         val a = ProbeAssessment.evaluate(id,result)
+        if(!result.has("checkedAt"))result.put("checkedAt",System.currentTimeMillis())
         update(command) { it.put("schema",2).put("verified",false).put("excluded",true).put("passed",a.requiredSuccess+a.extraSuccess).put("total",a.requiredTotal+a.extraTotal)
             .put("reason",probeFailureDetail(result)).put("bad",it.optInt("bad")+1).put("rollbacks",it.optInt("rollbacks")+if (rollback) 1 else 0) }
+    }
+    fun expireCache() {
+        val rows = entries();rows.forEach { it.put("checkedAt",0) }
+        prefs.edit().putString(key,JSONArray(rows).toString()).apply()
     }
     fun resetExclusions() {
         val rows = entries()
@@ -68,7 +76,7 @@ class MobileStrategyStore(private val prefs: SharedPreferences,private val id: S
 
 // Include failed endpoints first; successful rows must not hide the cause.
 fun probeFailureDetail(result: JSONObject): String {
-    val error = result.optString("error").takeIf { it.isNotBlank() }
+    val error = result.optString("error").takeIf { it.isNotBlank() } ?: result.optJSONObject("media")?.takeIf { it.optString("status")!="confirmed" }?.optString("detail")
     val rows = result.optJSONArray("rows")
     val failed = if (rows == null) emptyList() else (0 until rows.length()).mapNotNull { rows.optJSONObject(it) }
         .filter { !it.optBoolean("ok") }.take(4).map {

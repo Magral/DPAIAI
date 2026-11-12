@@ -26,6 +26,8 @@ object ProbeAssessment {
                 (spec.kind !in listOf("youtube","image") || row.optBoolean("public"))
             if (passed) { if (spec.required) requiredSuccess++ else extraSuccess++ }
         }
+        val media=result.optJSONObject("media")
+        if(target=="youtube" && media!=null && media.optString("status")!="confirmed") extraSuccess=0
         return Result(requiredSuccess,specs.count { it.required }*2,extraSuccess,specs.count { !it.required }*2)
     }
 }

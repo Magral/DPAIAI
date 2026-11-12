@@ -100,7 +100,7 @@ jobs:
               release = (await github.rest.repos.createRelease({
                 owner,repo,tag_name:tag,target_commitish:context.sha,name:'DPI Pilot '+version,
                 draft:true,prerelease:false,
-                body:fs.readFileSync("docs/MOBILE_0111.md","utf8")+"\n\nSource: "+context.sha+"\nSHA-256 APK: "+digest.slice(7)
+                body:fs.readFileSync("docs/MOBILE_0120.md","utf8")+"\n\nSource: "+context.sha+"\nSHA-256 APK: "+digest.slice(7)
               })).data;
             }
             const assets = (await github.rest.repos.listReleaseAssets({owner,repo,release_id:release.id})).data;
