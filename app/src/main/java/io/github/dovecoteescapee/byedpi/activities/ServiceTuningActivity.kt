@@ -64,6 +64,7 @@ class ServiceTuningActivity : AppCompatActivity() {
         val box = LinearLayout(this).apply { orientation=LinearLayout.VERTICAL;setPadding(24,24,24,24) }
         setContentView(ScrollView(this).apply { addView(box) })
         title = "Подбор стратегий"
+        if(state==null && intent.getBooleanExtra("open_dns",false)) box.post { dnsSettings() }
         base = TextView(this).apply { textSize=18f;setPadding(0,12,0,16);box.addView(this) }
         ServiceTargets.individual.forEach { target ->
             TextView(this).apply { text="${target.name}: общий прогресс";box.addView(this) }

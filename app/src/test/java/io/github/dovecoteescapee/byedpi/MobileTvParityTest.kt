@@ -54,11 +54,11 @@ class MobileTvParityTest {
             if (phase !in listOf("saved","paused")) assertTrue(text.contains("2 из 8"))
         }
         MobilePresentation.clear();MobilePresentation.start("youtube",command)
-        for (passed in 0..8) {
-            val progress = ProbeProgress(passed,8)
+        for (passed in 0..26) {
+            val progress = ProbeProgress(passed,26)
             assertEquals(progress,ProbeProgress.decode(progress.encode()))
             MobilePresentation.progress("youtube",command,progress)
-            assertTrue(MobilePresentation.summary().contains("$passed из 8"))
+            assertTrue(MobilePresentation.summary().contains("$passed из 26"))
         }
         MobilePresentation.finish("youtube",command,result("youtube",25))
         assertTrue(MobilePresentation.summary().contains("Не прошла"))

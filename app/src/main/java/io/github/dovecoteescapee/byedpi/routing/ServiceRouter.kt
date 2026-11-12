@@ -40,6 +40,7 @@ class ServiceRouter(private val bindPort: Int = 1080) : AutoCloseable {
             } catch (_: IOException) { if (running.get()) Thread.yield() }
         },"socks-accept").apply { isDaemon = true; start() }
     }
+    @Volatile var dns: ((String)->String?)? = null
     @Volatile var resolve: ((String,String)->String)? = null
     fun route(service: String,value: Route) { require(service in listOf("instagram","youtube")); routes[service] = value }
     fun active(service: String): Route? = routes[service]
@@ -140,7 +141,13 @@ class ServiceRouter(private val bindPort: Int = 1080) : AutoCloseable {
                     if (target == 443 || target == 0) continue // Force QUIC fallback to TCP for selected apps.
                     val payload = ByteArray(data.available()).also { data.readFully(it) }; val destination = packet.socketAddress
                     try { datagrams.execute {
-                        runCatching { DatagramSocket().use { remote ->
+                        runCatching {
+                            val resolver = if(target==53) io.github.dovecoteescapee.byedpi.utility.DnsResolver.questionName(payload)?.let { dns?.invoke(it) } else null
+                            if(!resolver.isNullOrEmpty()) {
+                                val response=io.github.dovecoteescapee.byedpi.utility.DnsResolver.exchange(payload,resolver)
+                                val wrapped=byteArrayOf(0,0,0)+encoded+byteArrayOf((target ushr 8).toByte(),target.toByte())+response
+                                if(!relay.isClosed)relay.send(DatagramPacket(wrapped,wrapped.size,destination))
+                            } else DatagramSocket().use { remote ->
                             sockets.add(remote)
                             try {
                                 remote.soTimeout = 5000; remote.connect(InetAddress.getByName(host),target)

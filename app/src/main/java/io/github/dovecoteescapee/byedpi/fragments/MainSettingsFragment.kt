@@ -70,6 +70,13 @@ class MainSettingsFragment : PreferenceFragmentCompat() {
         listOf("byedpi_mode","legacy_byedpi_category").forEach { findPreference<Preference>(it)?.isVisible = false }
         findPreferenceNotNull<Preference>("version").summary = BuildConfig.VERSION_NAME
 
+        findPreference<Preference>("mobile_network_dns")?.isVisible=false
+        preferenceScreen.addPreference(Preference(requireContext()).apply {
+            title="DNS для YouTube и Instagram";summary="Автоподбор, DNS сети или свой IPv4 / DoH"
+            setOnPreferenceClickListener {
+                startActivity(android.content.Intent(requireContext(),io.github.dovecoteescapee.byedpi.activities.ServiceTuningActivity::class.java).putExtra("open_dns",true));true
+            }
+        })
         updatePreferences()
     }
 
@@ -91,7 +98,7 @@ class MainSettingsFragment : PreferenceFragmentCompat() {
 
         when (mode) {
             Mode.VPN -> {
-                dns.isVisible = true
+                dns.isVisible = false
                 ipv6.isVisible = true
             }
 

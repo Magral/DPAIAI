@@ -6,6 +6,13 @@ import android.content.Context
 object MobileSetup {
     fun prepare(context: Context) {
         val prefs = context.getPreferences()
+        if(!prefs.contains("mobile_dns_mode") && !prefs.getBoolean("mobile_network_dns",true)) {
+            val dns=prefs.getString("dns_ip","1.1.1.1").orEmpty()
+            if(DnsResolver.valid(dns) && dns.isNotEmpty()) {
+                val edit=prefs.edit().putString("mobile_dns_mode","manual").putString("mobile_dns_manual",dns)
+                listOf("instagram","youtube").forEach { edit.putString(MobileDns.key(context,it),dns) };edit.apply()
+            }
+        }
         val selected = TargetApps.installed(context).map { it.packageName }.filter { it in ServiceTargets.combined.packages }.toSet()
         check(selected.isNotEmpty()) { "Установите YouTube или Instagram" }
         var plan = MobilePlan.saved(prefs)

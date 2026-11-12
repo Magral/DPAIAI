@@ -50,6 +50,19 @@ object DnsResolver {
         ascii.split('.').forEach { label -> require(label.length in 1..63);d.writeByte(label.length);d.writeBytes(label) }
         d.writeByte(0);d.writeShort(1);d.writeShort(1);return out.toByteArray()
     }
+    fun questionName(query: ByteArray): String? = runCatching {
+        val d=DataInputStream(ByteArrayInputStream(query));d.readUnsignedShort();require(d.readUnsignedShort() and 0x8000==0);require(d.readUnsignedShort()==1);d.skipBytes(6)
+        val labels=mutableListOf<String>();var length=0
+        while(true) { val n=d.readUnsignedByte();if(n==0)break;require(n in 1..63);length+=n+1;require(length<=254)
+            labels.add(String(ByteArray(n).also { d.readFully(it) },Charsets.US_ASCII)) }
+        labels.joinToString(".")
+    }.getOrNull()
+    fun exchange(query: ByteArray,server: String): ByteArray {
+        require(server.isNotEmpty() && valid(server));require(questionName(query)!=null)
+        val response=if(server.startsWith("https://"))doh(server,query) else udp(server,query)
+        require(response.size>=12 && response[0]==query[0] && response[1]==query[1] && response[2].toInt() and 0x80!=0)
+        return response
+    }
     private fun doh(url: String,query: ByteArray): ByteArray {
         val c=URL(url).openConnection(Proxy.NO_PROXY) as HttpsURLConnection
         try {
