@@ -21,6 +21,8 @@ class MobileMonitor(private val context: Context,private val scope: CoroutineSco
     private fun automatic() = prefs.getBoolean("mobile_auto_three_days",true)
     private fun scanKey(id: String,profile: String) = "mobile_scan.$id.$profile"
     private var connection = ""
+    private var generating: MobileGenerator.Request? = null
+    private fun permitted(id: String) = generating?.let { it.target == id && MobileGenerator.valid(it) } ?: (MobileScanPolicy.enabled(prefs,id) || prefs.contains("mobile_selected.$id"))
     private fun same(profile: String) = connection == MobileStrategyPolicy.connection(context) && MobileStrategyPolicy.connected(context) && MobileStrategyPolicy.profile(context) == profile
     private fun publish(message: String = "") {
         MobileStrategyPolicy.state = ServiceTargets.individual.joinToString("; ") { t ->
@@ -50,10 +52,11 @@ class MobileMonitor(private val context: Context,private val scope: CoroutineSco
                     runtime.reap()
                     cancellation = MobileFeedback.cancelToken()
                     revision = MobileFeedback.requestVersion()
+                    MobileGenerator.take()?.let { runGenerator(it,profile) }
                     for (target in ServiceTargets.individual) {
                         if (!same(profile) || cancellation != MobileFeedback.cancelToken() || superseded()) break
                         val id = target.id
-                        if (!MobileScanPolicy.enabled(prefs,id)) { MobilePresentation.disabled(id);continue }
+                        if (!permitted(id)) { MobilePresentation.disabled(id);continue }
                         val store = MobileHistory.store(context,id,profile)
                         if (prefs.getString("mobile_reset.$id",null) == profile) {
                             store.resetExclusions();prefs.edit().remove("mobile_reset.$id").apply()
@@ -81,65 +84,78 @@ class MobileMonitor(private val context: Context,private val scope: CoroutineSco
                             prefs.edit().remove("mobile_selected.$id").apply()
                             continue
                         }
-                        val current = if (!store.excluded(previousCommand)) probe(id,previousCommand,previews=true) else JSONObject().put("error","Исключённый вариант не проверяется")
-                        if (!MobileScanPolicy.enabled(prefs,id) || !same(profile) || MobileFeedback.token(id) != token || cancellation != MobileFeedback.cancelToken() || superseded()) continue
-                        reports[id] = current
-                        val results = mutableListOf<Pair<String,JSONObject>>()
-                        val failures = mutableListOf<Pair<String,JSONObject>>()
-                        val currentGood = ProbeAssessment.evaluate(id,current).eligible
-                        if (ProbeAssessment.evaluate(id,current).eligible) {
-                            store.accept(previousCommand,current);if (!replaceRequested) results.add(previousCommand to current)
-                        } else if (!store.excluded(previousCommand)) { store.defer(previousCommand,current);failures.add(previousCommand to current) }
                         val commands = if (selected != null) listOf(selected).filter { !store.excluded(it) && io.github.dovecoteescapee.byedpi.catalog.CatalogProtocol.validCommand(it) }
                             else MobileStrategyPolicy.window(context,target)
-                        var firstApplied = currentGood && !replaceRequested
-                        var previewCandidates = 0 // At most 3 reserves + the current route per cycle.
-                        for ((index,command) in commands.withIndex()) {
-                            if (command == previousCommand && !runtime.fault(id)) continue
-                            if (!MobileScanPolicy.enabled(prefs,id) || !same(profile) || MobileFeedback.token(id) != token || cancellation != MobileFeedback.cancelToken() || superseded() || (!forced && !automatic())) break
-                            publish("${target.name}: ${index+1}/${commands.size}; рабочая стратегия второго сервиса сохраняется")
+                        val planned = ((if (!store.excluded(previousCommand)) listOf(previousCommand) else emptyList())+commands).distinct()
+                        MobilePresentation.beginScan(id,planned.size)
+                        val results = mutableListOf<Pair<String,JSONObject>>()
+                        val failures = mutableListOf<Pair<String,JSONObject>>()
+                        val deferred = mutableListOf<String>()
+                        var currentGood = false
+                        var firstApplied = false
+                        fun validScan() = permitted(id) && same(profile) && MobileFeedback.token(id) == token && cancellation == MobileFeedback.cancelToken() && !superseded() && (forced || automatic())
+                        suspend fun test(command: String,fast: Boolean): JSONObject {
+                            if (command == MobilePlan.command(active,id) && !runtime.fault(id)) return probe(id,command,fast=fast)
                             MobilePresentation.start(id,command)
-                            val result = try { awaitResult(id,profile,token) { withTimeout(215000) {
-                                MobileCandidate.run(context,id,command,known=store.known(command),previews=previewCandidates < 3) {
-                                    MobilePresentation.progress(id,command,it)
-                                }
-                            } } }
-                                catch (e: TimeoutCancellationException) { currentCoroutineContext().ensureActive();JSONObject().put("error","Лимит процесса проверки") }
-                                catch (e: CancellationException) { throw e }
-                                catch (e: Exception) { JSONObject().put("error",e.javaClass.simpleName) }
-                            if (!MobileScanPolicy.enabled(prefs,id) || !same(profile) || MobileFeedback.token(id) != token || cancellation != MobileFeedback.cancelToken() || superseded()) break
-                            MobilePresentation.finish(id,command,result)
-                            if (result.has("preview")) previewCandidates++
-                            if (ProbeAssessment.evaluate(id,result).eligible) {
-                                if (store.accept(command,result)) {
-                                    results.add(command to result)
-                                    if (!firstApplied) firstApplied = applyVerified(id,command,result,profile,token)
-                                }
-                            } else {
-                                store.defer(command,result);failures.add(command to result)
-                                publish("${target.name}: вариант не прошёл; ${probeFailureDetail(result)}")
-                            }
+                            val result = candidate(id,command,profile,token,fast)
+                            if (validScan()) MobilePresentation.finish(id,command,result)
+                            return result
+                        }
+                        suspend fun accept(command: String,result: JSONObject) {
+                            if (!store.accept(command,result)) return
+                            if (command == previousCommand) currentGood = true
+                            if (!replaceRequested || command != previousCommand) results.add(command to result)
+                            if (command == MobilePlan.command(active,id)) MobilePresentation.applied(id)
+                            if (!firstApplied && (!replaceRequested || command != previousCommand))
+                                firstApplied = applyVerified(id,command,result,profile,token)
+                        }
+                        // Fast failures are never exclusions, and no confirming retry blocks this pass.
+                        for (command in planned) {
+                            if (!validScan()) break
+                            val result = test(command,true)
+                            if (!validScan()) break
+                            if (ProbeAssessment.evaluate(id,result).eligible) accept(command,result)
+                            else { deferred.add(command);store.defer(command,result) }
+                            MobilePresentation.checked(id,deferred.size)
                             MobileStrategyPolicy.advance(context,id,command)
                         }
-                        if (!MobileScanPolicy.enabled(prefs,id) || !same(profile) || MobileFeedback.token(id) != token || cancellation != MobileFeedback.cancelToken() || superseded()) continue
+                        // A full attempt stands alone; partial fast and slow results are never combined.
+                        for ((index,command) in deferred.withIndex()) {
+                            if (!validScan()) break
+                            MobilePresentation.secondPass(id,deferred.size-index)
+                            val result = test(command,false)
+                            if (!validScan()) break
+                            if (ProbeAssessment.evaluate(id,result).eligible) accept(command,result)
+                            else { store.defer(command,result);failures.add(command to result) }
+                            MobilePresentation.secondPass(id,deferred.size-index-1)
+                        }
+                        if (validScan()) MobilePresentation.endScan(id) else MobilePresentation.interruptScan(id)
+                        if (!permitted(id) || !same(profile) || MobileFeedback.token(id) != token || cancellation != MobileFeedback.cancelToken() || superseded()) continue
                         if (!forced && !automatic()) continue
                         val best = if (selected != null) results.firstOrNull { it.first == selected } else MobileScanPolicy.fastest(results,id)
-                        prefs.edit().remove("mobile_selected.$id").remove("mobile_imported.$id").remove("mobile_force_replace.$id").apply()
+                        if (best == null) prefs.edit().remove("mobile_selected.$id").remove("mobile_imported.$id").remove("mobile_force_replace.$id").apply()
                         if (best == null) { publish("${target.name}: полного результата нет; исключения не записаны — возможен общий сбой сети");continue }
                         // Commit negative evidence only beside a fresh successful control on this same network.
                         if (currentGood && failures.isNotEmpty()) {
                             val controlCommand = MobilePlan.command(active,id)
                             val control = probe(id,controlCommand)
-                            if (!MobileScanPolicy.enabled(prefs,id) || !same(profile) || MobileFeedback.token(id) != token || cancellation != MobileFeedback.cancelToken() || superseded()) continue
+                            if (!permitted(id) || !same(profile) || MobileFeedback.token(id) != token || cancellation != MobileFeedback.cancelToken() || superseded()) continue
                             if (ProbeAssessment.evaluate(id,control).eligible)
                                 failures.forEach { (command,result) -> store.reject(command,result) }
-                            else { store.defer(controlCommand,control);publish("${target.name}: контроль не прошёл; массовые исключения отменены");continue }
+                            else { store.defer(controlCommand,control);prefs.edit().remove("mobile_selected.$id").remove("mobile_imported.$id").remove("mobile_force_replace.$id").apply();publish("${target.name}: контроль не прошёл; массовые исключения отменены");continue }
                         }
                         if (best.first == MobilePlan.command(active,id) && !runtime.fault(id)) {
                             MobileStrategyPolicy.remember(context,id,best.first);MobilePresentation.finish(id,best.first,best.second)
-                            publish("${target.name}: текущая стратегия выбрана среди полных результатов");continue
+                            publish("${target.name}: текущая стратегия выбрана среди полных результатов")
+                        } else applyVerified(id,best.first,best.second,profile,token,waitForSlot=true)
+                        // Optional image quality is measured after application; never repeat the full test.
+                        if (id == "youtube" && same(profile) && !superseded()) {
+                            val quality = awaitResult(id,profile,token) { withTimeout(40000) {
+                                MobileCandidate.run(context,id,best.first,qualityOnly=true)
+                            } }
+                            if (validScan()) quality.optJSONArray("preview")?.let { best.second.put("preview",it);store.accept(best.first,best.second) }
                         }
-                        applyVerified(id,best.first,best.second,profile,token,waitForSlot=true)
+                        prefs.edit().remove("mobile_selected.$id").remove("mobile_imported.$id").remove("mobile_force_replace.$id").apply()
                     }
                     val enabledTargets = ServiceTargets.individual.filter { MobileScanPolicy.enabled(prefs,it.id) }
                     val wait = if (automatic()) enabledTargets.minOfOrNull { MobileScanPolicy.remaining(prefs.getLong(scanKey(it.id,profile),0),System.currentTimeMillis()) } ?: Long.MAX_VALUE else Long.MAX_VALUE
@@ -151,11 +167,69 @@ class MobileMonitor(private val context: Context,private val scope: CoroutineSco
             }
         }
     }
+    private suspend fun candidate(id: String,command: String,profile: String,token: Long,fast: Boolean): JSONObject =
+        awaitResult(id,profile,token) { withTimeout(if (fast) 30000L else 215000L) {
+            MobileCandidate.run(context,id,command,known=MobileHistory.store(context,id,profile).known(command),previews=false,fast=fast) {
+                MobilePresentation.progress(id,command,it)
+            }
+        } }
+
+    /** Uses the same serial isolated worker, so generator and regular scan cannot fight for its port. */
+    private suspend fun runGenerator(request: MobileGenerator.Request,profile: String) {
+        generating = request
+        val id = request.target
+        val token = MobileFeedback.token(id)
+        val store = MobileHistory.store(context,id,profile)
+        val seeds = store.choices().map { it.optString("command") }+ServiceTargets.target(id).preferred
+        val excluded = store.entries().filter { store.excluded(it.optString("command")) }.map { it.optString("command") }
+        val commands = StrategyGenerator.candidates(seeds,io.github.dovecoteescapee.byedpi.catalog.RuntimeCatalog.commands.toSet()+excluded)
+        val deadline = SystemClock.elapsedRealtime()+request.minutes*60000L
+        val results = mutableListOf<Pair<String,JSONObject>>()
+        val deferred = mutableListOf<String>()
+        var checked = 0
+        fun valid() = MobileGenerator.valid(request) && same(profile) && cancellation == MobileFeedback.cancelToken() && !superseded() && MobileFeedback.token(id) == token
+        fun update(phase: String,remaining: Int = deferred.size) = MobileGenerator.update(request,checked,commands.size,results.size,remaining,phase)
+        suspend fun test(command: String,fast: Boolean): JSONObject? {
+            if (!valid() || SystemClock.elapsedRealtime() >= deadline) return null
+            MobilePresentation.start(id,command)
+            val result = store.freshResult(command) ?: withTimeoutOrNull((deadline-SystemClock.elapsedRealtime()).coerceAtLeast(1)) {
+                candidate(id,command,profile,token,fast)
+            }
+            if (result != null && valid()) MobilePresentation.finish(id,command,result)
+            return result
+        }
+        suspend fun accept(command: String,result: JSONObject) {
+            if (!valid() || !store.accept(command,result)) return
+            results.add(command to result)
+            if (results.size == 1) applyVerified(id,command,result,profile,token)
+        }
+        try {
+            update("Быстрый проход")
+            for (command in commands) {
+                val result = test(command,true) ?: break
+                if (!valid()) break
+                checked++
+                if (ProbeAssessment.evaluate(id,result).eligible) accept(command,result) else { deferred.add(command);store.defer(command,result) }
+                update("Быстрый проход")
+            }
+            for ((index,command) in deferred.withIndex()) {
+                update("Полная перепроверка",deferred.size-index)
+                val result = test(command,false) ?: break
+                if (!valid()) break
+                if (ProbeAssessment.evaluate(id,result).eligible) accept(command,result) else store.defer(command,result)
+                update("Полная перепроверка",deferred.size-index-1)
+            }
+            if (valid()) {
+                MobileScanPolicy.fastest(results,id)?.let { applyVerified(id,it.first,it.second,profile,token) }
+                MobileGenerator.finish(request,if (SystemClock.elapsedRealtime() >= deadline) "Лимит времени; результаты сохранены" else "Поиск завершён; результаты сохранены")
+            } else MobileGenerator.finish(request,"Поиск прерван; результаты сохранены")
+        } finally { generating = null;MobileGenerator.finish(request,"Поиск прерван; результаты сохранены") }
+    }
     /** Full evidence comes from this scan or the network-scoped cache; never probe again here. */
     private suspend fun applyVerified(id: String,command: String,result: JSONObject,profile: String,token: Long,waitForSlot: Boolean = false): Boolean {
-        fun valid() = MobileScanPolicy.enabled(prefs,id) && same(profile) && MobileFeedback.token(id) == token && cancellation == MobileFeedback.cancelToken() && !superseded()
+        fun valid() = permitted(id) && same(profile) && MobileFeedback.token(id) == token && cancellation == MobileFeedback.cancelToken() && !superseded()
         if (!ProbeAssessment.evaluate(id,result).eligible || !valid()) return false
-        if (MobilePlan.command(active,id) == command && !runtime.fault(id)) return true
+        if (MobilePlan.command(active,id) == command && !runtime.fault(id)) { MobilePresentation.applied(id);return true }
         val previous = runtime.router.active(id) ?: return false
         var candidate = runtime.stage(id,command)
         // Keep established connections alive until the retired native slot drains.
@@ -168,6 +242,7 @@ class MobileMonitor(private val context: Context,private val scope: CoroutineSco
         try {
             if (!valid()) return false
             runtime.activate(id,route)
+            MobilePresentation.applied(id)
             val next = MobilePlan.replace(active,id,command)
             MobileStrategyPolicy.apply(prefs,MobilePlan.BOTH,next)
             active = next
@@ -191,7 +266,7 @@ class MobileMonitor(private val context: Context,private val scope: CoroutineSco
         }
         try {
             while (!pending.isCompleted) {
-                if (!MobileScanPolicy.enabled(prefs,id) || !same(profile) || MobileFeedback.token(id) != token || cancellation != MobileFeedback.cancelToken() || superseded()) {
+                if (!permitted(id) || !same(profile) || MobileFeedback.token(id) != token || cancellation != MobileFeedback.cancelToken() || superseded()) {
                     session?.cancel();pending.cancelAndJoin();return@coroutineScope JSONObject().put("cancelled",true)
                 }
                 delay(200)
@@ -199,14 +274,14 @@ class MobileMonitor(private val context: Context,private val scope: CoroutineSco
             pending.await()
         } finally { if (!pending.isCompleted) { session?.cancel();pending.cancelAndJoin() } }
     }
-    private suspend fun probe(id: String,command: String,previews: Boolean = false): JSONObject {
+    private suspend fun probe(id: String,command: String,previews: Boolean = false,fast: Boolean = false): JSONObject {
         val current = ServiceProbe.Session();session = current
         val profile = MobileStrategyPolicy.profile(context);val token = MobileFeedback.token(id)
         MobilePresentation.start(id,command)
         return try {
             val result = awaitResult(id,profile,token) { withContext(Dispatchers.IO) {
                 withTimeout(205000) { runInterruptible {
-                    ServiceProbe.check(id,command,1080,current,known=MobileHistory.store(context,id,profile).known(command),previews=previews) {
+                    ServiceProbe.check(id,command,1080,current,known=MobileHistory.store(context,id,profile).known(command),previews=previews,fast=fast) {
                         MobilePresentation.progress(id,command,it)
                     }
                 } }
@@ -215,5 +290,5 @@ class MobileMonitor(private val context: Context,private val scope: CoroutineSco
             result
         } finally { current.cancel();session = null;if (!MobileScanPolicy.enabled(prefs,id)) MobilePresentation.disabled(id) }
     }
-    suspend fun stop() { prefs.unregisterOnSharedPreferenceChangeListener(listener);session?.cancel();task?.cancelAndJoin();task=null;MobilePresentation.pause() }
+    suspend fun stop() { prefs.unregisterOnSharedPreferenceChangeListener(listener);session?.cancel();task?.cancelAndJoin();task=null;MobileGenerator.stop();MobilePresentation.pause() }
 }

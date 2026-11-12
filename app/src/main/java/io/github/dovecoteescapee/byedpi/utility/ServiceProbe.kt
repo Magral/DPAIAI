@@ -19,20 +19,20 @@ object ServiceProbe {
     }
 
     fun check(id: String,command: String,port: Int,session: Session = Session(),known: Boolean = false,
-        previews: Boolean = true,onProgress: (ProbeProgress)->Unit = {}): JSONObject {
+        previews: Boolean = true,fast: Boolean = false,onProgress: (ProbeProgress)->Unit = {}): JSONObject {
         try {
-            val first = attempt(id,command,port,session,previews,onProgress)
-            if (!MobileCheckPolicy.confirmFailure(id,first,known)) return first
+            val first = attempt(id,command,port,session,previews && !fast,fast,onProgress)
+            if (fast || !MobileCheckPolicy.confirmFailure(id,first,known)) return first
             session.checkActive()
             onProgress(ProbeProgress(0,ServiceTargets.target(id).endpoints.size*2,"retry"))
             Thread.sleep(750)
             session.checkActive()
             // Each attempt stands alone. Partial successes are never combined.
-            return attempt(id,command,port,session,false,onProgress).put("retried",true)
+            return attempt(id,command,port,session,false,false,onProgress).put("retried",true)
         } finally { session.cancel() }
     }
 
-    private fun attempt(id: String,command: String,port: Int,session: Session,previews: Boolean,
+    private fun attempt(id: String,command: String,port: Int,session: Session,previews: Boolean,fast: Boolean,
         onProgress: (ProbeProgress)->Unit): JSONObject {
         val target = ServiceTargets.target(id)
         val start = System.nanoTime()
@@ -46,7 +46,7 @@ object ServiceProbe {
                 val completed = ParallelProbe.round(target.endpoints.size,session::checkActive,{ it.optBoolean("ok") },
                     child::cancel) { index ->
                     session.checkActive();child.checkActive()
-                    val row = request(target.endpoints[index],command,port,round,session,child)
+                    val row = request(target.endpoints[index],command,port,round,session,child,fast)
                     synchronized(progressLock) {
                         if (row.optBoolean("ok")) passed++
                         onProgress(ProbeProgress(passed,target.endpoints.size*2))
@@ -61,7 +61,8 @@ object ServiceProbe {
             val result = JSONObject().put("success",success).put("total",target.endpoints.size*2).put("tested",rows.size)
                 .put("elapsed",(System.nanoTime()-start)/1000000).put("rows",JSONArray(rows))
                 .put("publicSuccess",rows.count { it.optBoolean("public") }).put("publicTotal",target.endpoints.count { it.kind in listOf("youtube","image") }*2)
-                .put("inconclusive",rows.any { it.optBoolean("unavailable") })
+                .put("inconclusive",rows.any { it.optBoolean("unavailable") || it.optBoolean("timeout") })
+                .put("deferred",fast && success != target.endpoints.size*2)
             val a = ProbeAssessment.evaluate(id,result)
             if (id == "youtube" && a.eligible && previews) {
                 onProgress(ProbeProgress(8,8,"preview"))
@@ -72,11 +73,11 @@ object ServiceProbe {
                 .put("latencyMs",if (a.eligible) ProbeAssessment.latency(result) else 0)
     }
     private fun request(spec: ServiceTargets.Endpoint,command: String,port: Int,round: Int,
-        parent: Session,child: Session): JSONObject {
+        parent: Session,child: Session,fast: Boolean): JSONObject {
         val start = System.nanoTime()
-        val readTimeout = MobileStrategyPolicy.timeout(command)
+        val readTimeout = MobileSearchPolicy.timeout(MobileStrategyPolicy.timeout(command),fast)
         val deadline = ProbeDeadline(readTimeout.toLong()+3000)
-        var stage = "start";var detail = "";var transport = false;var content = false;var failed = false;var unavailable = false
+        var stage = "start";var detail = "";var transport = false;var content = false;var failed = false;var unavailable = false;var timedOut = false
         fun report(value: String) { stage = value }
         try {
             report("DNS / TCP через локальный SOCKS5")
@@ -101,11 +102,11 @@ object ServiceProbe {
             }
             deadline.check()
         } catch (e: java.util.concurrent.CancellationException) { throw e }
-        catch (e: Exception) { failed = true;detail += "; $stage: ${e.javaClass.simpleName}: ${e.message?.take(100)}" }
+        catch (e: Exception) { timedOut = deadline.timedOut || generateSequence(e as Throwable?) { it.cause }.any { it is java.net.SocketTimeoutException };failed = true;detail += "; $stage: ${e.javaClass.simpleName}: ${e.message?.take(100)}" }
         finally { deadline.close() }
         parent.checkActive();child.checkActive()
         val ok = !failed && transport && (spec.kind !in listOf("youtube","image") || content)
         return JSONObject().put("host",spec.host).put("kind",spec.kind).put("round",round).put("ok",ok).put("public",content)
-            .put("skipped",false).put("unavailable",unavailable).put("detail",detail).put("stage",stage).put("elapsedMs",((System.nanoTime()-start)/1000000).coerceAtLeast(1))
+            .put("timeout",timedOut).put("skipped",false).put("unavailable",unavailable).put("detail",detail).put("stage",stage).put("elapsedMs",((System.nanoTime()-start)/1000000).coerceAtLeast(1))
     }
 }

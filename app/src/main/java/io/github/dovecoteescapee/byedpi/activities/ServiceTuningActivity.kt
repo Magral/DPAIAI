@@ -43,6 +43,7 @@ class ServiceTuningActivity : AppCompatActivity() {
     }
     private val handler = Handler(Looper.getMainLooper())
     private lateinit var base: TextView
+    private val bars = linkedMapOf<String,ProgressBar>()
     private val refresh = object : Runnable {
         override fun run() {
             val profile = MobileStrategyPolicy.profile(this@ServiceTuningActivity)
@@ -53,6 +54,7 @@ class ServiceTuningActivity : AppCompatActivity() {
                 "${t.name}: ${if (!MobileScanPolicy.enabled(prefs,t.id)) "подбор отключён" else if (!prefs.getBoolean("mobile_auto_three_days",true)) "по требованию" else if (remaining == 0L) "проверка доступна" else "следующий подбор через ${remaining/3600000} ч"}"
             }
             base.text = if (appStatus.first == AppStatus.Halted) "Включите защиту на главном экране" else MobilePresentation.summary()+"\n\n$next"
+            bars.forEach { (id,bar) -> val scan=MobilePresentation.scan(id);bar.max=scan?.total?.coerceAtLeast(1) ?: 1;bar.progress=scan?.checked ?: 0 }
             handler.postDelayed(this,1000)
         }
     }
@@ -63,6 +65,10 @@ class ServiceTuningActivity : AppCompatActivity() {
         setContentView(ScrollView(this).apply { addView(box) })
         title = "Подбор стратегий"
         base = TextView(this).apply { textSize=18f;setPadding(0,12,0,16);box.addView(this) }
+        ServiceTargets.individual.forEach { target ->
+            TextView(this).apply { text="${target.name}: общий прогресс";box.addView(this) }
+            bars[target.id] = ProgressBar(this,null,android.R.attr.progressBarStyleHorizontal).apply { box.addView(this) }
+        }
         fun button(label: String,action: ()->Unit) { Button(this).apply { text=label;isAllCaps=false;box.addView(this);setOnClickListener { action() } } }
         Switch(this).apply {
             text="Автоподбор раз в 3 дня";isChecked=getPreferences().getBoolean("mobile_auto_three_days",true);box.addView(this)
@@ -73,6 +79,7 @@ class ServiceTuningActivity : AppCompatActivity() {
             text="Подбирать для ${target.name}";isChecked=MobileScanPolicy.enabled(getPreferences(),target.id);box.addView(this)
             setOnCheckedChangeListener { _,enabled ->
                 getPreferences().edit().putBoolean("mobile_scan_enabled.${target.id}",enabled).apply()
+                if (!enabled) getPreferences().edit().remove("mobile_selected.${target.id}").apply()
                 if (!enabled) MobilePresentation.disabled(target.id)
                 else MobilePresentation.ready(target.id,MobilePlan.command(MobilePlan.saved(getPreferences()),target.id))
                 MobileFeedback.wake()
@@ -89,6 +96,8 @@ class ServiceTuningActivity : AppCompatActivity() {
         }
         button("Остановить подбор") { MobileFeedback.cancelScans(this);Toast.makeText(this,"Подбор остановлен",Toast.LENGTH_LONG).show() }
         ServiceTargets.individual.forEach { target -> button("${target.name}: годные стратегии") { choose(target) } }
+        ServiceTargets.individual.forEach { target -> button("Открыть ${target.name}") { openApp(target) } }
+        button("Генератор стратегий") { startActivity(Intent(this,StrategyGeneratorActivity::class.java)) }
         button("Дополнительно") { advanced() }
         lifecycleScope.launch(Dispatchers.IO) { MobileCatalogUpdater.refresh(this@ServiceTuningActivity) }
     }
@@ -118,6 +127,13 @@ class ServiceTuningActivity : AppCompatActivity() {
                 }.setNegativeButton("Назад") { _,_ -> choose(target) }.show()
         }
         dialog.show()
+    }
+    private fun openApp(target: ServiceTargets.Target) {
+        for (name in target.packages) {
+            val intent = packageManager.getLaunchIntentForPackage(name) ?: continue
+            try { startActivity(intent);return } catch (_: ActivityNotFoundException) { } catch (_: SecurityException) { }
+        }
+        Toast.makeText(this,"Приложение ${target.name} не установлено или недоступно",Toast.LENGTH_LONG).show()
     }
     private fun advanced() {
         val items = arrayOf("Обновить базу","Источники базы","Сохранить профиль","Импорт профиля с ТВ","Скопировать диагностику")

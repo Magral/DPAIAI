@@ -38,6 +38,7 @@ def extract(text):
         parser=Text();parser.feed(text);text=''.join(parser.parts)
     text=html.unescape(text).replace('\\-','-')
     found=[]
+    found.extend(re.findall(r'<item[^>]*>\s*(-{1,2}[^<\n]{1,4096})</item>',text))
     # Kotlin/list/document snippets are strings or complete command lines, never scripts.
     found.extend(re.findall(r'["`“](-{1,2}[^"`”\n\r]{1,4096})["`”]',text))
     for line in text.splitlines():
@@ -112,7 +113,11 @@ def main():
             try:
                 data=fetch(raw_url(source['url']))
                 record['sha256']=hashlib.sha256(data).hexdigest()
-                commands=extract(data.decode('utf-8',errors='replace'))
+                text=data.decode('utf-8',errors='replace')
+                if source.get('format') == 'inline-service-scope':
+                    # Only reviewed sources opt in. Service routing supplies these host limits.
+                    text=re.sub(r'-H:(?:"[^"\n]*"|\'[^\'\n]*\')\s*','',text).replace('$hostlist','')
+                commands=extract(text)
                 record['extracted']=len(commands);record['status']='fetched' if commands else 'no complete commands; snapshot retained'
             except Exception as error:
                 record['status']='fetch failed; snapshot retained';record['error']=type(error).__name__;commands=[]

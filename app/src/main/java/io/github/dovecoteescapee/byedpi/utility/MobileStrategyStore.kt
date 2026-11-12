@@ -19,8 +19,8 @@ class MobileStrategyStore(private val prefs: SharedPreferences,private val id: S
     fun choices(): List<JSONObject> {
         val expected = ServiceTargets.target(id).endpoints.size*2
         return entries().filter { !isExcluded(it) && it.optBoolean("verified") && it.optInt("passed") == expected && it.optInt("total") == expected && it.optInt("schema") == 2 }
-            .sortedWith(compareBy<JSONObject> { MobileScanPolicy.previewScore(id,it) }
-                .thenBy { it.optLong("latencyMs",Long.MAX_VALUE).takeIf { n -> n > 0 } ?: Long.MAX_VALUE }
+            .sortedWith(compareBy<JSONObject> { it.optLong("latencyMs",Long.MAX_VALUE).takeIf { n -> n > 0 } ?: Long.MAX_VALUE }
+                .thenBy { MobileScanPolicy.previewScore(id,it) }
                 .thenBy { CatalogProtocol.id(it.optString("command")) })
     }
     fun freshResult(command: String,now: Long = System.currentTimeMillis()): JSONObject? {
@@ -54,6 +54,7 @@ class MobileStrategyStore(private val prefs: SharedPreferences,private val id: S
         update(command) { it.put("verified",false).put("reason",probeFailureDetail(result)) }
     }
     fun reject(command: String,result: JSONObject = JSONObject(),rollback: Boolean = false) {
+        if (!rollback && result.length() > 0 && !MobileSearchPolicy.conclusiveFailure(result)) { defer(command,result);return }
         val a = ProbeAssessment.evaluate(id,result)
         update(command) { it.put("schema",2).put("verified",false).put("excluded",true).put("passed",a.requiredSuccess+a.extraSuccess).put("total",a.requiredTotal+a.extraTotal)
             .put("reason",probeFailureDetail(result)).put("bad",it.optInt("bad")+1).put("rollbacks",it.optInt("rollbacks")+if (rollback) 1 else 0) }

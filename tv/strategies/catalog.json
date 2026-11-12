@@ -1,5 +1,5 @@
 {
-  "version": "2026-10-31.1",
+  "version": "2026-11-12.1",
   "engine_commit": "ba532298de7b28cfe854aea83d061369d13ca290",
   "strategies": [
     {
@@ -254,7 +254,8 @@
       "sources": [
         "byebyedpi",
         "ewen",
-        "netfix"
+        "netfix",
+        "cherret-yt-new-fix"
       ]
     },
     {
@@ -1986,7 +1987,8 @@
       "id": "ea676e8ce58f8b46",
       "args": "--split 1 --disorder 3+s --mod-http h,d --auto torst --tlsrec 1+s",
       "sources": [
-        "webhamster"
+        "webhamster",
+        "bariskeser-presets"
       ]
     },
     {
@@ -2177,6 +2179,69 @@
       "sources": [
         "upstream"
       ]
+    },
+    {
+      "id": "221332473c2e67d6",
+      "args": "--oob 1 --udp-fake 2 --auto n --fake-sni google.com --fake-tls-mod r --fake -204 --split 1:5+sm --udp-fake 1 --auto s --disorder 1 --split 3+s --split 5+s --disoob 7 --udp-fake 1 --auto s --oob 2 --fake -43 --udp-fake 1 --auto s --tlsrec 5 --mod-http h --split 1:5+s --split 3:7+sm --udp-fake 1",
+      "sources": [
+        "cherret-test-speed-2"
+      ]
+    },
+    {
+      "id": "5265e74a4e535c58",
+      "args": "--oob 1 --disorder 1 --udp-fake 1 --auto n --udp-fake 2 --fake -204 --fake-sni google.com --fake-tls-mod r --split 1:5+sm --auto s --disorder 1 --split 3+s --split 5+s --disoob 7",
+      "sources": [
+        "cherret-youtube-fix-mts"
+      ]
+    },
+    {
+      "id": "46983a3dd6eb3908",
+      "args": "--fake-sni google.com --fake-tls-mod r --fake -204 --udp-fake 1 --auto s --split 1:3+sm --udp-fake 1 --auto s --split 5:8+sm --udp-fake 1 --auto s --disorder 3 --disoob 7 --oob 2 --fake -43 --fake -80 --fake -160 --tlsrec 5 --mod-http h --auto s",
+      "sources": [
+        "cherret-yt-ds-r34"
+      ]
+    },
+    {
+      "id": "33d24ca028bb5f4e",
+      "args": "--fake 1+s --ttl 4 --split 1 --disorder 3+s --auto torst --tlsrec 1+s",
+      "sources": [
+        "bariskeser-presets"
+      ]
+    },
+    {
+      "id": "768793f7ada407f0",
+      "args": "--fake 1+s --ttl 3 --fake-sni www.google.com --fake-tls-mod rand --auto torst --tlsrec 1+s",
+      "sources": [
+        "bariskeser-presets"
+      ]
+    },
+    {
+      "id": "c81d8a42411348a1",
+      "args": "--split 2 --disorder 3+s --mod-http h,d --auto torst --tlsrec 1+s",
+      "sources": [
+        "bariskeser-presets"
+      ]
+    },
+    {
+      "id": "17c9aea639f02aca",
+      "args": "--split 2 --disorder 1+s --auto torst --tlsrec 1+s",
+      "sources": [
+        "bariskeser-presets"
+      ]
+    },
+    {
+      "id": "48bd0486827a41d3",
+      "args": "--proto u --udp-fake 3 --auto n --proto t,h --split 0 --oob 1 --auto r --oob 1 --auto t --fake -1 --tlsrec 1+s --auto s --auto n",
+      "sources": [
+        "android-discussion318"
+      ]
+    },
+    {
+      "id": "d6b2cbcea737d2d2",
+      "args": "--proto t --fake -1 --fake-sni 4pda.to --auto t,s,c --timeout 1 --oob -5+he --auto n",
+      "sources": [
+        "b-checker"
+      ]
     }
   ],
   "rejected": [
@@ -2309,6 +2374,16 @@
       "source": "upstream",
       "raw": "------",
       "reason": "not a command-only desync option: ----"
+    },
+    {
+      "source": "cherret-default",
+      "raw": "-o 2 --auto=t,r,a,s -d 2",
+      "reason": "native: invalid value: -A t,r,a,s"
+    },
+    {
+      "source": "cherret-test-speed-1",
+      "raw": "-a4 -o2 --auto=t,r,a,s -d2 -o1 -a2 -An -f-1 -a2 -Ar,s -o0+sm -a2 -At -r1+s -a2 --fake -1 --ttl 10 -a2 -An",
+      "reason": "native: invalid value: -A t,r,a,s"
     }
   ],
   "sources": [
@@ -2409,6 +2484,75 @@
       "url": "https://github.com/hufrea/byedpi/blob/ba532298de7b28cfe854aea83d061369d13ca290/README.md",
       "retrieved": "2026-10-31",
       "note": ""
+    },
+    {
+      "id": "cherret-default",
+      "title": "CherretGit ByeDPI: strategy-default.txt",
+      "url": "https://github.com/CherretGit/zaprett-repo/blob/main/files/strategies/byedpi/strategy-default.txt",
+      "retrieved": "2026-11-12",
+      "note": "Curated ByeDPI text. Inline host selector/template removed: DPI Pilot scopes by service. Native acceptance is not network effectiveness.",
+      "format": "inline-service-scope"
+    },
+    {
+      "id": "cherret-test-speed-1",
+      "title": "CherretGit ByeDPI: strategy-test-speed-1.txt",
+      "url": "https://github.com/CherretGit/zaprett-repo/blob/main/files/strategies/byedpi/strategy-test-speed-1.txt",
+      "retrieved": "2026-11-12",
+      "note": "Curated ByeDPI text. Inline host selector/template removed: DPI Pilot scopes by service. Native acceptance is not network effectiveness.",
+      "format": "inline-service-scope"
+    },
+    {
+      "id": "cherret-test-speed-2",
+      "title": "CherretGit ByeDPI: strategy-test-speed-2.txt",
+      "url": "https://github.com/CherretGit/zaprett-repo/blob/main/files/strategies/byedpi/strategy-test-speed-2.txt",
+      "retrieved": "2026-11-12",
+      "note": "Curated ByeDPI text. Inline host selector/template removed: DPI Pilot scopes by service. Native acceptance is not network effectiveness.",
+      "format": "inline-service-scope"
+    },
+    {
+      "id": "cherret-youtube-fix-mts",
+      "title": "CherretGit ByeDPI: strategy-youtube-fix-mts.txt",
+      "url": "https://github.com/CherretGit/zaprett-repo/blob/main/files/strategies/byedpi/strategy-youtube-fix-mts.txt",
+      "retrieved": "2026-11-12",
+      "note": "Curated ByeDPI text. Inline host selector/template removed: DPI Pilot scopes by service. Native acceptance is not network effectiveness.",
+      "format": "inline-service-scope"
+    },
+    {
+      "id": "cherret-yt-ds-r34",
+      "title": "CherretGit ByeDPI: strategy-yt-ds-r34.txt",
+      "url": "https://github.com/CherretGit/zaprett-repo/blob/main/files/strategies/byedpi/strategy-yt-ds-r34.txt",
+      "retrieved": "2026-11-12",
+      "note": "Curated ByeDPI text. Inline host selector/template removed: DPI Pilot scopes by service. Native acceptance is not network effectiveness.",
+      "format": "inline-service-scope"
+    },
+    {
+      "id": "cherret-yt-new-fix",
+      "title": "CherretGit ByeDPI: strategy-yt-new-fix.txt",
+      "url": "https://github.com/CherretGit/zaprett-repo/blob/main/files/strategies/byedpi/strategy-yt-new-fix.txt",
+      "retrieved": "2026-11-12",
+      "note": "Curated ByeDPI text. Inline host selector/template removed: DPI Pilot scopes by service. Native acceptance is not network effectiveness.",
+      "format": "inline-service-scope"
+    },
+    {
+      "id": "bariskeser-presets",
+      "title": "BarisKeser ByeDPI operator presets",
+      "url": "https://github.com/barkeser2002/BarisKeser-ByeDPI/blob/master/app/src/main/res/values/arrays.xml",
+      "retrieved": "2026-11-12",
+      "note": "Operator names refer to Turkey. Effectiveness on Russian networks unverified."
+    },
+    {
+      "id": "android-discussion318",
+      "title": "ByeDPIAndroid community configurations #318",
+      "url": "https://github.com/dovecoteescapee/ByeDPIAndroid/discussions/318",
+      "retrieved": "2026-11-12",
+      "note": "User-reported network-specific candidates; not device-verified."
+    },
+    {
+      "id": "b-checker",
+      "title": "B-Checker author TLS configuration example",
+      "url": "https://ntc.rkn.quest/t/14291",
+      "retrieved": "2026-11-12",
+      "note": "Only complete command-only TLS group imported; Windows scripts and payload/file references excluded."
     }
   ],
   "notes": [

@@ -429,5 +429,105 @@
       "------",
       "------"
     ]
+  },
+  {
+    "id": "cherret-default",
+    "title": "CherretGit ByeDPI: strategy-default.txt",
+    "url": "https://github.com/CherretGit/zaprett-repo/blob/main/files/strategies/byedpi/strategy-default.txt",
+    "retrieved": "2026-11-12",
+    "note": "Curated ByeDPI text. Inline host selector/template removed: DPI Pilot scopes by service. Native acceptance is not network effectiveness.",
+    "commands": [
+      "-o 2 --auto=t,r,a,s -d 2"
+    ],
+    "format": "inline-service-scope"
+  },
+  {
+    "id": "cherret-test-speed-1",
+    "title": "CherretGit ByeDPI: strategy-test-speed-1.txt",
+    "url": "https://github.com/CherretGit/zaprett-repo/blob/main/files/strategies/byedpi/strategy-test-speed-1.txt",
+    "retrieved": "2026-11-12",
+    "note": "Curated ByeDPI text. Inline host selector/template removed: DPI Pilot scopes by service. Native acceptance is not network effectiveness.",
+    "commands": [
+      "-a4 -o2 --auto=t,r,a,s -d2 -o1 -a2 -An -f-1 -a2 -Ar,s -o0+sm -a2 -At -r1+s -a2 --fake -1 --ttl 10 -a2 -An"
+    ],
+    "format": "inline-service-scope"
+  },
+  {
+    "id": "cherret-test-speed-2",
+    "title": "CherretGit ByeDPI: strategy-test-speed-2.txt",
+    "url": "https://github.com/CherretGit/zaprett-repo/blob/main/files/strategies/byedpi/strategy-test-speed-2.txt",
+    "retrieved": "2026-11-12",
+    "note": "Curated ByeDPI text. Inline host selector/template removed: DPI Pilot scopes by service. Native acceptance is not network effectiveness.",
+    "commands": [
+      "-o1 -a2 -An -n google.com -Qr -f-204 -s1:5+sm -a1 -As -d1 -s3+s -s5+s -q7 -a1 -As -o2 -f-43 -a1 -As -r5 -Mh -s1:5+s -s3:7+sm -a1"
+    ],
+    "format": "inline-service-scope"
+  },
+  {
+    "id": "cherret-youtube-fix-mts",
+    "title": "CherretGit ByeDPI: strategy-youtube-fix-mts.txt",
+    "url": "https://github.com/CherretGit/zaprett-repo/blob/main/files/strategies/byedpi/strategy-youtube-fix-mts.txt",
+    "retrieved": "2026-11-12",
+    "note": "Curated ByeDPI text. Inline host selector/template removed: DPI Pilot scopes by service. Native acceptance is not network effectiveness.",
+    "commands": [
+      "-o1 -d1 -a1 -An -a2 -f-204 -n google.com -Qr -s1:5+sm -As -d1 -s3+s -s5+s -q7"
+    ],
+    "format": "inline-service-scope"
+  },
+  {
+    "id": "cherret-yt-ds-r34",
+    "title": "CherretGit ByeDPI: strategy-yt-ds-r34.txt",
+    "url": "https://github.com/CherretGit/zaprett-repo/blob/main/files/strategies/byedpi/strategy-yt-ds-r34.txt",
+    "retrieved": "2026-11-12",
+    "note": "Curated ByeDPI text. Inline host selector/template removed: DPI Pilot scopes by service. Native acceptance is not network effectiveness.",
+    "commands": [
+      "-n google.com -Qr -f-204 -a1 -As -s1:3+sm -a1 -As -s5:8+sm -a1 -As -d3 -q7 -o2 -f-43 -f-80 -f-160 -r5 -Mh -As"
+    ],
+    "format": "inline-service-scope"
+  },
+  {
+    "id": "cherret-yt-new-fix",
+    "title": "CherretGit ByeDPI: strategy-yt-new-fix.txt",
+    "url": "https://github.com/CherretGit/zaprett-repo/blob/main/files/strategies/byedpi/strategy-yt-new-fix.txt",
+    "retrieved": "2026-11-12",
+    "note": "Curated ByeDPI text. Inline host selector/template removed: DPI Pilot scopes by service. Native acceptance is not network effectiveness.",
+    "commands": [
+      "-d1 -s1+s -d3+s -s6+s -d9+s -s12+s -d15+s -s20+s -d25+s -s30+s -d35+s -a1"
+    ],
+    "format": "inline-service-scope"
+  },
+  {
+    "id": "bariskeser-presets",
+    "title": "BarisKeser ByeDPI operator presets",
+    "url": "https://github.com/barkeser2002/BarisKeser-ByeDPI/blob/master/app/src/main/res/values/arrays.xml",
+    "retrieved": "2026-11-12",
+    "note": "Operator names refer to Turkey. Effectiveness on Russian networks unverified.",
+    "commands": [
+      "--split 1 --disorder 3+s --mod-http=h,d --auto=torst --tlsrec 1+s",
+      "--fake 1+s --ttl 4 --split 1 --disorder 3+s --auto=torst --tlsrec 1+s",
+      "--fake 1+s --ttl 3 --fake-sni www.google.com --fake-tls-mod rand --auto=torst --tlsrec 1+s",
+      "--split 2 --disorder 3+s --mod-http=h,d --auto=torst --tlsrec 1+s",
+      "--split 2 --disorder 1+s --auto=torst --tlsrec 1+s"
+    ]
+  },
+  {
+    "id": "android-discussion318",
+    "title": "ByeDPIAndroid community configurations #318",
+    "url": "https://github.com/dovecoteescapee/ByeDPIAndroid/discussions/318",
+    "retrieved": "2026-11-12",
+    "note": "User-reported network-specific candidates; not device-verified.",
+    "commands": [
+      "-Ku -a3 -An -Kt,h -s0 -o1 -Ar -o1 -At -f-1 -r1+s -As -An"
+    ]
+  },
+  {
+    "id": "b-checker",
+    "title": "B-Checker author TLS configuration example",
+    "url": "https://ntc.rkn.quest/t/14291",
+    "retrieved": "2026-11-12",
+    "note": "Only complete command-only TLS group imported; Windows scripts and payload/file references excluded.",
+    "commands": [
+      "-K t -f -1 -n 4pda.to -A t,s,c -T 1 -o -5+he -A n"
+    ]
   }
 ]
