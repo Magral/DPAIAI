@@ -19,8 +19,8 @@ class MobileStrategyStore(private val prefs: SharedPreferences,private val id: S
     fun choices(): List<JSONObject> {
         val expected = ServiceTargets.target(id).endpoints.size*2
         return entries().filter { !isExcluded(it) && it.optBoolean("verified") && it.optInt("passed") == expected && it.optInt("total") == expected && it.optInt("schema") == 2 }
-            .sortedWith(compareBy<JSONObject> { MobileScanPolicy.previewScore(id,it) }
-                .thenBy { it.optLong("latencyMs",Long.MAX_VALUE).takeIf { n -> n > 0 } ?: Long.MAX_VALUE }
+            .sortedWith(compareBy<JSONObject> { it.optLong("latencyMs",Long.MAX_VALUE).takeIf { n -> n > 0 } ?: Long.MAX_VALUE }
+                .thenBy { MobileScanPolicy.previewScore(id,it) }
                 .thenBy { CatalogProtocol.id(it.optString("command")) })
     }
     fun freshResult(command: String,now: Long = System.currentTimeMillis()): JSONObject? {
