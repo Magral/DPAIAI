@@ -89,6 +89,8 @@ class MobileStoreAndParallelTest {
         assertTrue(store.accept(command,result("youtube",42)))
         val checked=store.entries().single().getLong("checkedAt")
         assertEquals(42L,ProbeAssessment.latency(store.freshResult(command,checked)!!))
+        store.accept(command,store.freshResult(command,checked)!!)
+        assertEquals(checked,store.entries().single().getLong("checkedAt")) // Cache reuse never refreshes the evidence clock.
         assertNotNull(MobileStrategyStore(preferences,"youtube","wifi").freshResult(command,checked+1))
         assertNull(store.freshResult(command,checked-1))
         assertNull(store.freshResult(command,checked+MobileScanPolicy.INTERVAL))

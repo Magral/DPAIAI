@@ -77,6 +77,7 @@ class MobileMonitor(private val context: Context,private val scope: CoroutineSco
                         if (!MobileScanPolicy.due(automatic(),forced,prefs.getLong(key,0),System.currentTimeMillis())) continue
                         consumed[id] = token
                         prefs.edit().putLong(key,System.currentTimeMillis()).commit()
+                        val cycleStarted=System.currentTimeMillis()
                         val previousCommand = MobilePlan.command(active,id)
                         val cached = selected?.let { store.freshResult(it) }
                         if (selected != null && cached != null) {
@@ -145,7 +146,7 @@ class MobileMonitor(private val context: Context,private val scope: CoroutineSco
                         if (best == null) prefs.edit().remove("mobile_selected.$id").remove("mobile_imported.$id").remove("mobile_force_replace.$id").apply()
                         if (best == null) { publish("${target.name}: полного результата нет; исключения не записаны — возможен общий сбой сети");continue }
                         // Commit negative evidence only beside a fresh successful control on this same network.
-                        if (currentGood && failures.isNotEmpty()) {
+                        if (currentGood && failures.isNotEmpty() && results.any { (_,proof) -> proof.optLong("checkedAt") >= cycleStarted }) {
                             val controlCommand = MobilePlan.command(active,id)
                             val control = store.freshResult(controlCommand) ?: probe(id,controlCommand)
                             if (!permitted(id) || !same(profile) || MobileFeedback.token(id) != token || cancellation != MobileFeedback.cancelToken() || superseded()) continue
