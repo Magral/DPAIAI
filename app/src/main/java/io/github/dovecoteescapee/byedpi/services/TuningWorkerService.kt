@@ -20,6 +20,8 @@ class TuningWorkerService : Service() {
             val target = message.data.getString("target").orEmpty()
             val command = message.data.getString("command")
             val known = message.data.getBoolean("known")
+            val qualityOnly = message.data.getBoolean("qualityOnly",false)
+            val fast = message.data.getBoolean("fast",false)
             val previews = message.data.getBoolean("previews",true)
             executor.execute {
                 fun progress(value: ProbeProgress) { runCatching { reply.send(Message.obtain().apply {
@@ -36,7 +38,11 @@ class TuningWorkerService : Service() {
                         ready.countDown()
                     }.start()
                     check(ready.await(10,java.util.concurrent.TimeUnit.SECONDS) && bound.get()) { "Native listener did not start within 10s" }
-                    ServiceProbe.check(target,command,19080,known=known,previews=previews,onProgress = ::progress)
+                    if (qualityOnly) {
+                        val session = ServiceProbe.Session()
+                        try { JSONObject().put("preview",MobilePreviewProbe.check(19080,MobileStrategyPolicy.timeout(command),session).encode()) }
+                        finally { session.cancel() }
+                    } else ServiceProbe.check(target,command,19080,known=known,previews=previews,fast=fast,onProgress = ::progress)
                 } catch (e: Exception) { JSONObject().put("success",0).put("total",0).put("error",e.javaClass.simpleName+": "+e.message.orEmpty().take(200)) }
                 runCatching { reply.send(Message.obtain().apply { what = RESULT; data = Bundle().apply { putString("result",result.toString()) } }) }
             }
