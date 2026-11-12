@@ -1,1 +1,1 @@
-Android 0.10.0: TV preview quality and single confirming retry; simple strategy progress; fixed YouTube + Instagram; permanent signed APK.
+Android 0.10.1: apply first full success immediately, continue background scan, select lowest latency, reuse fresh verified evidence without repeated trial.

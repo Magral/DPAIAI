@@ -66,6 +66,23 @@ class MobileStoreAndParallelTest {
         assertTrue(restored.accept(command,result("youtube",100)))
         assertFalse(MobileStrategyStore(preferences,"instagram","wifi").excluded(command))
     }
+    @Test fun freshFullEvidenceCanBeReusedOnlyForSameServiceNetworkAndBeforeExpiry() {
+        val preferences=prefs();val command=StrategyCatalog.commands[1]
+        val store=MobileStrategyStore(preferences,"youtube","wifi")
+        assertNull(store.freshResult(command))
+        assertTrue(store.accept(command,result("youtube",42)))
+        val checked=store.entries().single().getLong("checkedAt")
+        assertEquals(42L,ProbeAssessment.latency(store.freshResult(command,checked)!!))
+        assertNotNull(MobileStrategyStore(preferences,"youtube","wifi").freshResult(command,checked+1))
+        assertNull(store.freshResult(command,checked-1))
+        assertNull(store.freshResult(command,checked+MobileScanPolicy.INTERVAL))
+        assertNull(MobileStrategyStore(preferences,"youtube","cell").freshResult(command,checked))
+        assertNull(MobileStrategyStore(preferences,"instagram","wifi").freshResult(command,checked))
+        store.defer(command,result("youtube",1,0));assertNull(store.freshResult(command,checked+1))
+        store.accept(command,result("youtube",42));store.report(command)
+        assertNull(store.freshResult(command))
+        store.resetExclusions();assertNull(store.freshResult(command))
+    }
     @Test fun exclusionsAreNotEvictedAfterTheOldEightEntryLimit() {
         val prefs=prefs();val store=MobileStrategyStore(prefs,"instagram","wifi")
         StrategyCatalog.commands.take(20).forEach { store.reject(it) }

@@ -23,6 +23,12 @@ class MobileStrategyStore(private val prefs: SharedPreferences,private val id: S
                 .thenBy { it.optLong("latencyMs",Long.MAX_VALUE).takeIf { n -> n > 0 } ?: Long.MAX_VALUE }
                 .thenBy { CatalogProtocol.id(it.optString("command")) })
     }
+    fun freshResult(command: String,now: Long = System.currentTimeMillis()): JSONObject? {
+        val row = choices().firstOrNull { it.optString("command") == command } ?: return null
+        val checked = row.optLong("checkedAt")
+        if (checked <= 0 || now < checked || now-checked >= MobileScanPolicy.INTERVAL) return null
+        return row.optJSONObject("result")?.takeIf { ProbeAssessment.evaluate(id,it).eligible }
+    }
     private fun update(command: String,edit: (JSONObject)->Unit) {
         require(CatalogProtocol.validCommand(command))
         val rows = entries().toMutableList()
@@ -34,7 +40,7 @@ class MobileStrategyStore(private val prefs: SharedPreferences,private val id: S
         if (!ProbeAssessment.evaluate(id,result).eligible) { reject(command,result);return false }
         if (excluded(command)) return false
         val a = ProbeAssessment.evaluate(id,result)
-        update(command) { it.put("schema",2).put("verified",true).put("passed",a.requiredSuccess+a.extraSuccess).put("total",a.requiredTotal+a.extraTotal)
+        update(command) { it.put("checkedAt",System.currentTimeMillis()).put("result",JSONObject(result.toString())).put("schema",2).put("verified",true).put("passed",a.requiredSuccess+a.extraSuccess).put("total",a.requiredTotal+a.extraTotal)
             .put("latencyMs",ProbeAssessment.latency(result)).put("good",it.optInt("good")+1).put("usefulMillis",it.optLong("usefulMillis")+useful.coerceAtLeast(0))
             result.optJSONArray("preview")?.let { preview -> it.put("preview",preview) }
         }

@@ -12,5 +12,5 @@ object MobileScanPolicy {
     fun due(automatic: Boolean,explicit: Boolean,started: Long,now: Long) = explicit || (automatic && remaining(started,now) == 0L)
     fun fastest(results: List<Pair<String,org.json.JSONObject>>,id: String): Pair<String,org.json.JSONObject>? =
         results.filter { ProbeAssessment.evaluate(id,it.second).eligible }.minWithOrNull(
-            compareBy<Pair<String,org.json.JSONObject>> { previewScore(id,it.second) }.thenBy { ProbeAssessment.latency(it.second) })
+            compareBy<Pair<String,org.json.JSONObject>> { ProbeAssessment.latency(it.second) }.thenBy { previewScore(id,it.second) })
 }

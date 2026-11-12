@@ -37,11 +37,11 @@ class MobileTvParityTest {
             assertFalse(ProbeAssessment.evaluate("youtube",result("youtube",7).put("preview",quality.encode())).eligible)
         }
     }
-    @Test fun previewRanksStableTransfersBeforeFastButPoorTransfersAndNeverPartialNodes() {
+    @Test fun latencyRanksFullResultsAndNeverPartialNodes() {
         val a = StrategyCatalog.commands[1];val b = StrategyCatalog.commands[2]
         val stable = result("youtube",8,800).put("preview",preview(100).encode())
         val slow = result("youtube",8,1).put("preview",preview(2200).encode())
-        assertEquals(a,MobileScanPolicy.fastest(listOf(b to slow,a to stable),"youtube")!!.first)
+        assertEquals(b,MobileScanPolicy.fastest(listOf(b to slow,a to stable),"youtube")!!.first)
         val partial = result("youtube",7,1).put("preview",preview(1).encode())
         assertEquals(a,MobileScanPolicy.fastest(listOf(b to partial,a to stable),"youtube")!!.first)
         assertEquals(a,MobileScanPolicy.fastest(listOf(a to stable,b to stable),"youtube")!!.first)

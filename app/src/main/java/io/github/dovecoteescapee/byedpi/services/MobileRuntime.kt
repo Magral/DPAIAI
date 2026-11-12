@@ -16,7 +16,7 @@ class MobileRuntime(private val context: Context) {
     private val protectedRoutes = mutableSetOf<ServiceRouter.Route>()
     init { router.onDrained = { maintenance.launch { reap() } } }
     suspend fun open(plan: String) {
-        // Active preferences are committed only after a trial. Interrupted trials restart on the old pair.
+        // Discard obsolete trial markers from older versions; saved routes contain applied full-test results.
         context.getPreferences().edit().remove("mobile_trial.instagram").remove("mobile_trial.youtube").apply()
         try {
             for (id in listOf("instagram","youtube")) {
