@@ -40,10 +40,10 @@ object MobilePresentation {
     }
     @Synchronized fun progress(id: String,command: String,value: ProbeProgress) {
         val current = statuses[id] ?: return
-        if (current.command != command || current.phase !in setOf("checking","retry","preview")) return
+        if (current.command != command || current.phase !in setOf("checking","retry","preview","video")) return
         val expected = ServiceTargets.target(id).endpoints.size*2
         statuses[id] = Status(command,value.passed.coerceIn(0,expected),expected,
-            value.phase.takeIf { it in setOf("checking","retry","preview") } ?: "checking")
+            value.phase.takeIf { it in setOf("checking","retry","preview","video") } ?: "checking")
     }
     @Synchronized fun finish(id: String,command: String,result: JSONObject) {
         val score = ProbeAssessment.evaluate(id,result)
@@ -56,7 +56,7 @@ object MobilePresentation {
         statuses.keys.toList().forEach { id ->
             val s = statuses.getValue(id)
             scans[id]?.let { scans[id] = it.copy(done=true,phase="Подбор остановлен") }
-            if (s.phase in setOf("checking","retry","preview")) statuses[id] = s.copy(phase="paused")
+            if (s.phase in setOf("checking","retry","preview","video")) statuses[id] = s.copy(phase="paused")
         }
     }
     fun text(status: Status): String {
@@ -65,6 +65,7 @@ object MobilePresentation {
             "good" -> "$count · Годна"
             "failed" -> "$count · Не прошла"
             "deferred" -> "$count · Отложена для перепроверки"
+            "video" -> "$count · Проверяем загрузку видео"
             "preview" -> "$count · Проверяем качество"
             "retry" -> "$count · Повторная проверка"
             "saved" -> "Сохранённая стратегия"

@@ -4,8 +4,8 @@ import org.json.JSONObject
 
 /** Evidence about public endpoints, never a claim that an account or video playback works. */
 object ProbeAssessment {
-    data class Result(val requiredSuccess: Int,val requiredTotal: Int,val extraSuccess: Int,val extraTotal: Int) {
-        val eligible get() = requiredTotal > 0 && requiredSuccess == requiredTotal && extraSuccess == extraTotal
+    data class Result(val requiredSuccess: Int,val requiredTotal: Int,val extraSuccess: Int,val extraTotal: Int,val mediaReady: Boolean = true) {
+        val eligible get() = mediaReady && requiredTotal > 0 && requiredSuccess == requiredTotal && extraSuccess == extraTotal
         val complete get() = eligible && extraSuccess == extraTotal
         fun text() = "полный тест ${requiredSuccess+extraSuccess}/${requiredTotal+extraTotal}"
     }
@@ -27,7 +27,7 @@ object ProbeAssessment {
             if (passed) { if (spec.required) requiredSuccess++ else extraSuccess++ }
         }
         val media=result.optJSONObject("media")
-        if(target=="youtube" && media!=null && media.optString("status")!="confirmed") extraSuccess=0
-        return Result(requiredSuccess,specs.count { it.required }*2,extraSuccess,specs.count { !it.required }*2)
+        val mediaReady=target!="youtube" || media==null || media.optString("status")=="confirmed"
+        return Result(requiredSuccess,specs.count { it.required }*2,extraSuccess,specs.count { !it.required }*2,mediaReady)
     }
 }

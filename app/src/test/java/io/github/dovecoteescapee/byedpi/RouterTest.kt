@@ -29,13 +29,19 @@ class RouterTest {
     }
     private class Backend(val marker: Int) : AutoCloseable {
         val server = ServerSocket(0,16,InetAddress.getByName("127.0.0.1"))
+        val destinations = java.util.Collections.synchronizedList(mutableListOf<String>())
         val peers = java.util.Collections.synchronizedList(mutableListOf<Socket>())
         val workers = Executors.newCachedThreadPool()
         init { workers.execute { while (!server.isClosed) runCatching { val peer = server.accept(); peers.add(peer); workers.execute { handle(peer) } } } }
         private fun handle(peer: Socket) { peer.use {
             val input = DataInputStream(it.inputStream); val output = it.outputStream
             check(input.readUnsignedByte() == 5); input.skipBytes(input.readUnsignedByte()); output.write(byteArrayOf(5,0)); output.flush()
-            check(input.readUnsignedByte() == 5); input.skipBytes(2); when (input.readUnsignedByte()) {1->input.skipBytes(4);4->input.skipBytes(16);3->input.skipBytes(input.readUnsignedByte())}; input.readUnsignedShort()
+            check(input.readUnsignedByte() == 5); input.skipBytes(2); val destination=when(input.readUnsignedByte()) {
+                1 -> InetAddress.getByAddress(ByteArray(4).also { input.readFully(it) }).hostAddress!!
+                4 -> InetAddress.getByAddress(ByteArray(16).also { input.readFully(it) }).hostAddress!!
+                3 -> String(ByteArray(input.readUnsignedByte()).also { input.readFully(it) })
+                else -> error("Bad SOCKS address")
+            };destinations.add(destination);input.readUnsignedShort()
             output.write(byteArrayOf(5,0,0,1,127,0,0,1,0,0)); output.flush()
             while (true) {
                 val prefix = HostInspector.read(input); if (prefix.bytes.isEmpty()) break
@@ -72,6 +78,20 @@ class RouterTest {
                 } }
             }
         } } }
+    }
+    @Test fun chosenResolverAffectsNewVideoConnectionsAndPreservesOpenStreams() {
+        Backend(66).use { backend -> ServiceRouter(0).use { router ->
+            var address="8.8.8.8"
+            router.resolve={ host,id -> assertEquals("youtube",id);assertEquals("r1.googlevideo.com",host);address }
+            router.route("youtube",ServiceRouter.Route(backend.server.localPort,1));router.start()
+            connect(router.port).use { old ->
+                request(old,"r1.googlevideo.com",66);assertEquals("8.8.8.8",backend.destinations.last())
+                address="1.1.1.1"
+                connect(router.port).use { request(it,"r1.googlevideo.com",66) }
+                assertEquals(listOf("8.8.8.8","1.1.1.1"),backend.destinations.toList())
+                request(old,"r1.googlevideo.com",66)
+            }
+        } }
     }
     @Test fun concurrentPreloadsDoNotStealUploadCapacity() {
         Backend(66).use { backend -> ServiceRouter(0).use { router ->

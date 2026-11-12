@@ -147,7 +147,7 @@ class MobileMonitor(private val context: Context,private val scope: CoroutineSco
                         // Commit negative evidence only beside a fresh successful control on this same network.
                         if (currentGood && failures.isNotEmpty()) {
                             val controlCommand = MobilePlan.command(active,id)
-                            val control = probe(id,controlCommand)
+                            val control = store.freshResult(controlCommand) ?: probe(id,controlCommand)
                             if (!permitted(id) || !same(profile) || MobileFeedback.token(id) != token || cancellation != MobileFeedback.cancelToken() || superseded()) continue
                             if (ProbeAssessment.evaluate(id,control).eligible)
                                 failures.forEach { (command,result) -> store.reject(command,result) }

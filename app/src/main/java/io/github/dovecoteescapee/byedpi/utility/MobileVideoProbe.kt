@@ -54,7 +54,7 @@ object MobileVideoProbe {
             val data=player(String(page.body,Charsets.UTF_8))?.optJSONObject("streamingData")
                 ?: return result.put("detail","YouTube не предоставил публичные адреса видео; возможны consent/login/изменение страницы")
             val urls=listOf("formats","adaptiveFormats").flatMap { name -> val a=data.optJSONArray(name)
-                if(a==null) emptyList() else (0 until a.length()).mapNotNull { a.optJSONObject(it)?.optString("url")?.takeIf { url -> mediaUrl(url) } }
+                if(a==null) emptyList() else (0 until a.length()).mapNotNull { a.optJSONObject(it)?.takeIf { format -> format.optString("mimeType").startsWith("video/") }?.optString("url")?.takeIf { url -> mediaUrl(url) } }
             }.distinct().take(2)
             if(urls.isEmpty())return result.put("detail","Тестовое видео требует подписи проигрывателя; транспорт не признан нерабочим")
             var passed=0;var elapsed=0L;var bytes=0
