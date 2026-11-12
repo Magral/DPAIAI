@@ -50,7 +50,7 @@ class ServiceTuningActivity : AppCompatActivity() {
             val next = ServiceTargets.individual.joinToString("\n") { t ->
                 val started = prefs.getLong("mobile_scan.${t.id}.$profile",0)
                 val remaining = MobileScanPolicy.remaining(started,System.currentTimeMillis())
-                "${t.name}: ${if (!prefs.getBoolean("mobile_auto_three_days",true)) "по требованию" else if (remaining == 0L) "проверка доступна" else "следующий подбор через ${remaining/3600000} ч"}"
+                "${t.name}: ${if (!MobileScanPolicy.enabled(prefs,t.id)) "подбор отключён" else if (!prefs.getBoolean("mobile_auto_three_days",true)) "по требованию" else if (remaining == 0L) "проверка доступна" else "следующий подбор через ${remaining/3600000} ч"}"
             }
             base.text = if (appStatus.first == AppStatus.Halted) "Включите защиту на главном экране" else MobilePresentation.summary()+"\n\n$next"
             handler.postDelayed(this,1000)
@@ -68,10 +68,24 @@ class ServiceTuningActivity : AppCompatActivity() {
             text="Автоподбор раз в 3 дня";isChecked=getPreferences().getBoolean("mobile_auto_three_days",true);box.addView(this)
             setOnCheckedChangeListener { _,enabled -> getPreferences().edit().putBoolean("mobile_auto_three_days",enabled).apply() }
         }
+        TextView(this).apply { text="Выберите приложения для подбора. Отключённые приложения не проверяются; сохранённые маршруты остаются.";box.addView(this) }
+        ServiceTargets.individual.forEach { target -> Switch(this).apply {
+            text="Подбирать для ${target.name}";isChecked=MobileScanPolicy.enabled(getPreferences(),target.id);box.addView(this)
+            setOnCheckedChangeListener { _,enabled ->
+                getPreferences().edit().putBoolean("mobile_scan_enabled.${target.id}",enabled).apply()
+                if (!enabled) MobilePresentation.disabled(target.id)
+                else MobilePresentation.ready(target.id,MobilePlan.command(MobilePlan.saved(getPreferences()),target.id))
+                MobileFeedback.wake()
+            }
+        } }
         TextView(this).apply { text="Годна только стратегия, прошедшая все проверки: YouTube — 8 из 8, Instagram — 6 из 6.";setPadding(0,16,0,16);box.addView(this) }
         button("Проверить сейчас") {
             if (appStatus.first == AppStatus.Halted) Toast.makeText(this,"Включите VPN на главном экране; проверка выполняется в фоне",Toast.LENGTH_LONG).show()
-            else { ServiceTargets.individual.forEach { MobileFeedback.request(it.id) };Toast.makeText(this,"Подбор запрошен; окно можно закрыть",Toast.LENGTH_LONG).show() }
+            else {
+                val targets=ServiceTargets.individual.filter { MobileScanPolicy.enabled(getPreferences(),it.id) }
+                targets.forEach { MobileFeedback.request(it.id) }
+                Toast.makeText(this,if (targets.isEmpty()) "Выберите хотя бы одно приложение" else "Подбор запрошен; окно можно закрыть",Toast.LENGTH_LONG).show()
+            }
         }
         button("Остановить подбор") { MobileFeedback.cancelScans(this);Toast.makeText(this,"Подбор остановлен",Toast.LENGTH_LONG).show() }
         ServiceTargets.individual.forEach { target -> button("${target.name}: годные стратегии") { choose(target) } }
@@ -79,6 +93,7 @@ class ServiceTuningActivity : AppCompatActivity() {
         lifecycleScope.launch(Dispatchers.IO) { MobileCatalogUpdater.refresh(this@ServiceTuningActivity) }
     }
     private fun choose(target: ServiceTargets.Target) {
+        if (!MobileScanPolicy.enabled(getPreferences(),target.id)) { Toast.makeText(this,"Сначала включите подбор для ${target.name}",Toast.LENGTH_LONG).show();return }
         val profile = MobileStrategyPolicy.profile(this)
         val store = MobileHistory.store(this,target.id,profile)
         val choices = store.choices()
@@ -90,15 +105,16 @@ class ServiceTuningActivity : AppCompatActivity() {
                     .setPositiveButton("Сбросить") { _,_ -> store.resetExclusions();Toast.makeText(this,"Исключения сброшены; можно запросить проверку",Toast.LENGTH_LONG).show() }
                     .setNegativeButton("Отмена",null).show()
             }.setNegativeButton("Закрыть",null)
-        if (choices.isEmpty()) dialog.setMessage("Нет подтверждённых полных результатов. Старые записи требуют новой проверки. Включите VPN и нажмите «Проверить Instagram + YouTube сейчас».")
+        if (choices.isEmpty()) dialog.setMessage("Нет подтверждённых полных результатов. Старые записи требуют новой проверки. Включите VPN и нажмите «Проверить сейчас».")
         else dialog.setItems(choices.map { row -> "${MobilePresentation.strategy(row.optString("command"))} · ${row.optInt("passed")} из ${row.optInt("total")}" }.toTypedArray()) { _,index ->
             val row = choices[index];val command = row.getString("command")
+            val fresh = store.freshResult(command) != null
             androidx.appcompat.app.AlertDialog.Builder(this).setTitle(target.name)
-                .setMessage("${MobilePresentation.strategy(command)}\nПройдено ${row.optInt("passed")} из ${row.optInt("total")}\n\nПроверить и применить эту стратегию?")
-                .setPositiveButton("Проверить и применить") { _,_ ->
+                .setMessage("${MobilePresentation.strategy(command)}\nПройдено ${row.optInt("passed")} из ${row.optInt("total")}\n\n${if (fresh) "Применить без повторной проверки?" else "Результат устарел. Проверить и применить?"}")
+                .setPositiveButton(if (fresh) "Применить" else "Проверить и применить") { _,_ ->
                     getPreferences().edit().putString("mobile_selected.${target.id}",JSONObject().put("command",command).put("profile",profile).toString()).apply()
                     MobileFeedback.request(target.id)
-                    Toast.makeText(this,if (appStatus.first == AppStatus.Halted) "Выбор сохранён; включите VPN" else "Выбранная стратегия проверяется в фоне",Toast.LENGTH_LONG).show()
+                    Toast.makeText(this,if (appStatus.first == AppStatus.Halted) "Выбор сохранён; включите VPN" else if (fresh) "Применяем проверенную стратегию" else "Выбранная стратегия проверяется в фоне",Toast.LENGTH_LONG).show()
                 }.setNegativeButton("Назад") { _,_ -> choose(target) }.show()
         }
         dialog.show()

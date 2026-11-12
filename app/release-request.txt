@@ -1,1 +1,1 @@
-Android 0.10.1: apply first full success immediately, continue background scan, select lowest latency, reuse fresh verified evidence without repeated trial.
+Android 0.10.1: apply first full success immediately, continue background scan, select lowest latency, reuse fresh verified evidence without repeated trial. Independent optional YouTube/Instagram scan toggles.

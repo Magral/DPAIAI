@@ -13,17 +13,17 @@ import java.util.concurrent.atomic.AtomicInteger
 
 class MobileStoreAndParallelTest {
     private fun prefs(): SharedPreferences {
-        val values=mutableMapOf<String,String?>()
+        val values=mutableMapOf<String,Any?>()
         lateinit var edit: SharedPreferences.Editor
         edit=Proxy.newProxyInstance(SharedPreferences.Editor::class.java.classLoader,arrayOf(SharedPreferences.Editor::class.java)) { _,m,a ->
             when(m.name) {
-                "putString" -> { values[a!![0] as String]=a[1] as String?;edit }
+                "putString", "putBoolean" -> { values[a!![0] as String]=a[1];edit }
                 "apply" -> null
                 else -> error(m.name)
             }
         } as SharedPreferences.Editor
         return Proxy.newProxyInstance(SharedPreferences::class.java.classLoader,arrayOf(SharedPreferences::class.java)) { _,m,a ->
-            when(m.name) { "getString" -> values[a!![0] as String] ?: a[1];"edit" -> edit;else -> error(m.name) }
+            when(m.name) { "getString", "getBoolean" -> values[a!![0] as String] ?: a[1];"edit" -> edit;else -> error(m.name) }
         } as SharedPreferences
     }
     private fun result(id: String,delay: Long,fail: Int = -1): JSONObject {
@@ -65,6 +65,22 @@ class MobileStoreAndParallelTest {
         restored.resetExclusions();assertTrue(restored.choices().isEmpty())
         assertTrue(restored.accept(command,result("youtube",100)))
         assertFalse(MobileStrategyStore(preferences,"instagram","wifi").excluded(command))
+    }
+    @Test fun optionalTargetsPersistIndependentlyAndDefaultToBothEnabled() {
+        val preferences=prefs()
+        assertTrue(MobileScanPolicy.enabled(preferences,"youtube"))
+        assertTrue(MobileScanPolicy.enabled(preferences,"instagram"))
+        preferences.edit().putBoolean("mobile_scan_enabled.instagram",false).apply()
+        assertFalse(MobileScanPolicy.enabled(preferences,"instagram"))
+        assertTrue(MobileScanPolicy.enabled(preferences,"youtube"))
+        preferences.edit().putBoolean("mobile_scan_enabled.youtube",false).apply()
+        assertFalse(MobileScanPolicy.enabled(preferences,"youtube"))
+        preferences.edit().putBoolean("mobile_scan_enabled.instagram",true).apply()
+        assertTrue(MobileScanPolicy.enabled(preferences,"instagram"))
+        assertFalse(MobileScanPolicy.enabled(preferences,"youtube"))
+        MobilePresentation.disabled("youtube")
+        assertTrue(MobilePresentation.summary().contains("Подбор отключён"))
+        MobilePresentation.clear()
     }
     @Test fun freshFullEvidenceCanBeReusedOnlyForSameServiceNetworkAndBeforeExpiry() {
         val preferences=prefs();val command=StrategyCatalog.commands[1]

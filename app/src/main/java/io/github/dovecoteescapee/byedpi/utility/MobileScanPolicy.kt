@@ -1,6 +1,8 @@
 package io.github.dovecoteescapee.byedpi.utility
 
 object MobileScanPolicy {
+    fun enabled(prefs: android.content.SharedPreferences,id: String) = prefs.getBoolean("mobile_scan_enabled.$id",true)
+
     fun previewScore(id: String,result: org.json.JSONObject): Long = if (id == "youtube")
         io.github.dovecoteescapee.byedpi.catalog.PreviewQuality.decode(result.optJSONArray("preview")).score else 0L
     const val INTERVAL = 3L*24*60*60*1000

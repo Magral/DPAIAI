@@ -38,6 +38,7 @@ object MobilePresentation {
             if (score.eligible) "good" else "failed")
     }
     @Synchronized fun ready(id: String,command: String) { statuses[id] = Status(command,0,0,"saved") }
+    @Synchronized fun disabled(id: String) { statuses[id] = Status("",0,0,"disabled") }
     @Synchronized fun pause() {
         statuses.keys.toList().forEach { id ->
             val s = statuses.getValue(id)
@@ -55,7 +56,7 @@ object MobilePresentation {
             "paused" -> "Подбор остановлен"
             else -> count
         }
-        return "${strategy(status.command)}\n$state"
+        return if (status.phase == "disabled") "Подбор отключён" else "${strategy(status.command)}\n$state"
     }
     @Synchronized fun summary(): String = ServiceTargets.individual.joinToString("\n\n") { t ->
         "${t.name}\n"+(statuses[t.id]?.let(::text) ?: "Сохранённая стратегия")
