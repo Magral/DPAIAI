@@ -8,7 +8,7 @@ import org.json.JSONObject
 
 object MobileCandidate {
     suspend fun run(context: Context,target: String,command: String,known: Boolean = false,
-        previews: Boolean = true,onProgress: (ProbeProgress)->Unit = {}): JSONObject {
+        previews: Boolean = true,fast: Boolean = false,qualityOnly: Boolean = false,onProgress: (ProbeProgress)->Unit = {}): JSONObject {
         val connected = CompletableDeferred<IBinder>()
         val result = CompletableDeferred<String>()
         val died = CompletableDeferred<Unit>()
@@ -38,7 +38,7 @@ object MobileCandidate {
             val remote = Messenger(withTimeout(5000) { connected.await() })
             remote.send(Message.obtain().apply {
                 replyTo = callback
-                data = Bundle().apply { putString("target",target); putString("command",command);putBoolean("known",known);putBoolean("previews",previews) }
+                data = Bundle().apply { putString("target",target); putString("command",command);putBoolean("known",known);putBoolean("previews",previews);putBoolean("fast",fast);putBoolean("qualityOnly",qualityOnly) }
             })
             return JSONObject(withTimeout(225000L) { result.await() })
         } finally {
