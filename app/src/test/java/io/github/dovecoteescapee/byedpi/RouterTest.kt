@@ -73,6 +73,23 @@ class RouterTest {
             }
         } } }
     }
+    @Test fun concurrentPreloadsDoNotStealUploadCapacity() {
+        Backend(66).use { backend -> ServiceRouter(0).use { router ->
+            router.route("youtube",ServiceRouter.Route(backend.server.localPort,1));router.start()
+            val clients = mutableListOf<Socket>()
+            try {
+                // The old shared 192-thread pool fails around connection 97:
+                // every download handler also needs an upload worker.
+                repeat(104) {
+                    val peer = connect(router.port);clients.add(peer)
+                    request(peer,"rr1---sn-test.googlevideo.com",66)
+                }
+                // Existing streams still exchange data after the preload burst.
+                clients.forEach { request(it,"rr1---sn-test.googlevideo.com",66) }
+                assertEquals(104,router.stats("youtube").connections)
+            } finally { clients.forEach { it.close() } }
+        } }
+    }
     @Test fun udpAssociationPreservesDatagramAndStopsWithItsControlConnection() {
         DatagramSocket(InetSocketAddress("127.0.0.1",0)).use { echo ->
             val worker = Thread { runCatching { val p = DatagramPacket(ByteArray(1024),1024);echo.receive(p);echo.send(p) } }.apply { isDaemon = true;start() }

@@ -25,8 +25,8 @@ android {
         applicationId = "io.github.magral.dpipilot"
         minSdk = 21
         targetSdk = 34
-        versionCode = 21
-        versionName = "0.11.0"
+        versionCode = 22
+        versionName = "0.11.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 

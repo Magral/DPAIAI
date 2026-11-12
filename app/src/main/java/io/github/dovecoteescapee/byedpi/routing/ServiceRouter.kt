@@ -14,7 +14,14 @@ class ServiceRouter(private val bindPort: Int = 1080) : AutoCloseable {
     private data class Flow(val client: Socket,val peer: Socket,val service: String?,val route: Route?)
     private val running = AtomicBoolean(false)
     private val deadlines = ScheduledThreadPoolExecutor(1) { r -> Thread(r,"route-deadlines").apply { isDaemon = true } }.apply { removeOnCancelPolicy = true }
-    private val workers = ThreadPoolExecutor(0,192,20,TimeUnit.SECONDS,SynchronousQueue(),{ r -> Thread(r,"service-router").apply { isDaemon = true } })
+    // A handler occupies its worker for the lifetime of the download. Uploads must
+    // have their own capacity: nested submission to the handler pool rejects
+    // established flows when concurrent video/preload connections fill that pool.
+    private fun pool(limit: Int,name: String) = ThreadPoolExecutor(0,limit,20,TimeUnit.SECONDS,SynchronousQueue<Runnable>(),
+        { r -> Thread(r,name).apply { isDaemon = true } })
+    private val workers = pool(128,"service-router")
+    private val uploads = pool(128,"service-upload")
+    private val datagrams = pool(16,"service-datagram")
     private val routes = ConcurrentHashMap<String,Route>()
     private val meters = ConcurrentHashMap<String,Meter>()
     private val routeMeters = ConcurrentHashMap<Route,Meter>()
@@ -92,7 +99,7 @@ class ServiceRouter(private val bindPort: Int = 1080) : AutoCloseable {
             val established = Flow(client,upstreamPeer,service,route); flow = established; flows.add(established); totals.forEach { it.connections.incrementAndGet() }
             upstreamPeer.outputStream.write(prefix.bytes); upstreamPeer.outputStream.flush(); totals.forEach { it.tx.addAndGet(prefix.bytes.size.toLong()); it.writes.incrementAndGet() }
             val stats = totals
-            val upload = workers.submit {
+            val upload = uploads.submit {
                 try { pump(input,upstreamPeer.outputStream) { n -> stats.forEach { it.tx.addAndGet(n.toLong()); it.writes.incrementAndGet() } }; runCatching { upstreamPeer.shutdownOutput() } }
                 catch (_: Exception) { runCatching { upstreamPeer.close() }; runCatching { client.close() } }
             }
@@ -115,7 +122,7 @@ class ServiceRouter(private val bindPort: Int = 1080) : AutoCloseable {
             sockets.add(relay)
             output.write(byteArrayOf(5,0,0,1,127,0,0,1,(relay.localPort ushr 8).toByte(),relay.localPort.toByte())); output.flush()
             client.soTimeout = 0
-            val control = workers.submit { try { while (client.inputStream.read() >= 0) { } } finally { relay.close() } }
+            val control = uploads.submit { try { while (client.inputStream.read() >= 0) { } } finally { relay.close() } }
             var source: SocketAddress? = null
             try {
                 while (running.get() && !relay.isClosed) {
@@ -127,7 +134,7 @@ class ServiceRouter(private val bindPort: Int = 1080) : AutoCloseable {
                     val (host,encoded) = address(data); val target = data.readUnsignedShort()
                     if (target == 443 || target == 0) continue // Force QUIC fallback to TCP for selected apps.
                     val payload = ByteArray(data.available()).also { data.readFully(it) }; val destination = packet.socketAddress
-                    try { workers.execute {
+                    try { datagrams.execute {
                         runCatching { DatagramSocket().use { remote ->
                             sockets.add(remote)
                             try {
@@ -145,6 +152,6 @@ class ServiceRouter(private val bindPort: Int = 1080) : AutoCloseable {
     }
     override fun close() {
         running.set(false); runCatching { listener?.close() }
-        sockets.toList().forEach { runCatching { it.close() } }; sockets.clear(); workers.shutdownNow();deadlines.shutdownNow(); flows.clear()
+        sockets.toList().forEach { runCatching { it.close() } }; sockets.clear(); workers.shutdownNow();uploads.shutdownNow();datagrams.shutdownNow();deadlines.shutdownNow(); flows.clear()
     }
 }

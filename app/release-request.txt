@@ -1,1 +1,1 @@
-Android 0.11.0: two-pass full selection, clear progress, app launch buttons, curated sources and separate bounded manual strategy generator. Release after CI with the permanent certificate.
+Android 0.11.1: isolate duplex video forwarding workers and DNS datagram workers; regression-tested concurrent preload burst. Permanent signed release.
