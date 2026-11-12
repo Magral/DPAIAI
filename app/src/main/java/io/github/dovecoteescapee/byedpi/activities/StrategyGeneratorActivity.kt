@@ -6,6 +6,7 @@ import android.os.Looper
 import android.widget.*
 import androidx.appcompat.app.AppCompatActivity
 import io.github.dovecoteescapee.byedpi.data.AppStatus
+import io.github.dovecoteescapee.byedpi.services.appStatus
 import io.github.dovecoteescapee.byedpi.utility.*
 
 /** A manually started search, independent from scheduled catalog scans. */
