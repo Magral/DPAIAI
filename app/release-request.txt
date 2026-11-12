@@ -1,1 +1,1 @@
-Android 0.11.1: isolate duplex video forwarding workers and DNS datagram workers; regression-tested concurrent preload burst. Permanent signed release.
+Android 0.12.0: compact home app logos, latency and timestamps, 72-hour evidence reuse, stable applied strategies, automatic DNS-strategy pairing, 13-host YouTube checks and bounded video range tests. Publish only after release tests and permanent certificate verification.
