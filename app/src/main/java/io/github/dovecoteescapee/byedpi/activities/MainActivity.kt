@@ -38,7 +38,8 @@ class MainActivity : AppCompatActivity() {
     private val catalogHandler = android.os.Handler(android.os.Looper.getMainLooper())
     private val catalogUi = object : Runnable {
         override fun run() {
-            binding.mobileCatalogStatus.text = "База ${RuntimeCatalog.commands.size} · ${RuntimeCatalog.version}\n${MobileCatalogUpdater.status}\n${MobileStrategyPolicy.state}\n${MobileFeedback.traffic}" + if (getPreferences().getString("mobile_target",null) == MobilePlan.BOTH) "\n"+MobilePlan.describe(getPreferences().getString("mobile_command","").orEmpty()) else ""
+            binding.mobileCatalogStatus.text = if (appStatus.first == AppStatus.Running) MobilePresentation.summary()
+                else "Включите защиту для YouTube и Instagram"
             catalogHandler.postDelayed(this,2000)
         }
     }
@@ -156,8 +157,14 @@ class MainActivity : AppCompatActivity() {
             registerReceiver(receiver, intentFilter)
         }
 
-        binding.youtubeProblem.setOnClickListener { getPreferences().edit().putString("mobile_force_replace.youtube",MobileStrategyPolicy.profile(this)).apply();MobileFeedback.request("youtube"); Toast.makeText(this,"Запрошена замена стратегии YouTube",Toast.LENGTH_SHORT).show() }
-        binding.instagramProblem.setOnClickListener { getPreferences().edit().putString("mobile_force_replace.instagram",MobileStrategyPolicy.profile(this)).apply();MobileFeedback.request("instagram"); Toast.makeText(this,"Запрошена замена стратегии Instagram",Toast.LENGTH_SHORT).show() }
+        fun report(id: String) {
+            val prefs = getPreferences();val profile = MobileStrategyPolicy.profile(this)
+            MobileHistory.store(this,id,profile).report(MobilePlan.command(MobilePlan.saved(prefs),id))
+            prefs.edit().putString("mobile_force_replace.$id",profile).apply();MobileFeedback.request(id)
+            Toast.makeText(this,"Ищем другую стратегию",Toast.LENGTH_SHORT).show()
+        }
+        binding.youtubeProblem.setOnClickListener { report("youtube") }
+        binding.instagramProblem.setOnClickListener { report("instagram") }
         binding.serviceTuningButton.setOnClickListener { startActivity(Intent(this, ServiceTuningActivity::class.java)) }
         binding.statusButton.setOnClickListener {
             val (status, _) = appStatus
@@ -193,7 +200,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreateOptionsMenu(menu: Menu?): Boolean {
         menuInflater.inflate(R.menu.menu_main, menu)
-        menu?.add(0, 9001, 0, "Профили и проверка")
+        menu?.add(0, 9001, 0, "Дополнительно: профили")
         return true
     }
 
@@ -268,9 +275,7 @@ class MainActivity : AppCompatActivity() {
             catch (_: PackageManager.NameNotFoundException) { pkg }
         }.sorted()
         binding.targetsSummary.text = "Instagram + YouTube\n"+if (labels.isEmpty()) "Подключаются установленные клиенты" else labels.joinToString(", ")
-        val proxyIp = preferences.getStringNotNull("byedpi_proxy_ip", "127.0.0.1")
-        val proxyPort = preferences.getStringNotNull("byedpi_proxy_port", "1080")
-        binding.proxyAddress.text = getString(R.string.proxy_address, proxyIp, proxyPort)
+        binding.proxyAddress.visibility = android.view.View.GONE
 
         when (status) {
             AppStatus.Halted -> {

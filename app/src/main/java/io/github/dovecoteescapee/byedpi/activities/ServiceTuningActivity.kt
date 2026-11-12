@@ -32,7 +32,7 @@ class ServiceTuningActivity : AppCompatActivity() {
                     }
                 }
                 androidx.appcompat.app.AlertDialog.Builder(this@ServiceTuningActivity).setTitle("Профиль для проверки")
-                    .setMessage(commands.entries.joinToString("\n\n") { "${it.key}: ${it.value.ifEmpty { "контроль" }}" }+"\n\nЭто локальный файл. Команды будут испытаны перед сохранением в рабочий резерв.")
+                    .setMessage(commands.entries.joinToString("\n") { "${ServiceTargets.target(it.key).name}: ${MobilePresentation.strategy(it.value)}" }+"\n\nПеред применением стратегии пройдут проверку.")
                     .setPositiveButton("Добавить к подбору") { _,_ ->
                         val edit = getPreferences().edit();commands.forEach { (id,command) -> edit.putString("mobile_imported.$id",command) };edit.apply()
                         commands.keys.forEach { MobileFeedback.request(it) }
@@ -52,7 +52,7 @@ class ServiceTuningActivity : AppCompatActivity() {
                 val remaining = MobileScanPolicy.remaining(started,System.currentTimeMillis())
                 "${t.name}: ${if (!prefs.getBoolean("mobile_auto_three_days",true)) "по требованию" else if (remaining == 0L) "проверка доступна" else "следующий подбор через ${remaining/3600000} ч"}"
             }
-            base.text = "DPI Pilot ${io.github.dovecoteescapee.byedpi.BuildConfig.VERSION_NAME} · База ${RuntimeCatalog.commands.size}\n${MobileCatalogUpdater.status}\n${MobileStrategyPolicy.state}\n$next\n${MobileNetwork.summary(this@ServiceTuningActivity)}"
+            base.text = if (appStatus.first == AppStatus.Halted) "Включите защиту на главном экране" else MobilePresentation.summary()+"\n\n$next"
             handler.postDelayed(this,1000)
         }
     }
@@ -61,37 +61,28 @@ class ServiceTuningActivity : AppCompatActivity() {
         MobileCatalogUpdater.load(this);CatalogUpdateJob.schedule(this)
         val box = LinearLayout(this).apply { orientation=LinearLayout.VERTICAL;setPadding(24,24,24,24) }
         setContentView(ScrollView(this).apply { addView(box) })
-        base = TextView(this).apply { setPadding(0,12,0,16);box.addView(this) }
+        title = "Подбор стратегий"
+        base = TextView(this).apply { textSize=18f;setPadding(0,12,0,16);box.addView(this) }
         fun button(label: String,action: ()->Unit) { Button(this).apply { text=label;isAllCaps=false;box.addView(this);setOnClickListener { action() } } }
         Switch(this).apply {
             text="Автоподбор раз в 3 дня";isChecked=getPreferences().getBoolean("mobile_auto_three_days",true);box.addView(this)
             setOnCheckedChangeListener { _,enabled -> getPreferences().edit().putBoolean("mobile_auto_three_days",enabled).apply() }
         }
-        TextView(this).apply { text="Instagram и YouTube работают вместе. В рабочих — только полный тест: Instagram 6/6, YouTube 8/8. Узлы одной стратегии проверяются параллельно; при первом отказе оставшиеся тесты прекращаются. Задержка сортируется только среди полных результатов.";setPadding(0,16,0,16);box.addView(this) }
-        button("Проверить Instagram + YouTube сейчас") {
+        TextView(this).apply { text="Годна только стратегия, прошедшая все проверки: YouTube — 8 из 8, Instagram — 6 из 6.";setPadding(0,16,0,16);box.addView(this) }
+        button("Проверить сейчас") {
             if (appStatus.first == AppStatus.Halted) Toast.makeText(this,"Включите VPN на главном экране; проверка выполняется в фоне",Toast.LENGTH_LONG).show()
             else { ServiceTargets.individual.forEach { MobileFeedback.request(it.id) };Toast.makeText(this,"Подбор запрошен; окно можно закрыть",Toast.LENGTH_LONG).show() }
         }
-        button("Остановить текущий подбор") { MobileFeedback.cancelScans(this);Toast.makeText(this,"Подбор остановлен; прежние маршруты сохраняются",Toast.LENGTH_LONG).show() }
-        ServiceTargets.individual.forEach { target -> button("${target.name}: рабочие стратегии по задержке") { choose(target) } }
-        button("Обновить базу стратегий") { lifecycleScope.launch(Dispatchers.IO) { MobileCatalogUpdater.refresh(this@ServiceTuningActivity,true) } }
-        button("Источники и состояние базы") {
-            androidx.appcompat.app.AlertDialog.Builder(this).setTitle(RuntimeCatalog.version).setMessage(RuntimeCatalog.sources.joinToString("\n\n")).setPositiveButton("Закрыть",null).show()
-        }
-        button("Сохранить профиль в файл") { exportProfile.launch("DPI-Pilot-profile.json") }
-        button("Импорт профиля с ТВ / другого устройства") { importProfile.launch(arrayOf("application/json","text/plain")) }
-        button("Скопировать диагностику") {
-            (getSystemService(CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("DPI Pilot",base.text.toString()+"\n"+MobileStrategyPolicy.lastProbe+"\n"+MobileFeedback.traffic+"\n"+MobileHistory.summary(this)))
-            Toast.makeText(this,"Диагностика скопирована",Toast.LENGTH_SHORT).show()
-        }
+        button("Остановить подбор") { MobileFeedback.cancelScans(this);Toast.makeText(this,"Подбор остановлен",Toast.LENGTH_LONG).show() }
+        ServiceTargets.individual.forEach { target -> button("${target.name}: годные стратегии") { choose(target) } }
+        button("Дополнительно") { advanced() }
         lifecycleScope.launch(Dispatchers.IO) { MobileCatalogUpdater.refresh(this@ServiceTuningActivity) }
     }
     private fun choose(target: ServiceTargets.Target) {
         val profile = MobileStrategyPolicy.profile(this)
         val store = MobileHistory.store(this,target.id,profile)
         val choices = store.choices()
-        val excluded = store.excludedIds().size
-        val title = "${target.name} · полные результаты · исключено $excluded"
+        val title = "${target.name}: годные стратегии"
         val dialog = androidx.appcompat.app.AlertDialog.Builder(this).setTitle(title)
             .setNeutralButton("Сбросить исключения") { _,_ ->
                 androidx.appcompat.app.AlertDialog.Builder(this).setTitle("Разрешить повторные тесты?")
@@ -100,10 +91,10 @@ class ServiceTuningActivity : AppCompatActivity() {
                     .setNegativeButton("Отмена",null).show()
             }.setNegativeButton("Закрыть",null)
         if (choices.isEmpty()) dialog.setMessage("Нет подтверждённых полных результатов. Старые записи требуют новой проверки. Включите VPN и нажмите «Проверить Instagram + YouTube сейчас».")
-        else dialog.setItems(choices.map { row -> "${row.optLong("latencyMs")} мс · ${row.optInt("passed")}/${row.optInt("total")} · ${io.github.dovecoteescapee.byedpi.catalog.CatalogProtocol.id(row.optString("command"))}" }.toTypedArray()) { _,index ->
+        else dialog.setItems(choices.map { row -> "${MobilePresentation.strategy(row.optString("command"))} · ${row.optInt("passed")} из ${row.optInt("total")}" }.toTypedArray()) { _,index ->
             val row = choices[index];val command = row.getString("command")
             androidx.appcompat.app.AlertDialog.Builder(this).setTitle(target.name)
-                .setMessage("Последняя проверка ${row.optInt("passed")}/${row.optInt("total")}; задержка HTTPS ${row.optLong("latencyMs")} мс\n\n${command.ifEmpty { "Контроль без изменений" }}\n\nПеред применением — повторная проверка. Другой сервис продолжит работу.")
+                .setMessage("${MobilePresentation.strategy(command)}\nПройдено ${row.optInt("passed")} из ${row.optInt("total")}\n\nПроверить и применить эту стратегию?")
                 .setPositiveButton("Проверить и применить") { _,_ ->
                     getPreferences().edit().putString("mobile_selected.${target.id}",JSONObject().put("command",command).put("profile",profile).toString()).apply()
                     MobileFeedback.request(target.id)
@@ -111,6 +102,25 @@ class ServiceTuningActivity : AppCompatActivity() {
                 }.setNegativeButton("Назад") { _,_ -> choose(target) }.show()
         }
         dialog.show()
+    }
+    private fun advanced() {
+        val items = arrayOf("Обновить базу","Источники базы","Сохранить профиль","Импорт профиля с ТВ","Скопировать диагностику")
+        androidx.appcompat.app.AlertDialog.Builder(this).setTitle("Дополнительно").setItems(items) { _,index ->
+            when (index) {
+                0 -> lifecycleScope.launch(Dispatchers.IO) { MobileCatalogUpdater.refresh(this@ServiceTuningActivity,true) }
+                1 -> androidx.appcompat.app.AlertDialog.Builder(this).setTitle(RuntimeCatalog.version)
+                    .setMessage(MobileCatalogUpdater.status+"\n\n"+RuntimeCatalog.sources.joinToString("\n\n")).setPositiveButton("Закрыть",null).show()
+                2 -> exportProfile.launch("DPI-Pilot-profile.json")
+                3 -> importProfile.launch(arrayOf("application/json","text/plain"))
+                4 -> {
+                    val detail = "DPI Pilot ${io.github.dovecoteescapee.byedpi.BuildConfig.VERSION_NAME}\n"+
+                        MobileStrategyPolicy.state+"\n"+MobileNetwork.summary(this)+"\n"+MobileStrategyPolicy.lastProbe+"\n"+
+                        MobileFeedback.traffic+"\n"+MobileHistory.summary(this)
+                    (getSystemService(CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("DPI Pilot",detail))
+                    Toast.makeText(this,"Диагностика скопирована",Toast.LENGTH_SHORT).show()
+                }
+            }
+        }.setNegativeButton("Закрыть",null).show()
     }
     override fun onStart() { super.onStart();handler.post(refresh) }
     override fun onStop() { handler.removeCallbacks(refresh);super.onStop() }

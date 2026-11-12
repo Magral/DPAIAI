@@ -48,6 +48,24 @@ class MobileStoreAndParallelTest {
         assertEquals(listOf(b,a),store.choices().map { it.getString("command") })
         assertEquals(a,MobileScanPolicy.fastest(listOf(a to result("youtube",200),b to result("youtube",1,0)),"youtube")!!.first)
     }
+    @Test fun manualComplaintSurvivesRestartAndPreviewMetricsSurviveCoreOnlyConfirmation() {
+        val preferences=prefs();val command=StrategyCatalog.commands[1]
+        val store=MobileStrategyStore(preferences,"youtube","wifi")
+        val preview=io.github.dovecoteescapee.byedpi.catalog.PreviewQuality(
+            io.github.dovecoteescapee.byedpi.catalog.PreviewQuality.sources.flatMap { source ->
+                (1..2).map { round -> io.github.dovecoteescapee.byedpi.catalog.PreviewSample(source,round,16000,100,20,true) }
+            })
+        assertTrue(store.accept(command,result("youtube",200).put("preview",preview.encode())))
+        assertTrue(store.accept(command,result("youtube",150)))
+        assertEquals(preview,io.github.dovecoteescapee.byedpi.catalog.PreviewQuality.decode(store.choices().single().optJSONArray("preview")))
+        store.report(command)
+        val restored=MobileStrategyStore(preferences,"youtube","wifi")
+        assertTrue(restored.excluded(command));assertTrue(restored.choices().isEmpty())
+        assertFalse(restored.accept(command,result("youtube",100)))
+        restored.resetExclusions();assertTrue(restored.choices().isEmpty())
+        assertTrue(restored.accept(command,result("youtube",100)))
+        assertFalse(MobileStrategyStore(preferences,"instagram","wifi").excluded(command))
+    }
     @Test fun exclusionsAreNotEvictedAfterTheOldEightEntryLimit() {
         val prefs=prefs();val store=MobileStrategyStore(prefs,"instagram","wifi")
         StrategyCatalog.commands.take(20).forEach { store.reject(it) }

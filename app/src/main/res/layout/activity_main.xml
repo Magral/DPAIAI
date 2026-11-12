@@ -61,7 +61,7 @@
         android:layout_below="@id/instagram_problem"
         android:layout_marginHorizontal="20dp"
         android:textAllCaps="false"
-        android:text="Подбор, база и диагностика" />
+        android:text="Подбор стратегий" />
     <com.google.android.material.textview.MaterialTextView
         android:id="@+id/mobile_catalog_status"
         android:layout_width="match_parent"

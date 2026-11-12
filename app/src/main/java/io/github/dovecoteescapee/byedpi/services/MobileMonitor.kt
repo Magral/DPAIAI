@@ -51,6 +51,7 @@ class MobileMonitor(private val context: Context,private val scope: CoroutineSco
     }
     fun start() {
         MobileFeedback.clearSignals()
+        ServiceTargets.individual.forEach { MobilePresentation.ready(it.id,MobilePlan.command(active,it.id)) }
         prefs.registerOnSharedPreferenceChangeListener(listener)
         task = scope.launch {
             var profile = MobileStrategyPolicy.profile(context)
@@ -60,7 +61,7 @@ class MobileMonitor(private val context: Context,private val scope: CoroutineSco
                     if (!MobileStrategyPolicy.connected(context)) { publish("Нет физической сети; исключения не меняются");MobileFeedback.waitFor(15000);continue }
                     connection = MobileStrategyPolicy.connection(context)
                     val currentProfile = MobileStrategyPolicy.profile(context)
-                    if (profile != currentProfile) { profile = currentProfile;reports.clear();health.values.forEach { it.reset() } }
+                    if (profile != currentProfile) { profile = currentProfile;reports.clear();health.values.forEach { it.reset() };MobilePresentation.clear() }
                     runtime.reap()
                     cancellation = MobileFeedback.cancelToken()
                     revision = MobileFeedback.requestVersion()
@@ -88,7 +89,7 @@ class MobileMonitor(private val context: Context,private val scope: CoroutineSco
                         consumed[id] = token
                         prefs.edit().putLong(key,System.currentTimeMillis()).commit()
                         val previousCommand = MobilePlan.command(active,id)
-                        val current = if (!store.excluded(previousCommand)) probe(id,previousCommand) else JSONObject().put("error","Исключённый вариант не проверяется")
+                        val current = if (!store.excluded(previousCommand)) probe(id,previousCommand,previews=true) else JSONObject().put("error","Исключённый вариант не проверяется")
                         if (!same(profile) || MobileFeedback.token(id) != token || cancellation != MobileFeedback.cancelToken() || superseded()) continue
                         reports[id] = current
                         val results = mutableListOf<Pair<String,JSONObject>>()
@@ -99,15 +100,23 @@ class MobileMonitor(private val context: Context,private val scope: CoroutineSco
                         } else if (!store.excluded(previousCommand)) { store.defer(previousCommand,current);failures.add(previousCommand to current) }
                         val commands = if (selected != null) listOf(selected).filter { !store.excluded(it) && io.github.dovecoteescapee.byedpi.catalog.CatalogProtocol.validCommand(it) }
                             else MobileStrategyPolicy.window(context,target)
+                        var previewCandidates = 0 // At most 3 reserves + the current route per cycle.
                         for ((index,command) in commands.withIndex()) {
                             if (command == previousCommand && !runtime.fault(id)) continue
                             if (!same(profile) || MobileFeedback.token(id) != token || cancellation != MobileFeedback.cancelToken() || superseded() || (!forced && !automatic())) break
                             publish("${target.name}: ${index+1}/${commands.size}; рабочая стратегия второго сервиса сохраняется")
-                            val result = try { awaitResult(id,profile,token) { withTimeout(170000) { MobileCandidate.run(context,id,command) { progress("${target.name}: $it") } } } }
+                            MobilePresentation.start(id,command)
+                            val result = try { awaitResult(id,profile,token) { withTimeout(215000) {
+                                MobileCandidate.run(context,id,command,known=store.known(command),previews=previewCandidates < 3) {
+                                    MobilePresentation.progress(id,command,it)
+                                }
+                            } } }
                                 catch (e: TimeoutCancellationException) { currentCoroutineContext().ensureActive();JSONObject().put("error","Лимит процесса проверки") }
                                 catch (e: CancellationException) { throw e }
                                 catch (e: Exception) { JSONObject().put("error",e.javaClass.simpleName) }
                             if (!same(profile) || MobileFeedback.token(id) != token || cancellation != MobileFeedback.cancelToken() || superseded()) break
+                            MobilePresentation.finish(id,command,result)
+                            if (result.has("preview")) previewCandidates++
                             if (ProbeAssessment.evaluate(id,result).eligible) {
                                 if (store.accept(command,result)) results.add(command to result)
                                 if (!currentGood) break // Restore access promptly; do not finish the whole bank first.
@@ -131,7 +140,8 @@ class MobileMonitor(private val context: Context,private val scope: CoroutineSco
                             else { store.defer(previousCommand,control);publish("${target.name}: контроль не прошёл; массовые исключения отменены");continue }
                         }
                         if (best.first == previousCommand && !runtime.fault(id)) {
-                            MobileStrategyPolicy.remember(context,id,previousCommand);publish("${target.name}: текущая стратегия быстрее остальных полных результатов");continue
+                            MobileStrategyPolicy.remember(context,id,previousCommand);MobilePresentation.finish(id,previousCommand,best.second)
+                            publish("${target.name}: текущая стратегия выбрана среди полных результатов");continue
                         }
                         trial(id,best.first,profile,token,store)
                     }
@@ -195,14 +205,21 @@ class MobileMonitor(private val context: Context,private val scope: CoroutineSco
             pending.await()
         } finally { if (!pending.isCompleted) { session?.cancel();pending.cancelAndJoin() } }
     }
-    private suspend fun probe(id: String,command: String): JSONObject {
+    private suspend fun probe(id: String,command: String,previews: Boolean = false): JSONObject {
         val current = ServiceProbe.Session();session = current
         val profile = MobileStrategyPolicy.profile(context);val token = MobileFeedback.token(id)
+        MobilePresentation.start(id,command)
         return try {
-            awaitResult(id,profile,token) { withContext(Dispatchers.IO) {
-                withTimeout(150000) { runInterruptible { ServiceProbe.check(id,command,1080,current) { text -> scope.launch { progress("${ServiceTargets.target(id).name}: $text") } } } }
+            val result = awaitResult(id,profile,token) { withContext(Dispatchers.IO) {
+                withTimeout(205000) { runInterruptible {
+                    ServiceProbe.check(id,command,1080,current,known=MobileHistory.store(context,id,profile).known(command),previews=previews) {
+                        MobilePresentation.progress(id,command,it)
+                    }
+                } }
             } }
+            if (same(profile) && cancellation == MobileFeedback.cancelToken() && !superseded()) MobilePresentation.finish(id,command,result)
+            result
         } finally { current.cancel();session = null }
     }
-    suspend fun stop() { prefs.unregisterOnSharedPreferenceChangeListener(listener);session?.cancel();task?.cancelAndJoin();sample?.cancelAndJoin();task=null;sample=null }
+    suspend fun stop() { prefs.unregisterOnSharedPreferenceChangeListener(listener);session?.cancel();task?.cancelAndJoin();sample?.cancelAndJoin();task=null;sample=null;MobilePresentation.pause() }
 }
