@@ -114,7 +114,7 @@ def main():
                         rejects.append(dict(source=source['id'],raw=candidate,reason='native: '+error));continue
                     keys[key]=len(entries)
                     entries.append(dict(id=hashlib.sha256(key.encode()).hexdigest()[:16],args=key,sources=[source['id']]))
-    catalog=dict(version='2026-10-31.1',engine_commit='ba532298de7b28cfe854aea83d061369d13ca290',strategies=entries,rejected=rejects,sources=[{k:v for k,v in s.items() if k!='commands'} for s in sources],notes=['Startup/SOCKS acceptance is not ISP effectiveness.','Five fake-SNI substitutions use the service-domain list documented by NetFix; not five independently reported successes.','Aliases, typography and detached offset suffixes normalized; unrelated operations and external-file arguments excluded.'])
+    catalog=dict(version='2026-11-12.1',engine_commit='ba532298de7b28cfe854aea83d061369d13ca290',strategies=entries,rejected=rejects,sources=[{k:v for k,v in s.items() if k!='commands'} for s in sources],notes=['Startup/SOCKS acceptance is not ISP effectiveness.','Five fake-SNI substitutions use the service-domain list documented by NetFix; not five independently reported successes.','Aliases, typography and detached offset suffixes normalized; unrelated operations and external-file arguments excluded.'])
     catalog_path.write_text(json.dumps(catalog,ensure_ascii=False,indent=2)+'\n')
     kotlin.write_text(render(catalog))
     print(json.dumps(dict(accepted=len(entries),rejected=len(rejects),source_counts={s['id']:sum(s['id'] in e['sources'] for e in entries) for s in sources}),ensure_ascii=False))
