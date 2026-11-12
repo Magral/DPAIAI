@@ -48,7 +48,7 @@ object MobilePresentation {
     @Synchronized fun finish(id: String,command: String,result: JSONObject) {
         val score = ProbeAssessment.evaluate(id,result)
         statuses[id] = Status(command,score.requiredSuccess+score.extraSuccess,score.requiredTotal+score.extraTotal,
-            if (score.eligible) "good" else "failed")
+            if (score.eligible) "good" else if (result.optBoolean("deferred") || result.optBoolean("inconclusive")) "deferred" else "failed")
     }
     @Synchronized fun ready(id: String,command: String) { statuses[id] = Status(command,0,0,"saved") }
     @Synchronized fun disabled(id: String) { statuses[id] = Status("",0,0,"disabled") }
@@ -64,6 +64,7 @@ object MobilePresentation {
         val state = when (status.phase) {
             "good" -> "$count · Годна"
             "failed" -> "$count · Не прошла"
+            "deferred" -> "$count · Отложена для перепроверки"
             "preview" -> "$count · Проверяем качество"
             "retry" -> "$count · Повторная проверка"
             "saved" -> "Сохранённая стратегия"
