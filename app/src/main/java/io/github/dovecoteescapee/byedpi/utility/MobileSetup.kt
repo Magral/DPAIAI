@@ -20,7 +20,7 @@ object MobileSetup {
             val good = prefs.getString("mobile_good.$id.${MobileStrategyPolicy.profile(context)}",null)
             val current = MobilePlan.command(plan,id)
             val preserved = current.takeIf { !MobileHistory.store(context,id).excluded(it) && prefs.getString("tuned_$id",null) == it }
-            val preferred = MobileHistory.store(context,id).choices().firstOrNull { io.github.dovecoteescapee.byedpi.catalog.CatalogProtocol.id(it.optString("command")) == good }?.optString("command")
+            val preferred = MobileHistory.store(context,id).entries().firstOrNull { it.optInt("good") > 0 && !MobileHistory.store(context,id).excluded(it.optString("command")) && io.github.dovecoteescapee.byedpi.catalog.CatalogProtocol.id(it.optString("command")) == good }?.optString("command")
                 ?: MobileHistory.backups(context,id).firstOrNull()
             val fallback = (if (good != null) preferred else null) ?: preserved ?: preferred ?: if (MobileHistory.store(context,id).excluded(MobilePlan.command(plan,id))) MobileStrategyPolicy.window(context,ServiceTargets.target(id)).firstOrNull() else null
             fallback?.let { plan = MobilePlan.replace(plan,id,it) }
