@@ -11,8 +11,11 @@ import org.json.JSONObject
 
 /** Anonymous playback sample. Expired URLs/consent/login responses are inconclusive. */
 object MobileVideoProbe {
+    @Volatile var discoveredUrls: List<String> = emptyList()
+    @Volatile var preparedUrls: List<String> = emptyList()
     private const val LIMIT=256*1024
     internal fun mediaUrl(value: String): Boolean = runCatching {
+        require(value.length<=8192)
         val u=URI(value);u.scheme=="https" && u.userInfo==null && u.port in listOf(-1,443) &&
             u.host?.endsWith(".googlevideo.com")==true && u.path=="/videoplayback"
     }.getOrDefault(false)
@@ -50,13 +53,17 @@ object MobileVideoProbe {
         val result=JSONObject().put("status","unavailable")
         try {
             // Public YouTube IFrame API sample, refreshed for each attempt, never a signed URL in the catalog.
+            val prepared=preparedUrls.filter { mediaUrl(it) }
+            val urls=if(prepared.isNotEmpty())prepared.take(2) else {
             val page=get("www.youtube.com","/watch?v=M7lc1UVf-VE",port,session,2*1024*1024)
             val data=player(String(page.body,Charsets.UTF_8))?.optJSONObject("streamingData")
                 ?: return result.put("detail","YouTube не предоставил публичные адреса видео; возможны consent/login/изменение страницы")
-            val urls=listOf("formats","adaptiveFormats").flatMap { name -> val a=data.optJSONArray(name)
+            listOf("formats","adaptiveFormats").flatMap { name -> val a=data.optJSONArray(name)
                 if(a==null) emptyList() else (0 until a.length()).mapNotNull { a.optJSONObject(it)?.takeIf { format -> format.optString("mimeType").startsWith("video/") }?.optString("url")?.takeIf { url -> mediaUrl(url) } }
             }.distinct().take(2)
+            }
             if(urls.isEmpty())return result.put("detail","Тестовое видео требует подписи проигрывателя; транспорт не признан нерабочим")
+            discoveredUrls=urls
             var passed=0;var elapsed=0L;var bytes=0
             for(url in urls) {
                 session.checkActive();val u=URI(url);val started=System.nanoTime()

@@ -7,8 +7,13 @@ import kotlinx.coroutines.*
 import org.json.JSONObject
 
 object MobileCandidate {
+    private var mediaNetwork=""
+    private var mediaUntil=0L
+    private var mediaUrls: List<String> = emptyList()
     suspend fun run(context: Context,target: String,command: String,known: Boolean = false,
         previews: Boolean = true,fast: Boolean = false,qualityOnly: Boolean = false,dns: String = "",onProgress: (ProbeProgress)->Unit = {}): JSONObject {
+        val network=MobileNetwork.signature(context)
+        if(mediaNetwork!=network || android.os.SystemClock.elapsedRealtime()>=mediaUntil) { mediaUrls=emptyList();mediaNetwork=network }
         val connected = CompletableDeferred<IBinder>()
         val result = CompletableDeferred<String>()
         val died = CompletableDeferred<Unit>()
@@ -38,9 +43,19 @@ object MobileCandidate {
             val remote = Messenger(withTimeout(5000) { connected.await() })
             remote.send(Message.obtain().apply {
                 replyTo = callback
-                data = Bundle().apply { putString("dns",dns);putString("target",target); putString("command",command);putBoolean("known",known);putBoolean("previews",previews);putBoolean("fast",fast);putBoolean("qualityOnly",qualityOnly) }
+                data = Bundle().apply { putStringArrayList("mediaUrls",java.util.ArrayList(mediaUrls));putString("dns",dns);putString("target",target); putString("command",command);putBoolean("known",known);putBoolean("previews",previews);putBoolean("fast",fast);putBoolean("qualityOnly",qualityOnly) }
             })
-            return JSONObject(withTimeout(225000L) { result.await() })
+            val answer=JSONObject(withTimeout(225000L) { result.await() })
+            answer.optJSONObject("media")?.let { media ->
+                val urls=answer.optJSONArray("_sampleUrls")
+                if(media.optString("status")=="confirmed" && urls!=null) {
+                    mediaUrls=(0 until urls.length()).map { urls.getString(it) }.filter { MobileVideoProbe.mediaUrl(it) }
+                    mediaUntil=android.os.SystemClock.elapsedRealtime()+10*60*1000L
+                } else if(media.optString("status")=="unavailable")mediaUrls=emptyList()
+                answer.remove("_sampleUrls") // Signed playback URLs never enter history, exports or diagnostics.
+            }
+            answer.remove("_sampleUrls")
+            return answer
         } finally {
             accepting.set(false)
             withContext(NonCancellable) {

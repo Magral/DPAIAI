@@ -18,6 +18,7 @@ class TuningWorkerService : Service() {
             used = true
             val reply = message.replyTo
             val dns = message.data.getString("dns","").orEmpty()
+            MobileVideoProbe.preparedUrls=message.data.getStringArrayList("mediaUrls").orEmpty()
             TargetProbe.resolveHost=if(dns.isEmpty()) null else { host -> DnsResolver.resolve(host,dns) }
             val target = message.data.getString("target").orEmpty()
             val command = message.data.getString("command")
@@ -46,7 +47,7 @@ class TuningWorkerService : Service() {
                         finally { session.cancel() }
                     } else ServiceProbe.check(target,command,19080,known=known,previews=previews,fast=fast,onProgress = ::progress)
                 } catch (e: Exception) { JSONObject().put("success",0).put("total",0).put("error",e.javaClass.simpleName+": "+e.message.orEmpty().take(200)) }
-                runCatching { reply.send(Message.obtain().apply { what = RESULT; data = Bundle().apply { putString("result",result.put("dns",dns).toString()) } }) }
+                runCatching { reply.send(Message.obtain().apply { what = RESULT; data = Bundle().apply { putString("result",result.put("dns",dns).put("_sampleUrls",org.json.JSONArray(MobileVideoProbe.discoveredUrls)).toString()) } }) }
             }
         }
         true
