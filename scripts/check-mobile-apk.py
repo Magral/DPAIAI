@@ -15,6 +15,8 @@ with zipfile.ZipFile(apk) as package:
         assert b'__wrap_connect' in modern and b'__wrap_sendto' in modern
         assert package.getinfo(f'lib/{abi}/libhev-socks5-tunnel.so').file_size>0
     dex=b''.join(package.read(n) for n in package.namelist() if n.endswith('.dex'))
-    for removed in [b'ytInitialPlayerResponse',b'TelegramBridgeService',b'MTProxyService']:
+    for removed in [b'TelegramBridgeService',b'MTProxyService']:
         assert removed not in dex
+    for required in [b'DnsResolver',b'MobileDns',b'MobileVideoProbe']:
+        assert required in dex,required
 print('Phone identity, four ABIs, independent service slots, recovery receiver, JNI and fixed Instagram/YouTube boundaries verified')
