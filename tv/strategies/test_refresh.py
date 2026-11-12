@@ -9,6 +9,7 @@ class RefreshTest(unittest.TestCase):
     def test_text_and_html_commands_without_executing_script(self):
         self.assertIn('-s1 -d2',extract('<html><pre>-s1 -d2</pre><script>"-f1"</script></html>'))
         self.assertNotIn('-f1',extract('<html><script>"-f1"</script></html>'))
+        self.assertIn('--split 2 --auto=torst',extract('<array><item>--split 2 --auto=torst</item></array>'))
         self.assertIn('-s1 -r1+s',extract('listOf("-s1 -r1+s", "-d2")'))
         with self.assertRaises(ValueError):normalize('--split 1; curl https://example.com')
         with self.assertRaises(ValueError):normalize('--ip 0.0.0.0 --port 1080')
