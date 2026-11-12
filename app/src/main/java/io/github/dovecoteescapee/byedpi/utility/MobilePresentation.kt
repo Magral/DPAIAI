@@ -17,11 +17,24 @@ data class ProbeProgress(val passed: Int,val total: Int,val phase: String = "che
 object MobilePresentation {
     data class Status(val command: String,val passed: Int,val total: Int,val phase: String)
     private val statuses = linkedMapOf<String,Status>()
+    data class Scan(val total: Int,val checked: Int = 0,val deferred: Int = 0,val phase: String = "Быстрый проход",val done: Boolean = false)
+    private val scans = linkedMapOf<String,Scan>()
+    private val verified = linkedSetOf<String>()
+    @Synchronized fun beginScan(id: String,total: Int) { scans[id] = Scan(total.coerceAtLeast(0)) }
+    @Synchronized fun checked(id: String,deferred: Int) { scans[id]?.let { scans[id] = it.copy(checked=(it.checked+1).coerceAtMost(it.total),deferred=deferred) } }
+    @Synchronized fun secondPass(id: String,remaining: Int) { scans[id]?.let { scans[id] = it.copy(deferred=remaining,phase="Перепроверяем медленные варианты") } }
+    @Synchronized fun endScan(id: String) { scans[id]?.let { scans[id] = it.copy(done=true,phase="Подбор завершён") } }
+    @Synchronized fun interruptScan(id: String) { scans[id]?.let { scans[id] = it.copy(done=true,phase="Подбор прерван") } }
+    @Synchronized fun applied(id: String) { verified.add(id) }
+    @Synchronized fun scan(id: String) = scans[id]
+    fun scanText(scan: Scan): String = "Проверено ${scan.checked} из ${scan.total}, осталось ${(scan.total-scan.checked).coerceAtLeast(0)}"+
+        "\n${scan.phase}"+if (scan.deferred > 0) " · Отложено: ${scan.deferred}" else ""
+
     fun strategy(command: String): String {
         val index = RuntimeCatalog.commands.indexOf(command)
         return if (index < 0) "Своя стратегия" else "Стратегия №${index+1}"
     }
-    @Synchronized fun clear() { statuses.clear() }
+    @Synchronized fun clear() { statuses.clear();scans.clear();verified.clear() }
     @Synchronized fun start(id: String,command: String) {
         statuses[id] = Status(command,0,ServiceTargets.target(id).endpoints.size*2,"checking")
     }
@@ -42,6 +55,7 @@ object MobilePresentation {
     @Synchronized fun pause() {
         statuses.keys.toList().forEach { id ->
             val s = statuses.getValue(id)
+            scans[id]?.let { scans[id] = it.copy(done=true,phase="Подбор остановлен") }
             if (s.phase in setOf("checking","retry","preview")) statuses[id] = s.copy(phase="paused")
         }
     }
@@ -59,6 +73,7 @@ object MobilePresentation {
         return if (status.phase == "disabled") "Подбор отключён" else "${strategy(status.command)}\n$state"
     }
     @Synchronized fun summary(): String = ServiceTargets.individual.joinToString("\n\n") { t ->
-        "${t.name}\n"+(statuses[t.id]?.let(::text) ?: "Сохранённая стратегия")
+        "${t.name}\n"+(if (t.id in verified) "Уже работает"+(if (scans[t.id]?.done == false) " · Ищем более быструю" else "")+"\n" else "")+
+            (statuses[t.id]?.let(::text) ?: "Сохранённая стратегия")+(scans[t.id]?.let { "\n"+scanText(it) } ?: "")
     }
 }
