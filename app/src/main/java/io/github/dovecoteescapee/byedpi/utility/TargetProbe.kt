@@ -6,7 +6,7 @@ import javax.net.ssl.SSLSocket
 import javax.net.ssl.SSLSocketFactory
 
 object TargetProbe {
-    @Volatile var resolver: String = ""
+    @Volatile var resolveHost: ((String)->String)? = null
     // Explicit SOCKS5 negotiation gives exact failure stages and reply codes on Android.
     internal fun socket(host: String, port: Int, proxyPort: Int = 19080, readTimeout: Int = 5000, onSocket: (Socket) -> Unit = {}, onStage: (String) -> Unit = {}): Socket {
         val tcp = Socket(Proxy.NO_PROXY)
@@ -22,7 +22,7 @@ object TargetProbe {
             onStage(stage)
             output.write(byteArrayOf(5,1,0)); output.flush()
             check(input.readUnsignedByte() == 5 && input.readUnsignedByte() == 0) { "SOCKS method rejected" }
-            val destination = if (proxyPort != 1080 && resolver.isNotEmpty()) DnsResolver.resolve(host,resolver) else host
+            val destination = if (proxyPort != 1080) resolveHost?.invoke(host) ?: host else host
             val numeric = destination.split('.').takeIf { it.size == 4 && it.all { part -> (part.toIntOrNull() ?: -1) in 0..255 } }
             val address = if (numeric != null) byteArrayOf(1)+numeric.map { it.toInt().toByte() }.toByteArray()
                 else java.net.IDN.toASCII(host).toByteArray(Charsets.US_ASCII).let { name ->

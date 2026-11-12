@@ -18,7 +18,7 @@ class TuningWorkerService : Service() {
             used = true
             val reply = message.replyTo
             val dns = message.data.getString("dns","").orEmpty()
-            TargetProbe.resolver=dns
+            TargetProbe.resolveHost=if(dns.isEmpty()) null else { host -> DnsResolver.resolve(host,dns) }
             val target = message.data.getString("target").orEmpty()
             val command = message.data.getString("command")
             val known = message.data.getBoolean("known")
