@@ -80,7 +80,7 @@ object ServiceProbe {
     private fun request(spec: ServiceTargets.Endpoint,command: String,port: Int,round: Int,
         parent: Session,child: Session,fast: Boolean): JSONObject {
         val start = System.nanoTime()
-        val readTimeout = MobileSearchPolicy.timeout(minOf(MobileStrategyPolicy.timeout(command),15000),fast)
+        val readTimeout = MobileSearchPolicy.timeout(if(spec.required) MobileStrategyPolicy.timeout(command) else minOf(MobileStrategyPolicy.timeout(command),5000),fast)
         val deadline = ProbeDeadline(readTimeout.toLong()+3000)
         var stage = "start";var detail = "";var transport = false;var content = false;var failed = false;var unavailable = false;var timedOut = false
         fun report(value: String) { stage = value }
