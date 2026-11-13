@@ -8,6 +8,9 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.Win32;
 
+CachePolicyTests.Run();
+if(args.Contains("--policy-only")) { Console.WriteLine("CACHE / SCHEDULE POLICY TESTS PASSED");return; }
+
 static void Assert(bool condition,string message){if(!condition)throw new Exception(message);}
 string RegistrySnapshot()
 {
@@ -28,6 +31,8 @@ using var publicKey=cert.GetRSAPublicKey()!;
 byte[] feed=File.ReadAllBytes(Path.Combine(resources,"catalog-v1.json"));
 var all=CatalogProtocol.Verify(feed,publicKey,0);var bank=all.Entries.Where(CatalogProtocol.WindowsCompatible).ToArray();
 Assert(bank.Length>=60,"Windows bank too small");
+await ControllerCacheTests.RunAsync(resources);
+if(args.Contains("--controller-only"))return;
 Assert(CatalogProtocol.Id("")=="e3b0c44298fc1c14","Stable identity mismatch");
 foreach(string domain in new[]{"youtube.com","www.youtube.com","r2---sn-a.googlevideo.com","i.ytimg.com","youtubei.googleapis.com"})Assert(DomainPolicy.Allows(domain),"YouTube host rejected");
 foreach(string domain in new[]{"youtube.com.evil.test","notyoutube.com","google.com","accounts.google.com","maps.googleapis.com","steamcommunity.com","127.0.0.1","localhost","evilgooglevideo.com"})Assert(!DomainPolicy.Allows(domain),"Unrelated host routed");

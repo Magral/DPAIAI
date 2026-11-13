@@ -54,13 +54,13 @@ class PreviewQualityTest {
         assertFalse(ProbeQuality(true,3,1,good).eligible)
         assertFalse(ProbeQuality(false,6,1,good).eligible)
     }
-    @Test fun stablePreviewTransfersRankFirstButTimingAloneNeverBansWorkingAccess() {
+    @Test fun latencyRanksFullAccessAndOptionalPreviewDoesNotBanWorkingAccess() {
         val stable = ProbeQuality(true,6,800,PreviewFixtures.transfers(100))
         val slow = ProbeQuality(true,6,1,PreviewFixtures.transfers(2200))
         assertTrue(slow.eligible)
         assertFalse(QualityPolicy.better(slow,stable,false))
         assertFalse(TvProbe.Result(true,"fixture unavailable",6,stable,inconclusive=true).ok)
-        assertEquals(1,TvCheckPolicy.fastest(1 to stable,listOf(2 to slow)))
+        assertEquals(2,TvCheckPolicy.fastest(1 to stable,listOf(2 to slow)))
         assertFalse(QualityPolicy.regression(stable,slow))
         assertTrue(QualityPolicy.regression(stable,slow.copy(passed=3)))
         assertFalse(QualityPolicy.regression(stable,stable.copy(preview=PreviewFixtures.transfers(110))))

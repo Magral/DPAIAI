@@ -19,5 +19,5 @@ object TvCheckPolicy {
     fun fastest(current: Pair<Int,ProbeQuality>?,candidates: List<Pair<Int,ProbeQuality>>): Int? =
         ((if (current == null) emptyList() else listOf(current))+candidates)
             .filter { it.second.eligible && it.second.latencyMs > 0 }
-            .minWithOrNull(compareBy<Pair<Int,ProbeQuality>> { it.second.preview.score }.thenBy { it.second.latencyMs })?.first
+            .minWithOrNull(compareBy<Pair<Int,ProbeQuality>> { it.second.latencyMs }.thenBy { it.second.preview.score })?.first
 }

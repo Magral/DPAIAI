@@ -1,1 +1,1 @@
-Defer scan exclusions until fresh working control; restore failed access with first full reserve; expose failure detail. Permanent release.
+TV 0.6.12: persisted72h full evidence, latency-first choices, manual cache reuse, per-strategy timeout handling. Permanent signing.

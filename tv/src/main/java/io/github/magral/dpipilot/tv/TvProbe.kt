@@ -23,18 +23,20 @@ object TvProbe {
         Spec("image","i.ytimg.com","/vi/jNQXAC9IVRw/hqdefault.jpg"),
         Spec("image-jpeg","i.ytimg.com","/vi/M7lc1UVf-VE/hqdefault.jpg"),
         Spec("image-webp","i.ytimg.com","/vi_webp/M7lc1UVf-VE/hqdefault.webp"))
-    class Result(ok: Boolean,val detail: String,val score: Int = 0,val quality: ProbeQuality = ProbeQuality(ok,score,0),val inconclusive: Boolean = false) {
+    class Result(ok: Boolean,val detail: String,val score: Int = 0,val quality: ProbeQuality = ProbeQuality(ok,score,0),val inconclusive: Boolean = false,val resourceUnavailable: Boolean = false) {
         val ok: Boolean = ok && score == 6 && quality.eligible && !inconclusive
     }
     class Session : ProbeSession()
-    private data class Payload(val error: String?,val bytes: Int = 0,val gap: Long = 0,val unavailable: Boolean = false)
-    private data class Sample(val error: String?,val elapsedMs: Long,val row: String,val preview: PreviewSample?,val unavailable: Boolean)
+    private data class Payload(val error: String?,val bytes: Int = 0,val gap: Long = 0,val unavailable: Boolean = false,val inconclusive: Boolean = false)
+    private data class Sample(val error: String?,val elapsedMs: Long,val row: String,val preview: PreviewSample?,val unavailable: Boolean,val inconclusive: Boolean)
+    internal fun <T> completeBatch(size: Int,checkActive: ()->Unit,abort: ()->Unit,run: (Int)->T): List<ParallelProbe.Item<T>> =
+        ParallelProbe.round(size,checkActive,{ true },abort,run)
     fun check(port: Int,index: Int,session: Session,previews: Boolean = true,progress: (String)->Unit = {}): Result {
         val nodes = mutableListOf<Sample>()
         val images = mutableListOf<Sample>()
         fun runBatch(items: List<Pair<Spec,Int>>): List<Sample> {
             val child = Session()
-            return ParallelProbe.round(items.size,session::checkActive,{ it.error == null },child::cancel) { position ->
+            return completeBatch(items.size,session::checkActive,child::cancel) { position ->
                 session.checkActive();child.checkActive()
                 val (spec,round) = items[position]
                 val label = "${spec.host}${if (spec.kind.startsWith("image")) spec.path else ""} · раунд $round"
@@ -42,13 +44,13 @@ object TvProbe {
                 val started = System.nanoTime()
                 val result = try { request(spec,port,TvPolicy.probeReadTimeout(index),session,child) }
                     catch(e: java.util.concurrent.CancellationException) { throw e }
-                    catch(e: Exception) { Payload("${e.javaClass.simpleName}: ${e.message?.take(140)}") }
+                    catch(e: Exception) { Payload("${e.javaClass.simpleName}: ${e.message?.take(140)}",inconclusive=generateSequence(e as Throwable?) { it.cause }.any { it is java.net.SocketTimeoutException }) }
                 session.checkActive();child.checkActive()
                 val ms = ((System.nanoTime()-started)/1000000).coerceAtLeast(1)
                 val preview = if (spec.kind.startsWith("image") && spec.kind != "image-head") PreviewSample(spec.kind,round,result.bytes,ms,result.gap,result.error == null) else null
                 val row = "$label: ${result.error ?: "OK"}; $ms мс; ${result.bytes} байт; пауза ${result.gap} мс"
                 progress(row)
-                Sample(result.error,ms,row,preview,result.unavailable)
+                Sample(result.error,ms,row,preview,result.unavailable,result.inconclusive)
             }.map { it.value }
         }
         try {
@@ -61,18 +63,23 @@ object TvProbe {
             session.checkActive()
             val all = nodes+images
             val preview = PreviewQuality(all.mapNotNull { it.preview })
-            val latency = nodes.map { it.elapsedMs }.average().toLong().coerceAtLeast(1)
+            val latency = (nodes.filter { it.error==null }.map { it.elapsedMs }.takeIf { it.isNotEmpty() }?.average() ?: 0.0).toLong().coerceAtLeast(1)
             val quality = ProbeQuality(score == 6,score,latency,preview)
-            val unavailable = nodes.any { it.unavailable }
-            return Result(quality.eligible,"Узлы $score/6; ${preview.text()}; "+all.joinToString(" | ") { it.row },score,quality,unavailable)
+            val unavailable = nodes.any { it.unavailable || it.inconclusive }
+            return Result(quality.eligible,"Узлы $score/6; ${preview.text()}; "+all.joinToString(" | ") { it.row },score,quality,unavailable,nodes.any { it.unavailable })
         } finally { session.cancel() }
+    }
+    internal fun <T> deadlineGuard(deadline: ProbeDeadline,block: () -> T): T {
+        try { return block().also { deadline.check() } }
+        catch(e: Exception) { deadline.check();throw e }
+        finally { deadline.close() }
     }
     private fun request(spec: Spec,port: Int,timeout: Int,session: Session,child: Session): Payload {
         val image = spec.kind.startsWith("image")
         val basic = spec.kind == "image-head"
         val detailed = image && !basic
         val deadline = ProbeDeadline((if(detailed) minOf(timeout,10000) else timeout).toLong()+3000)
-        try {
+        return deadlineGuard(deadline) {
             val result = TargetProbe.socket(spec.host,443,port,timeout,{ session.register(it);child.register(it);deadline.register(it) }).use { raw ->
                 ((SSLSocketFactory.getDefault() as SSLSocketFactory).createSocket(raw,spec.host,443,true) as SSLSocket).use tlsBlock@{ tls ->
                     tls.soTimeout = if(detailed) minOf(timeout,10000) else timeout
@@ -104,7 +111,7 @@ object TvProbe {
                     } else Payload(if(TvPolicy.accepts(spec.kind,response.status,response.headers["content-type"].orEmpty(),response.body.size)) null else "HTTP ${response.status}")
                 }
             }
-            deadline.check();return result
-        } finally { deadline.close() }
+            result
+        }
     }
 }

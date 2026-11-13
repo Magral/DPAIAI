@@ -99,6 +99,13 @@ class TvActivity : Activity() {
         button(diagnostics,"Экспорт отчёта") { exportReport() }
         button(diagnostics,"Профиль для телефона") { exportProfile() }
         val updates = row()
+        button(updates,"Перепроверить все стратегии") {
+            if(!prefs.getBoolean("enabled",false) || VpnService.prepare(this)!=null) {
+                Toast.makeText(this,"Сначала включите VPN",Toast.LENGTH_LONG).show()
+            } else {
+                prefs.edit().putString("force_recheck",TvState.networkProfile).apply();requestCheck(false)
+            }
+        }
         button(updates,"Обновить базу стратегий") { Thread { CatalogUpdater.refresh(applicationContext,true) }.start() }
         val autonomyNote = text("После первого разрешения VPN служба работает без открытого окна. Для автозапуска оставьте VPN включённым. После явного выключения он останется выключенным и при перезагрузке. Системный постоянный VPN настраивается отдельно.",18f)
         val journalTitle = text("Журнал событий · сохраняется после перезапуска",23f)
@@ -198,9 +205,9 @@ class TvActivity : Activity() {
             .setItems(labels) { _,which ->
                 val id = ids[which]
                 val index = TvPolicy.indexOfId(id) ?: return@setItems
-                val text = "${store.describe(index)}\n\n${RuntimeCatalog.commands[index].ifEmpty { "Без модификаций" }}\n\nИсточник: ${RuntimeCatalog.origins[index]}\n\nПеред применением — отдельная проверка. При переключении видео может переподключиться. После успешного испытания выбор сохранится для этой сети. При включённом авторежиме следующий плановый подбор снова сравнит стабильность превью и задержку. Чтобы оставить ручной выбор, выключите автоподбор."
+                val text = "${store.describe(index)}\n\n${RuntimeCatalog.commands[index].ifEmpty { "Без модификаций" }}\n\nИсточник: ${RuntimeCatalog.origins[index]}\n\nСвежий результат 6/6 применяется без повторного теста; после 72 часов выполняется проверка. При переключении видео может переподключиться. После успешного испытания выбор сохранится для этой сети. При включённом авторежиме следующий плановый подбор сравнит задержку полных результатов. Чтобы оставить ручной выбор, выключите автоподбор."
                 AlertDialog.Builder(this).setTitle("Стратегия №${index+1}").setMessage(text)
-                    .setPositiveButton("Проверить и применить") { _,_ ->
+                    .setPositiveButton("Применить") { _,_ ->
                         if (!prefs.getBoolean("enabled",false) || VpnService.prepare(this) != null) {
                             Toast.makeText(this,"Сначала включите VPN",Toast.LENGTH_LONG).show()
                         } else {

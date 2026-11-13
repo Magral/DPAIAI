@@ -18,7 +18,7 @@ class QualityStore(private val prefs: SharedPreferences) {
             records[id] = QualityRecord(r.optInt("ok").coerceAtLeast(0),r.optInt("fail").coerceAtLeast(0),r.optInt("stall").coerceAtLeast(0),r.optInt("rollback").coerceAtLeast(0),
                 r.optLong("useful").coerceAtLeast(0),r.optLong("active").coerceAtLeast(0),r.optLong("latency").coerceAtLeast(0),r.optLong("seen").coerceAtLeast(0),
                 r.optBoolean("excluded",r.optInt("fail") > 0 && r.optInt("ok") == 0),
-                r.optInt("last_passed",-1),r.optBoolean("last_complete",false),PreviewQuality.decode(r.optJSONArray("previews")),r.optInt("reports"))
+                r.optInt("last_passed",-1),r.optBoolean("last_complete",false),PreviewQuality.decode(r.optJSONArray("previews")),r.optInt("reports"),r.optLong("checked_at",if(r.optBoolean("last_complete") && r.optInt("last_passed")==6) r.optLong("seen") else 0),r.optString("checked_engine","ba532298de7b28cfe854aea83d061369d13ca290"))
         }
         // v0.6.7 mixed preview quality failures with transport exclusions. Repair these once.
         val marker = "quality_access_schema.$profile"
@@ -41,13 +41,14 @@ class QualityStore(private val prefs: SharedPreferences) {
     fun approved(index: Int,quality: ProbeQuality,now: Long) {
         if (!quality.eligible) { failed(index,quality=quality); return }
         val r = record(index); if (r.excluded) return
-        r.successes++; r.lastSeen = now; r.latencyMs = quality.latencyMs
+        r.successes++; r.lastSeen = now;r.checkedAt=now;r.checkedEngine=CatalogProtocol.engine; r.latencyMs = quality.latencyMs
         r.lastPassed = quality.passed; r.lastComplete = true; r.preview = quality.preview
         flush()
     }
+    @Suppress("UNUSED_PARAMETER")
     fun defer(index: Int,quality: ProbeQuality) {
-        val r = record(index);r.lastComplete = false;r.lastPassed = quality.passed
-        r.preview = quality.preview;flush()
+        // Deferred evidence never revokes or renews the last complete proof.
+        record(index);flush()
     }
     fun failed(index: Int,stall: Boolean = false,rollback: Boolean = false,quality: ProbeQuality? = null,user: Boolean = false) {
         val r = record(index); r.lastComplete = false; r.lastPassed = quality?.passed?.coerceIn(0,6) ?: -1
@@ -60,30 +61,37 @@ class QualityStore(private val prefs: SharedPreferences) {
         val r = record(index); r.activeSeconds += elapsedSeconds
         if (useful) r.usefulSeconds += elapsedSeconds
     }
+    fun fresh(index: Int,now: Long): ProbeQuality? {
+        val r=records[RuntimeCatalog.ids[index]] ?: return null
+        return quality(index).takeIf { r.fullSuccess && r.checkedAt>0 && now>=r.checkedAt && now-r.checkedAt<TvCheckPolicy.INTERVAL }
+    }
+    fun expireCache() { records.values.forEach { it.checkedAt=0 };flush() }
+    fun checkedAt(index: Int) = records[RuntimeCatalog.ids[index]]?.checkedAt ?: 0L
     fun excluded(): Set<Int> = records.filterValues { it.excluded }.keys.mapNotNull { TvPolicy.indexOfId(it) }.toSet()
     fun exclude(index: Int) { record(index).apply { excluded = true; lastComplete = false }; flush() }
     fun resetExclusions() { records.values.forEach { it.excluded = false }; flush() }
     fun latency(index: Int): Long = records[RuntimeCatalog.ids[index]]?.latencyMs ?: 0L
-    fun quality(index: Int): ProbeQuality = records[RuntimeCatalog.ids[index]]?.let { ProbeQuality(it.lastComplete,it.lastPassed,it.latencyMs,it.preview) } ?: ProbeQuality(false,0,0)
+    fun quality(index: Int): ProbeQuality = records[RuntimeCatalog.ids[index]]?.let { ProbeQuality(it.lastComplete && it.checkedEngine==CatalogProtocol.engine,it.lastPassed,it.latencyMs,it.preview) } ?: ProbeQuality(false,0,0)
     fun preview(index: Int) = quality(index).preview
     fun preferred(legacy: List<Int>): List<Int> = choices(legacy).take(3)
+    @Suppress("UNUSED_PARAMETER")
     fun choices(legacy: List<Int>): List<Int> = records.entries.filter { it.value.fullSuccess }
         .mapNotNull { TvPolicy.indexOfId(it.key) }
-        .sortedWith(compareBy<Int> { preview(it).score }.thenBy { latency(it) }.thenBy { it })
+        .sortedWith(compareBy<Int> { latency(it).takeIf { n -> n>0 } ?: Long.MAX_VALUE }.thenBy { preview(it).score }.thenBy { it })
     fun describe(index: Int): String {
         val r = records[RuntimeCatalog.ids[index]] ?: return "Последняя полная проверка: не подтверждена"
         val last = if (r.lastPassed >= 0) "узлы ${r.lastPassed}/6" else "узлы не проверены"
         return "Последняя проверка: $last; ${r.preview.text()}; ${if (r.fullSuccess) "проверки доступности пройдены" else "проверки доступности не пройдены"}; жалоб ${r.reports}; задержка HTTPS: ${r.latencyMs} мс; в истории успешных ${r.successes}, отказов ${r.failures}; полезный обмен ${r.usefulSeconds/60} мин"
 
     }
-    fun summary(): String = records.entries.filter { it.value.fullSuccess && TvPolicy.indexOfId(it.key) != null }.sortedWith(compareBy<Map.Entry<String,QualityRecord>> { it.value.preview.score }.thenBy { it.value.latencyMs }).take(5).joinToString("\n") { (id,r) ->
+    fun summary(): String = records.entries.filter { it.value.fullSuccess && TvPolicy.indexOfId(it.key) != null }.sortedWith(compareBy<Map.Entry<String,QualityRecord>> { it.value.latencyMs }.thenBy { it.value.preview.score }).take(5).joinToString("\n") { (id,r) ->
         "№${(TvPolicy.indexOfId(id) ?: -1)+1}: последний тест 6/6; ${r.preview.text()}; в истории успешных ${r.successes}, отказов ${r.failures}; полезный обмен ${r.usefulSeconds/60} мин; зависания ${r.stalls}; откаты ${r.rollbacks}; задержка ${r.latencyMs} мс"
     }.ifEmpty { "История качества ещё не накоплена" }
     fun flush(edit: SharedPreferences.Editor = prefs.edit()) {
         if (profile.isEmpty()) return
         val root = JSONObject()
         for ((id,r) in records) root.put(id,JSONObject().put("ok",r.successes).put("fail",r.failures).put("stall",r.stalls).put("rollback",r.rollbacks)
-            .put("useful",r.usefulSeconds).put("active",r.activeSeconds).put("latency",r.latencyMs).put("seen",r.lastSeen).put("excluded",r.excluded).put("last_passed",r.lastPassed).put("last_complete",r.lastComplete).put("previews",r.preview.encode()).put("reports",r.reports))
+            .put("useful",r.usefulSeconds).put("active",r.activeSeconds).put("latency",r.latencyMs).put("seen",r.lastSeen).put("excluded",r.excluded).put("last_passed",r.lastPassed).put("last_complete",r.lastComplete).put("previews",r.preview.encode()).put("reports",r.reports).put("checked_at",r.checkedAt).put("checked_engine",r.checkedEngine))
         edit.putString("quality.$profile",root.toString()).apply()
         TvState.qualityHistory = summary()
     }

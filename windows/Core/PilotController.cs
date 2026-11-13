@@ -15,36 +15,36 @@ public sealed class PilotController : IAsyncDisposable
     private readonly CancellationTokenSource lifetime = new();
     private readonly SemaphoreSlim operation = new(1);
     private readonly ConcurrentQueue<string> journal = new();
-    private readonly ConcurrentDictionary<string,DateTimeOffset> blocked = new();
+    private readonly StrategyEvidenceStore evidence;
+    private readonly Func<EngineProcess,CancellationToken,Task<ProbeResult>> runProbe;
     private readonly object routeGate = new();
     private EngineProcess? active;
     private CancellationTokenSource? enabledLifetime;
     private Task? worker;
-    private Task? observer;
     private Task? catalogWorker;
     private volatile bool requested;
-    private volatile bool stalled;
-    private volatile bool trialInProgress;
     private volatile bool manualRequest;
-    private long usefulAt,watchAt,lastSent,lastReceived;
-    private int deficient;
+    private long revision;
+    private CancellationTokenSource? scanLifetime;
+    private readonly Func<string>? getProfile;
+    private readonly Func<bool> hasNetwork;
+    private string activeProfile="";
     private bool disposed;
     public LocalGateway Gateway { get; }
     public bool Enabled => settings.Value.Enabled;
     public string Phase { get; private set; } = "Обход выключен; обычный маршрут Chrome";
     public string LastProbe { get; private set; } = "Проверок ещё не было";
     public string LastSuccess { get; private set; } = "нет";
-    public string Observation { get; private set; } = "Ожидание трафика YouTube из Chrome";
+    public string Observation => Gateway.Active==0 ? "Нет активных соединений YouTube; это не ошибка" : $"Соединений YouTube: {Gateway.Active}; получено {Gateway.Received/1024} КБ. Счётчики не запускают сетевые проверки.";
     public string ActiveDescription { get { lock(routeGate) return active is { } e ? $"{e.Strategy.Id}\n{(e.Strategy.Args == "" ? "Без модификаций" : e.Strategy.Args)}\nИсточник: {e.Strategy.Origin}" : "Без обхода"; } }
     public string[] Journal => journal.ToArray();
-    public PilotController(SettingsStore settings,CatalogStore catalog,string executable,int proxyPort = 18471,int pacPort = 18472)
+    public PilotController(SettingsStore settings,CatalogStore catalog,string executable,int proxyPort = 18471,int pacPort = 18472,Func<EngineProcess,CancellationToken,Task<ProbeResult>>? probe=null,Func<string>? networkProfile=null,Func<bool>? networkAvailable=null)
     {
-        this.settings = settings; this.catalog = catalog; this.executable = executable;
+        this.settings = settings; this.catalog = catalog; this.executable = executable;evidence=new(settings);runProbe=probe ?? Probe.CheckAsync;getProfile=networkProfile;hasNetwork=networkAvailable ?? NetworkInterface.GetIsNetworkAvailable;
         Gateway = new(proxyPort,pacPort,settings.Value.PacToken,ConnectAsync,Log);
         Log("Локальный обработчик: только YouTube/TCP443. Системные proxy/DNS/маршруты не меняются.");
-        observer = ObserveAsync();
         catalogWorker = UpdateCatalogAsync();
-        NetworkChange.NetworkAddressChanged += NetworkChanged;
+        if(OperatingSystem.IsWindows())NetworkChange.NetworkAddressChanged += NetworkChanged;
     }
     public void Log(string text) { journal.Enqueue(DateTime.Now.ToString("HH:mm:ss")+" "+text); while (journal.Count > 120) journal.TryDequeue(out _); }
     private async Task<ConnectionRoute> ConnectAsync(string host,int port,CancellationToken cancellation)
@@ -85,9 +85,24 @@ public sealed class PilotController : IAsyncDisposable
         }
         finally { operation.Release(); }
     }
-    public void RequestCheck() { manualRequest=true; requested = true; }
+    public IReadOnlyList<StrategyEvidence> KnownStrategies() => evidence.Choices(Profile());
+    public bool IsFresh(string id) => evidence.Fresh(Profile(),id,DateTimeOffset.UtcNow) is not null;
+    public void RequestCheck(bool force=false) {
+        var profile=Profile();if(force)evidence.Expire(profile);
+        settings.Change(s=>s.ManualChoices.Remove(profile));Interlocked.Increment(ref revision);CancelScan();manualRequest=true;requested=true;
+    }
+    public void SelectStrategy(string id) {
+        var profile=Profile();
+        if(!evidence.Choices(profile).Any(r=>r.Id==id) || !catalog.Snapshot.Entries.Any(s=>s.Id==id))throw new InvalidOperationException("Нет полного результата 6/6 для этой стратегии в текущей сети");
+        settings.Change(s=>s.ManualChoices[profile]=id);Interlocked.Increment(ref revision);CancelScan();manualRequest=true;requested=true;
+    }
+    private void CancelScan() {try {Volatile.Read(ref scanLifetime)?.Cancel();}catch(ObjectDisposedException) {}}
+    public void ResetExclusions() { evidence.ResetExclusions(Profile());Log("Исключения текущей сети сброшены; сетевой тест не запускался"); }
+
+    public string NetworkProfile => Profile();
     private string Profile()
     {
+        if(getProfile is not null)return getProfile();
         var parts = NetworkInterface.GetAllNetworkInterfaces().Where(n => n.OperationalStatus == OperationalStatus.Up && n.NetworkInterfaceType != NetworkInterfaceType.Loopback)
             .SelectMany(n => n.GetIPProperties().GatewayAddresses.Select(a => a.Address.ToString()).Concat(n.GetIPProperties().DnsAddresses.Select(a=>a.ToString()))).Order().ToArray();
         return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(string.Join('|',parts))))[..24];
@@ -100,119 +115,122 @@ public sealed class PilotController : IAsyncDisposable
     private void Remember(string profile,Strategy strategy)
     {
         settings.Change(s => { var prior = s.History.GetValueOrDefault(profile) ?? []; s.History[profile] = new[] {strategy.Id}.Concat(prior).Distinct().Take(3).ToList(); if (s.History.Count > 32) s.History.Remove(s.History.Keys.First()); });
-        LastSuccess = DateTime.Now.ToString("dd.MM HH:mm:ss");
+        LastSuccess = evidence.Choices(profile).FirstOrDefault(r=>r.Id==strategy.Id)?.CheckedAt.ToLocalTime().ToString("dd.MM HH:mm:ss") ?? "нет";
     }
-    private static bool Useful(long when) => when > 0 && Environment.TickCount64-when < 90000;
     private async Task WorkAsync(CancellationToken cancellation)
     {
-        int failures = 0; DateTimeOffset next = DateTimeOffset.MinValue;
-        try
-        {
-            while (!cancellation.IsCancellationRequested)
-            {
-                if (!NetworkInterface.GetIsNetworkAvailable()) { Phase = "Нет физического подключения; ожидаем сеть"; await Task.Delay(10000,cancellation); continue; }
-                if (!CheckPolicy.ShouldProbe(settings.Value.PeriodicChecks,requested,stalled,active?.Alive == true,DateTimeOffset.UtcNow,next)) { await Task.Delay(settings.Value.PeriodicChecks ? 1000 : 10000,cancellation); continue; }
-                requested = false; bool manual = manualRequest; manualRequest=false; bool wasStalled = stalled; stalled = false;
-                try
-                {
-                    string profile = Profile(); var bank = catalog.Snapshot.Entries;
-                    var history = settings.Value.History.GetValueOrDefault(profile) ?? [];
-                    if (active is null || !active.Alive)
-                    {
-                        Strategy first = history.Select(id => bank.FirstOrDefault(s => s.Id==id)).FirstOrDefault(s=>s is not null) ?? bank.First(s => s.Args.StartsWith("--timeout 8 --cache-ttl 600",StringComparison.Ordinal));
-                        Phase = "Запускается сохранённая/адаптивная стратегия";
-                        Swap(await EngineProcess.StartAsync(executable,first,job,cancellation));
+        var next=DateTimeOffset.MinValue;
+        try {
+            while(!cancellation.IsCancellationRequested) {
+                if(!hasNetwork()) { Phase="Нет физической сети; результаты сохранены";await Task.Delay(5000,cancellation);continue; }
+                if(!requested && active?.Alive==true && (!settings.Value.PeriodicChecks || DateTimeOffset.UtcNow<next)) { await Task.Delay(1000,cancellation);continue; }
+                bool manual=manualRequest;manualRequest=false;requested=false;
+                long generation=Interlocked.Read(ref revision);
+                string profile="";
+                using var scan=CancellationTokenSource.CreateLinkedTokenSource(cancellation);
+                Volatile.Write(ref scanLifetime,scan);var token=scan.Token;
+                bool Valid() => !scan.IsCancellationRequested && Enabled && generation==Interlocked.Read(ref revision) && Profile()==profile;
+                try {
+                    profile=Profile();
+                    var bank=catalog.Snapshot.Entries;
+                    var history=settings.Read(s=>s.History.GetValueOrDefault(profile)?.ToArray() ?? []);
+                    var pin=settings.Read(s=>s.ManualChoices.GetValueOrDefault(profile));
+                    Strategy? pinned=bank.FirstOrDefault(s=>s.Id==pin && !evidence.Excluded(profile,s.Id));
+                    if(active is null || !active.Alive || activeProfile!=profile) {
+                        var first=(pinned is not null && evidence.Fresh(profile,pinned.Id,DateTimeOffset.UtcNow) is not null ? pinned : null)
+                            ?? history.Select(id=>bank.FirstOrDefault(s=>s.Id==id && !evidence.Excluded(profile,id))).FirstOrDefault(s=>s is not null)
+                            ?? evidence.Choices(profile).Select(r=>bank.FirstOrDefault(s=>s.Id==r.Id)).FirstOrDefault(s=>s is not null)
+                            ?? bank.FirstOrDefault(s=>s.Args.StartsWith("--timeout 8 --cache-ttl 600",StringComparison.Ordinal) && !evidence.Excluded(profile,s.Id))
+                            ?? bank.First(s=>!evidence.Excluded(profile,s.Id));
+                        var started=await EngineProcess.StartAsync(executable,first,job,token);
+                        if(!Valid()) { started.Dispose();continue; }
+                        Swap(started);activeProfile=profile;
                     }
-                    var previous = active!; Phase = "Проверка активной стратегии";
-                    ProbeResult current = await Probe.CheckAsync(previous,cancellation); LastProbe = current.Detail; Log("Текущая: "+current.Detail);
-                    if (current.Ok && !wasStalled) { Phase = "Включено · проверки YouTube пройдены"; failures=0; Remember(profile,previous.Strategy); next=CheckPolicy.Next(settings.Value.PeriodicChecks,DateTimeOffset.UtcNow); continue; }
-                    if (!wasStalled && Useful(Interlocked.Read(ref usefulAt))) { Phase="YouTube получает данные; сохраняем работающий поток"; next=DateTimeOffset.UtcNow.AddMinutes(1); continue; }
-                    var order = history.Concat(bank.Where(s=>s.Args.StartsWith("--timeout 8 --cache-ttl 600",StringComparison.Ordinal)).Select(s=>s.Id))
-                        .Concat(bank.Skip(settings.Value.ScanCursor % bank.Count).Concat(bank.Take(settings.Value.ScanCursor % bank.Count)).Select(s=>s.Id)).Distinct()
-                        .Select(id=>bank.FirstOrDefault(s=>s.Id==id)).Where(s=>s is not null && s.Id != previous.Strategy.Id && (!blocked.TryGetValue(s.Id,out var until) || until < DateTimeOffset.UtcNow)).Take(CheckPolicy.Candidates(settings.Value.PeriodicChecks,manual)).ToArray();
-                    bool changed = false;
-                    foreach (var strategy in order)
-                    {
-                        cancellation.ThrowIfCancellationRequested();
-                        if (Useful(Interlocked.Read(ref usefulAt)) && !wasStalled) break;
-                        EngineProcess? candidate = null;
-                        try
-                        {
-                            Phase = "Фоновый тест: "+strategy!.Id+"; текущий поток сохранён";
-                            candidate = await EngineProcess.StartAsync(executable,strategy,job,cancellation);
-                            var result = await Probe.CheckAsync(candidate,cancellation); LastProbe=result.Detail; Log(strategy.Id+": "+result.Detail);
-                            settings.Change(s => s.ScanCursor = (bank.ToList().FindIndex(e=>e.Id==strategy.Id)+1)%bank.Count);
-                            if (!result.Ok) { blocked[strategy.Id] = DateTimeOffset.UtcNow.AddMinutes(30); continue; }
-                            if (Useful(Interlocked.Read(ref usefulAt)) && !wasStalled) break;
-                            // Retain the previous process during the trial so rollback does not restart it.
-                            using var backupLease = previous.Acquire();
-                            lock(routeGate) active = candidate;
-                            var trial = candidate; candidate = null;
-                            Phase = "Пробная стратегия; наблюдение за новыми соединениями до 2 минут";
-                            Log(Phase); trialInProgress=true; bool rollback = false,trialFailed = false; long trialAt = Environment.TickCount64;
-                            for (int t=0;t<12;t++)
-                            {
-                                await Task.Delay(10000,cancellation);
-                                if (!trial.Alive || (stalled && Environment.TickCount64-trialAt >= 45000)) { trialFailed=true; rollback = current.Ok && !wasStalled && previous.Alive; break; }
-                                if ((settings.Value.PeriodicChecks && t == 2) || t == 11)
-                                {
-                                    var check = await Probe.CheckAsync(trial,cancellation);
-                                    if (!check.Ok) { var repeat = await Probe.CheckAsync(trial,cancellation); if (!repeat.Ok) { trialFailed=true; rollback = current.Ok && !wasStalled && previous.Alive; break; } }
-                                }
-                            }
-                            trialInProgress=false;
-                            if (rollback)
-                            { lock(routeGate) active = previous; trial.Dispose(); blocked[strategy.Id]=DateTimeOffset.UtcNow.AddMinutes(30); Phase="Откат к предыдущей стратегии"; Log(Phase); }
-                            else if(trialFailed)
-                            {
-                                lock(routeGate) active=previous.Alive ? previous : null;
-                                trial.Dispose(); blocked[strategy.Id]=DateTimeOffset.UtcNow.AddMinutes(30);requested=true;
-                                Phase="Пробная стратегия не подтверждена; сохранена прежняя или ожидается новый подбор";Log(Phase);
-                            }
-                            else { previous.Retire(); Remember(profile,strategy); Phase="Включено · стратегия проверена"; Log(Phase); changed=true; }
-                            break;
+                    var previous=active!;
+                    var now=DateTimeOffset.UtcNow;
+                    if(!manual && (pinned is null || pinned.Id==previous.Strategy.Id) && !evidence.Due(profile,now)) {
+                        var proof=evidence.Fresh(profile,previous.Strategy.Id,now);
+                        Phase=proof is not null ? "Включено · свежий кэш 6/6, повторных проверок нет" : "Маршрут сохранён · следующий подбор по расписанию или кнопке";
+                        if(proof is not null)LastProbe=proof.Result.Detail;
+                        next=evidence.NextDue(profile,settings.Value.PeriodicChecks,now);continue;
+                    }
+                    if(pinned is not null) {
+                        var proof=evidence.Fresh(profile,pinned.Id,now);
+                        EngineProcess? candidate=null;
+                        try {
+                            var target=previous.Strategy.Id==pinned.Id ? previous : candidate=await EngineProcess.StartAsync(executable,pinned,job,token);
+                            var result=proof?.Result;
+                            if(result is null) { evidence.StampAttempt(profile,now);result=await runProbe(target,token);if(!Valid())continue;if(result.Complete)evidence.Record(profile,pinned,result,DateTimeOffset.UtcNow);else evidence.Defer(profile,pinned.Id,result.Detail); }
+                            if(!Valid())continue;
+                            LastProbe=result.Detail;
+                            if(result.Complete) {
+                                if(candidate is not null) { Swap(candidate);candidate=null; }
+                                Remember(profile,pinned);Phase=proof is not null ? "Ручная стратегия применена из кэша без повторного теста" : "Ручная стратегия проверена: 6/6";
+                            } else Phase="Выбранная стратегия не подтверждена; прежний маршрут сохранён";
+                        } finally { candidate?.Dispose(); }
+                        next=evidence.NextDue(profile,settings.Value.PeriodicChecks,DateTimeOffset.UtcNow);continue;
+                    }
+                    var currentProof=evidence.Fresh(profile,previous.Strategy.Id,now);
+                    ProbeResult current;
+                    DateTimeOffset? livePositive=null;
+                    if(currentProof is not null) current=currentProof.Result;
+                    else {
+                        evidence.StampAttempt(profile,now);current=await runProbe(previous,token);if(!Valid())continue;
+                        if(current.Complete) { livePositive=DateTimeOffset.UtcNow;evidence.Record(profile,previous.Strategy,current,livePositive.Value); }
+                        else evidence.Defer(profile,previous.Strategy.Id,current.Detail);
+                    }
+                    LastProbe=current.Detail;
+                    var failures=new List<(Strategy Strategy,ProbeResult Result,DateTimeOffset At)>();
+                    if(!current.Complete)failures.Add((previous.Strategy,current,DateTimeOffset.UtcNow));
+                    var priority=history.Take(3).Concat(evidence.Choices(profile).Take(3).Select(r=>r.Id))
+                        .Concat(bank.Where(s=>s.Args.StartsWith("--timeout 8 --cache-ttl 600",StringComparison.Ordinal)).Take(1).Select(s=>s.Id));
+                    var cursor=Math.Max(0,settings.Value.ScanCursor)%bank.Count;
+                    var order=priority.Concat(bank.Skip(cursor).Concat(bank.Take(cursor)).Select(s=>s.Id)).Distinct()
+                        .Select(id=>bank.FirstOrDefault(s=>s.Id==id)).Where(s=>s is not null && s.Id!=previous.Strategy.Id && !evidence.Excluded(profile,s.Id))
+                        .Select(s=>s!).Take(CheckPolicy.Candidates(settings.Value.PeriodicChecks,manual)).ToArray();
+                    for(int i=0;i<order.Length;i++) {
+                        if(!Valid())break;var strategy=order[i];
+                        Phase=$"Подбор {i+1}/{order.Length} · база {bank.Count} · текущий маршрут сохранён";
+                        var proof=evidence.Fresh(profile,strategy.Id,DateTimeOffset.UtcNow);
+                        if(proof is not null) { Log(strategy.Id+": свежий кэш 6/6");continue; }
+                        EngineProcess? candidate=null;
+                        try {
+                            candidate=await EngineProcess.StartAsync(executable,strategy,job,token);
+                            evidence.StampAttempt(profile,DateTimeOffset.UtcNow);
+                            var result=await runProbe(candidate,token);if(!Valid())break;
+                            LastProbe=result.Detail;Log(strategy.Id+": "+result.Detail);
+                            settings.Change(s=>s.ScanCursor=(bank.ToList().FindIndex(e=>e.Id==strategy.Id)+1)%bank.Count);
+                            if(result.Complete) { livePositive=DateTimeOffset.UtcNow;evidence.Record(profile,strategy,result,livePositive.Value); }
+                            else { evidence.Defer(profile,strategy.Id,result.Detail);failures.Add((strategy,result,DateTimeOffset.UtcNow)); }
+                        } catch(OperationCanceledException) when(cancellation.IsCancellationRequested) { throw; }
+                        catch(Exception e) when(e is IOException or SocketException or InvalidOperationException) { if(Valid())evidence.Defer(profile,strategy.Id,e.GetType().Name); }
+                        finally { candidate?.Dispose(); }
+                    }
+                    if(!Valid())continue;
+                    // Only a real later success in this cycle can confirm a preceding conclusive failure.
+                    if(livePositive is { } control) foreach(var failure in failures.Where(f=>!f.Result.Inconclusive && f.At<=control))
+                        evidence.Reject(profile,failure.Strategy.Id,failure.Result.Detail);
+                    var fresh=evidence.Choices(profile).Where(r=>bank.Any(s=>s.Id==r.Id) && evidence.Fresh(profile,r.Id,DateTimeOffset.UtcNow) is not null).ToArray();
+                    var best=fresh.OrderBy(r=>r.Latency).ThenBy(r=>r.Id==previous.Strategy.Id ? 0 : 1).FirstOrDefault();
+                    if(best is not null) {
+                        var strategy=bank.First(s=>s.Id==best.Id);
+                        if(previous.Strategy.Id!=best.Id) {
+                            var replacement=await EngineProcess.StartAsync(executable,strategy,job,token);
+                            if(!Valid()) { replacement.Dispose();continue; }
+                            Swap(replacement);
                         }
-                        catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { throw; }
-                        catch (Exception e) when (e is IOException or SocketException or InvalidOperationException)
-                        { blocked[strategy!.Id]=DateTimeOffset.UtcNow.AddMinutes(30); Log("Кандидат: "+e.GetType().Name); }
-                        finally { trialInProgress=false; candidate?.Dispose(); }
-                    }
-                    failures = changed ? 0 : failures+1;
-                    if (!changed) Phase="Обработка включена; полная доступность YouTube пока не подтверждена";
-                    next = settings.Value.PeriodicChecks ? DateTimeOffset.UtcNow.AddMinutes(changed ? 60 : 10) : DateTimeOffset.MaxValue;
-                }
-                catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { throw; }
-                catch (Exception e) { Phase="Ошибка проверки: "+e.GetType().Name+"; повтор через минуту"; Log(Phase); next=settings.Value.PeriodicChecks ? DateTimeOffset.UtcNow.AddMinutes(10) : DateTimeOffset.MaxValue; }
+                        Remember(profile,strategy);LastProbe=best.Result.Detail;Phase=$"Включено · 6/6 · {best.Latency} мс · повторного теста нет";
+                    } else Phase="Полного результата нет; рабочий процесс и прежние результаты сохранены";
+                    next=evidence.NextDue(profile,settings.Value.PeriodicChecks,DateTimeOffset.UtcNow);
+                    if(next<=DateTimeOffset.UtcNow)next=settings.Value.PeriodicChecks ? DateTimeOffset.UtcNow.AddDays(3) : DateTimeOffset.MaxValue;
+                } catch(OperationCanceledException) when(cancellation.IsCancellationRequested) { throw; }
+                catch(OperationCanceledException) when(!cancellation.IsCancellationRequested) { requested=true; }
+                catch(Exception e) { Log("Подбор: "+e.GetType().Name);Phase="Ошибка проверки; прежний маршрут сохранён";next=settings.Value.PeriodicChecks ? DateTimeOffset.UtcNow.AddDays(3) : DateTimeOffset.MaxValue; }
+                finally { Interlocked.CompareExchange(ref scanLifetime,null,scan); }
             }
-        }
-        catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { }
+        } catch(OperationCanceledException) when(cancellation.IsCancellationRequested) { }
     }
-    private async Task ObserveAsync()
-    {
-        long priorRx=0;
-        try
-        {
-            while (!lifetime.IsCancellationRequested)
-            {
-                await Task.Delay(10000,lifetime.Token);
-                if (!settings.Value.PeriodicChecks && !trialInProgress) { Observation="Тихий режим: проверка при запуске, смене сети или по кнопке"; continue; }
-                long now=Environment.TickCount64, rx=Gateway.Received, tx=Gateway.Sent;
-                if (rx-priorRx >= 256*1024) Interlocked.Exchange(ref usefulAt,now); priorRx=rx;
-                if (watchAt == 0 || now-watchAt > 90000 || !NetworkInterface.GetIsNetworkAvailable() || !Enabled) { watchAt=now; lastSent=tx; lastReceived=rx; deficient=0; }
-                if (now-watchAt >= 45000)
-                {
-                    bool lack = Gateway.Active > 0 && tx-lastSent >= 16*1024 && rx-lastReceived < 64*1024;
-                    deficient=lack ? deficient+1 : 0;
-                    Observation = lack ? "Запросы идут, ответов мало; наблюдаем повторяемость" : Gateway.Active == 0 ? "Нет активных соединений YouTube; это не ошибка" : "Идёт обмен данными YouTube";
-                    if (deficient>=2 && !Useful(Interlocked.Read(ref usefulAt))) { stalled=true; Observation="Устойчивый дефицит ответов; запрошен фоновый подбор"; deficient=0; }
-                    watchAt=now; lastSent=tx; lastReceived=rx;
-                }
-
-            }
-        }
-        catch (OperationCanceledException) when (lifetime.IsCancellationRequested) { }
-    }
-    private void NetworkChanged(object? sender,EventArgs args) { requested=true; stalled=false; Interlocked.Exchange(ref usefulAt,0); }
+    private void NetworkChanged(object? sender,EventArgs args) { Interlocked.Increment(ref revision);CancelScan();requested=true; }
     private async Task UpdateCatalogAsync()
     {
         try { while(!lifetime.IsCancellationRequested) { await catalog.RefreshAsync(false,lifetime.Token); await Task.Delay(TimeSpan.FromMinutes(15),lifetime.Token); } }
@@ -220,9 +238,8 @@ public sealed class PilotController : IAsyncDisposable
     }
     public async ValueTask DisposeAsync()
     {
-        if (disposed) return; disposed=true; NetworkChange.NetworkAddressChanged -= NetworkChanged; lifetime.Cancel(); enabledLifetime?.Cancel(); Gateway.DropYouTubeConnections();
+        if (disposed) return; disposed=true; if(OperatingSystem.IsWindows())NetworkChange.NetworkAddressChanged -= NetworkChanged; lifetime.Cancel(); enabledLifetime?.Cancel(); Gateway.DropYouTubeConnections();
         if (worker is not null) await worker;
-        if (observer is not null) await observer;
         if (catalogWorker is not null) await catalogWorker;
         lock(routeGate) { active?.Dispose(); active=null; }
         await Gateway.DisposeAsync(); job.Dispose(); enabledLifetime?.Dispose(); lifetime.Dispose();

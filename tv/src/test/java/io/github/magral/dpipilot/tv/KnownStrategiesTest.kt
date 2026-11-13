@@ -32,6 +32,39 @@ class KnownStrategiesTest {
             }
         } as SharedPreferences
     }
+    @Test fun deferredFailurePreservesTheLastCompleteSuccess() {
+        val prefs=preferences();val store=QualityStore(prefs).apply { network("wifi-a") }
+        store.approved(1,PreviewFixtures.quality(true,6,120),1000)
+        store.defer(1,ProbeQuality(false,0,0))
+        val restored=QualityStore(prefs).apply { network("wifi-a") }
+        assertEquals(listOf(1),restored.choices(emptyList()))
+        assertEquals(120L,restored.latency(1))
+        assertTrue(restored.quality(1).eligible)
+    }
+    @Test fun choicesPrioritizeLatencyAfterFullAccessNotOptionalPreviewSpeed() {
+        val store=QualityStore(preferences()).apply { network("wifi-a") }
+        store.approved(1,ProbeQuality(true,6,40,PreviewFixtures.transfers(2000)),1000)
+        store.approved(2,ProbeQuality(true,6,200,PreviewFixtures.transfers(50)),1000)
+        assertEquals(listOf(1,2),store.choices(emptyList()))
+        assertEquals(1,TvCheckPolicy.fastest(2 to store.quality(2),listOf(1 to store.quality(1))))
+    }
+    @Test fun freshProofExpiresWithoutDeletingChoiceAndReadsNeverRefreshIt() {
+        val prefs=preferences();val store=QualityStore(prefs).apply { network("wifi-a") }
+        store.approved(1,ProbeQuality(true,6,90),1000)
+        assertNotNull(store.fresh(1,1000));assertNull(store.fresh(1,999))
+        assertNotNull(QualityStore(prefs).apply { network("wifi-a") }.fresh(1,1000+TvCheckPolicy.INTERVAL-1))
+        assertNull(store.fresh(1,1000+TvCheckPolicy.INTERVAL))
+        assertEquals(listOf(1),store.choices(emptyList()))
+        store.network("wifi-b");assertNull(store.fresh(1,1001))
+        store.network("wifi-a");store.failed(1);assertNull(store.fresh(1,1001))
+    }
+    @Test fun anotherEngineCannotReuseTheOldFullEvidence() {
+        val prefs=preferences();val id=RuntimeCatalog.ids[1]
+        val record=org.json.JSONObject().put("ok",1).put("last_complete",true).put("last_passed",6).put("latency",50).put("seen",1000).put("checked_at",1000).put("checked_engine","other-engine")
+        prefs.edit().putString("quality.wifi-a",org.json.JSONObject().put(id,record).toString()).apply()
+        val store=QualityStore(prefs).apply { network("wifi-a") }
+        assertNull(store.fresh(1,1001));assertTrue(store.choices(emptyList()).isEmpty())
+    }
     @Test fun successfulScoutsSurviveRestartWithoutApplyingThemAndStayScopedToNetwork() {
         val prefs = preferences()
         val store = QualityStore(prefs).apply { network("wifi-a") }

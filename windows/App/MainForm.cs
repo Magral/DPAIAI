@@ -23,7 +23,7 @@ internal sealed class MainForm : Form
     {
         this.settings=settings;this.catalog=catalog;
         pilot=new(settings,catalog,executable);
-        Text="DPI Pilot · YouTube для Chrome · 0.1.1";MinimumSize=new(760,620);Size=new(1020,790);StartPosition=FormStartPosition.CenterScreen;
+        Text="DPI Pilot · YouTube для Chrome · 0.2.0";MinimumSize=new(760,620);Size=new(1020,790);StartPosition=FormStartPosition.CenterScreen;
         AutoScaleMode=AutoScaleMode.Dpi;Font=new("Segoe UI",11);
         var layout=new TableLayoutPanel{Dock=DockStyle.Fill,ColumnCount=1,RowCount=7,Padding=new(20)};
         layout.RowStyles.Add(new(SizeType.AutoSize));layout.RowStyles.Add(new(SizeType.AutoSize));layout.RowStyles.Add(new(SizeType.AutoSize));layout.RowStyles.Add(new(SizeType.AutoSize));layout.RowStyles.Add(new(SizeType.AutoSize));layout.RowStyles.Add(new(SizeType.AutoSize));layout.RowStyles.Add(new(SizeType.Percent,100));
@@ -32,7 +32,9 @@ internal sealed class MainForm : Form
         var actions=new FlowLayoutPanel{AutoSize=true,Dock=DockStyle.Fill};
         void Button(string title,Action action){var b=new Button{Text=title,AutoSize=true,Padding=new(10,7,10,7),Margin=new(0,0,10,8)};b.Click+=(_,_)=>action();actions.Controls.Add(b);}
         toggle.Padding=new(10,7,10,7);toggle.Click+=async(_,_)=>{toggle.Enabled=false;try{if(pilot.Enabled)await pilot.StopAsync();else await pilot.StartAsync();}catch(Exception e){ShowError(e);}finally{toggle.Enabled=true;}};actions.Controls.Add(toggle);
-        Button("Проверить YouTube",()=>pilot.RequestCheck());
+        Button("Подобрать стратегии",()=>pilot.RequestCheck());
+        Button("Годные стратегии",ShowStrategies);
+        Button("Перепроверить",()=>pilot.RequestCheck(true));
         Button("Открыть YouTube",()=>OpenYouTube());
         Button("Обновить базу",()=>_=catalog.RefreshAsync(true,lifetime.Token));
         Button("Экспорт отчёта",Export);
@@ -44,7 +46,7 @@ internal sealed class MainForm : Form
         using(var key=Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run"))autorun.Checked=key?.GetValue("DpiPilotYouTube") is string;
         autorun.CheckedChanged+=(_,_)=>{using var key=Registry.CurrentUser.CreateSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run");if(autorun.Checked)key.SetValue("DpiPilotYouTube","\""+Environment.ProcessPath+"\" --background");else key.DeleteValue("DpiPilotYouTube",false);};
         install.Controls.Add(autorun);
-        var periodic=new CheckBox{Text="Периодические проверки (раз в час)",AutoSize=true,Checked=settings.Value.PeriodicChecks,Padding=new(10)};
+        var periodic=new CheckBox{Text="Автоподбор раз в 3 дня",AutoSize=true,Checked=settings.Value.PeriodicChecks,Padding=new(10)};
         periodic.CheckedChanged+=(_,_)=>{settings.Change(s=>s.PeriodicChecks=periodic.Checked);if(periodic.Checked)pilot.RequestCheck();};
         install.Controls.Add(periodic);layout.Controls.Add(install);
         layout.Controls.Add(new Label{AutoSize=true,Text="Закрытие окна сворачивает приложение в трей. Полный выход — через меню значка рядом с часами.",Padding=new(0,4,0,10)});
@@ -80,7 +82,7 @@ internal sealed class MainForm : Form
         information.Text=Report();
     }
     private string Report()=>
-        "DPI Pilot Windows 0.1.1 · Chrome extension\r\n"+
+        "DPI Pilot Windows 0.2.0 · Chrome extension\r\n"+
         "Расширение: "+(Interlocked.Read(ref extensionSeen)>0 && Environment.TickCount64-Interlocked.Read(ref extensionSeen)<20000 ? "связь есть (статус маршрута — на значке Chrome)" : "нет связи; проверьте одноразовую установку")+"\r\n"+
         "Маршрутизация: "+safety.Reason+"\r\n"+
         "Стратегия: "+pilot.ActiveDescription.Replace("\n","\r\n")+"\r\n\r\n"+
@@ -91,6 +93,23 @@ internal sealed class MainForm : Form
         $"Отправлено {pilot.Gateway.Sent/1048576.0:F2} МиБ; получено {pilot.Gateway.Received/1048576.0:F2} МиБ\r\n\r\n"+
         "Системный прокси, DNS, маршруты и UDP компьютера не изменяются. TLS не расшифровывается.\r\n"+
         "Доступность узлов и обмен данными не подтверждают воспроизведение каждого ролика.\r\n\r\nЖурнал:\r\n"+string.Join("\r\n",pilot.Journal);
+    private void ShowStrategies()
+    {
+        var rows=pilot.KnownStrategies();
+        using var dialog=new Form { Text="YouTube: только полные 6/6, по задержке",Size=new(760,480),StartPosition=FormStartPosition.CenterParent,MinimizeBox=false,MaximizeBox=false };
+        var layout=new TableLayoutPanel {Dock=DockStyle.Fill,RowCount=3,ColumnCount=1,Padding=new(12)};
+        layout.RowStyles.Add(new(SizeType.AutoSize));layout.RowStyles.Add(new(SizeType.Percent,100));layout.RowStyles.Add(new(SizeType.AutoSize));
+        layout.Controls.Add(new Label {AutoSize=true,MaximumSize=new(700,0),Text="Кэш — 72 часа для текущей сети. Свежая стратегия применяется без повторного теста. Устаревшая проверяется перед применением."});
+        var list=new ListBox {Dock=DockStyle.Fill,HorizontalScrollbar=true};
+        foreach(var row in rows)list.Items.Add($"{row.Latency} мс · {row.Id} · 6/6 · {row.CheckedAt.ToLocalTime():dd.MM HH:mm} · {(pilot.IsFresh(row.Id) ? "свежая" : "требует проверки")}");
+        if(rows.Count==0)list.Items.Add("Нет полных результатов для этой сети. Запустите подбор.");
+        layout.Controls.Add(list);var buttons=new FlowLayoutPanel {AutoSize=true,Dock=DockStyle.Fill};
+        var apply=new Button {Text="Применить",AutoSize=true,Enabled=rows.Count>0};
+        apply.Click+=async(_,_)=> {if(list.SelectedIndex<0 || list.SelectedIndex>=rows.Count)return;try {pilot.SelectStrategy(rows[list.SelectedIndex].Id);if(!pilot.Enabled)await pilot.StartAsync();dialog.Close();}catch(Exception e){ShowError(e);} };
+        var reset=new Button {Text="Сбросить исключения",AutoSize=true};reset.Click+=(_,_)=>{pilot.ResetExclusions();dialog.Close();};
+        var close=new Button {Text="Закрыть",AutoSize=true};close.Click+=(_,_)=>dialog.Close();buttons.Controls.Add(apply);buttons.Controls.Add(reset);buttons.Controls.Add(close);
+        layout.Controls.Add(buttons);dialog.Controls.Add(layout);if(rows.Count>0)list.SelectedIndex=0;dialog.ShowDialog(this);
+    }
     private void Export()
     {using var dialog=new SaveFileDialog{FileName="DPI-Pilot-report.txt",Filter="Текстовый отчёт|*.txt"};if(dialog.ShowDialog()==DialogResult.OK)File.WriteAllText(dialog.FileName,Report(),Encoding.UTF8);}
     private static void OpenYouTube(){string? chrome=FindChrome();if(chrome is null){MessageBox.Show("Установите Google Chrome");return;}Process.Start(new ProcessStartInfo(chrome){UseShellExecute=false,ArgumentList={"https://www.youtube.com"}});}

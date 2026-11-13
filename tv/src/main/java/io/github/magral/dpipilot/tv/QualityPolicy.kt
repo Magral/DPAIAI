@@ -29,8 +29,8 @@ data class Trial(val previous: Int,val candidate: Int,val started: Long,val rest
 }
 
 data class QualityRecord(var successes: Int = 0,var failures: Int = 0,var stalls: Int = 0,var rollbacks: Int = 0,
-    var usefulSeconds: Long = 0,var activeSeconds: Long = 0,var latencyMs: Long = 0,var lastSeen: Long = 0,var excluded: Boolean = false,var lastPassed: Int = -1,var lastComplete: Boolean = false,var preview: PreviewQuality = PreviewQuality(),var reports: Int = 0) {
-    val fullSuccess: Boolean get() = !excluded && successes > 0 && lastComplete && lastPassed == 6
+    var usefulSeconds: Long = 0,var activeSeconds: Long = 0,var latencyMs: Long = 0,var lastSeen: Long = 0,var excluded: Boolean = false,var lastPassed: Int = -1,var lastComplete: Boolean = false,var preview: PreviewQuality = PreviewQuality(),var reports: Int = 0,var checkedAt: Long = 0,var checkedEngine: String = CatalogProtocol.engine) {
+    val fullSuccess: Boolean get() = !excluded && successes > 0 && checkedEngine == CatalogProtocol.engine && lastComplete && lastPassed == 6
     fun rank(): Double = (successes+1.0)/(successes+failures+2.0)*100+
         ln(1+usefulSeconds.coerceIn(0,36000).toDouble())*8-
         stalls.coerceAtMost(20)*12-rollbacks.coerceAtMost(20)*20

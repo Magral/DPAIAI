@@ -9,6 +9,9 @@ public sealed class Settings
     public bool PeriodicChecks { get; set; }
     public string PacToken { get; set; } = Convert.ToHexString(RandomNumberGenerator.GetBytes(20)).ToLowerInvariant();
     public Dictionary<string, List<string>> History { get; set; } = [];
+    public Dictionary<string,List<StrategyEvidence>> Evidence { get; set; } = [];
+    public Dictionary<string,DateTimeOffset> ScanStarted { get; set; } = [];
+    public Dictionary<string,string> ManualChoices { get; set; } = [];
     public long CatalogSequence { get; set; }
     public string CatalogDigest { get; set; } = "";
     public DateTimeOffset CatalogChecked { get; set; }
@@ -27,8 +30,10 @@ public sealed class SettingsStore
         try { Value = JsonSerializer.Deserialize<Settings>(File.ReadAllText(Path.Combine(directory, "settings.json"))) ?? new(); }
         catch (Exception e) when (e is IOException or JsonException) { Value = new(); }
         if (Value.PacToken.Length != 40 || Value.PacToken.Any(c => !char.IsAsciiHexDigit(c))) Value.PacToken = Convert.ToHexString(RandomNumberGenerator.GetBytes(20));
+        Value.History ??= [];Value.Evidence ??= [];Value.ScanStarted ??= [];Value.ManualChoices ??= [];
         Save();
     }
+    public T Read<T>(Func<Settings,T> read) { lock(gate) return read(Value); }
     public void Change(Action<Settings> change) { lock (gate) { change(Value); Save(); } }
     public void Save() { lock (gate) { AtomicWrite(Path.Combine(DirectoryPath, "settings.json"), JsonSerializer.SerializeToUtf8Bytes(Value)); } }
     public static void AtomicWrite(string path, byte[] bytes)
