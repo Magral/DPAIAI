@@ -29,7 +29,7 @@ Files: TvVpnService.kt, TvProbe.kt, TvActivity.kt and TV policy tests.
 - [x] Test full core reporting despite one failed concurrent request; keep strict 6/6.
 - [x] Use fresh proof for manual selection and scan candidates without renewing it; preserve selected startup route; prevent timeout exclusions.
 - [x] Keep temporary test failure from removing the active verified route, update user copy.
-- [ ] Build/test all Android modules and native adapters in CI.
+- [x] Build/test all Android modules and native adapters in CI.
 
 ### Task 3: Windows evidence and schedule
 Files: new Core/StrategyEvidence.cs, Settings.cs, CheckPolicy.cs; new Tests/CachePolicyTests.cs.
@@ -43,9 +43,9 @@ Files: PilotController.cs, Probe.cs, MainForm.cs, Tests/Program.cs.
 - [x] Compare a bounded block of full results, choose lowest latency, keep existing connections leased; no 2-minute network retest of cached proof.
 - [x] Add eligible-strategy menu, separate force recheck, exclusion reset, cache timestamps and quiet-mode copy.
 - [x] Keep passive counters informational; no periodic sub-hour recovery scans.
-- [ ] Run full Windows native/PAC/Chrome isolation suite.
+- [x] Run full Windows native/PAC/Chrome isolation suite.
 
 ### Task 5: Review and release
 - [x] Review final diff independently against the spec and ledger; resolve important findings with tests.
 - [x] Bump TV to 0.6.12, Windows to 0.2.0; update release notes and installer resources.
-- [ ] Publish only after CI passes, verify asset URLs and permanent APK certificate.
+- [x] Publish only after CI passes, verify asset URLs and permanent APK certificate.

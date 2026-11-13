@@ -13,3 +13,11 @@ Release preparation: TV0.6.12(code22), Windows0.2.0; permanent Android identity 
 Follow-up to the same review: interrupted in-memory TV trial recovery still quarantined candidate before control; replaced with defer/clear. This closes last unconditional automatic quarantine. Final CI restarted on this revision; prior builds must not publish older source.
 
 Complete CI exposed obsolete TvParallelProbeTest expecting fail-fast cancellation, which contradicts the requested complete round. Updated real-socket test to assert two other requests remain open after first SOCKS refusal and each produces its own error; worker futures are awaited so assertions cannot be lost. Session cancellation test retained. Host suite expanded to include these two socket tests:25tests GREEN. Production compilation in previous full CI passed; test failure prevented any APK publication. Rebuild from final test revision.
+
+Release completion (2026-11-13): final source6714ae7dbb94cec2f1a77396b265ec7ff56b28ae. All platform workflows completed successfully:
+- Android all-module debug/native/unit/routing checks: https://github.com/Magral/DPAIAI/actions/runs/43454242263
+- SignedTV release: https://github.com/Magral/DPAIAI/actions/runs/43454242174 ; pinned certificate SHA256 c445f31d1345b3766a1f269f86f8953997938196eeade34462b61cc7024a8a56. APK v1/v2 signatures verified.
+- Windows native+real Chrome/PAC/registry isolation+extension restore+standalone installer+installed native messaging/UI lifetime: https://github.com/Magral/DPAIAI/actions/runs/43454242448
+- PublishedTV0.6.12: https://github.com/Magral/DPAIAI/releases/tag/tv-v0.6.12 ; APK SHA256 a1d940ecabecf7589c3970c6476b3c456c6fb9a5fdc6830cdc2a269a524328b8
+- PublishedWindows0.2.0: https://github.com/Magral/DPAIAI/releases/tag/windows-v0.2.0 ; installer SHA256 90df0042e3b97c561ae74846ee18b0cbd280f4cfe02ea31b2d73a285cd157c15
+Assets are non-draft and their GitHub asset digests match release notes. TV uses permanent existing Android signing identity; Windows installer is not Authenticode-signed. Physical-network fingerprint collision and unported DNS transports remain explicitly documented limitations. Phone source was not changed in this release; its full Android CI passed.
