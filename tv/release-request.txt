@@ -1,3 +1,4 @@
 TV 0.6.12: persisted72h full evidence, latency-first choices, manual cache reuse, per-strategy timeout handling. Permanent signing.
 Final revision: interrupted TV trial preserves candidate proof until live control confirms failure.
 Final test revision: socket-level TV batch test verifies independent completion instead of obsolete fail-fast cancellation.
+Publish reviewed platform parity release after full CI checks.
