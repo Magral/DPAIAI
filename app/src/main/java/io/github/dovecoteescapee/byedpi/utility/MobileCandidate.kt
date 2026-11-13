@@ -38,7 +38,7 @@ object MobileCandidate {
         }
         val bound = withContext(Dispatchers.Main) { context.bindService(Intent(context,TuningWorkerService::class.java),connection,Context.BIND_AUTO_CREATE) }
         check(bound) { "Cannot bind tuning worker" }
-        onProgress(ProbeProgress(0,ServiceTargets.target(target).endpoints.size*2))
+        onProgress(ProbeProgress(0,ServiceTargets.total(target)))
         try {
             val remote = Messenger(withTimeout(5000) { connected.await() })
             remote.send(Message.obtain().apply {

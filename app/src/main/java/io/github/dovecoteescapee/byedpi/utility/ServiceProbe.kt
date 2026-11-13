@@ -24,7 +24,7 @@ object ServiceProbe {
             val first = attempt(id,command,port,session,previews && !fast,fast,onProgress)
             if (fast || !MobileCheckPolicy.confirmFailure(id,first,known)) return first
             session.checkActive()
-            onProgress(ProbeProgress(0,ServiceTargets.target(id).endpoints.size*2,"retry"))
+            onProgress(ProbeProgress(0,ServiceTargets.total(id),"retry"))
             Thread.sleep(750)
             session.checkActive()
             // Each attempt stands alone. Partial successes are never combined.
@@ -39,39 +39,38 @@ object ServiceProbe {
         val rows = mutableListOf<JSONObject>()
         val progressLock = Any()
         var passed = 0
-        onProgress(ProbeProgress(0,target.endpoints.size*2))
-            for (round in 1..2) {
-                session.checkActive()
-                val child = Session()
-                val completed = ParallelProbe.round(target.endpoints.size,session::checkActive,{ it.optBoolean("ok") },
-                    child::cancel) { index ->
-                    session.checkActive();child.checkActive()
-                    val row = request(target.endpoints[index],command,port,round,session,child,fast)
-                    synchronized(progressLock) {
-                        if (row.optBoolean("ok")) passed++
-                        onProgress(ProbeProgress(passed,target.endpoints.size*2))
+        var checked = 0
+        onProgress(ProbeProgress(0,target.endpoints.size*ServiceTargets.rounds(id)))
+            rounds@ for (round in 1..ServiceTargets.rounds(id)) {
+                val groups=listOf(target.endpoints.indices.filter { target.endpoints[it].required },target.endpoints.indices.filter { !target.endpoints[it].required })
+                for ((groupIndex,indices) in groups.withIndex()) {
+                    session.checkActive()
+                    val child=Session()
+                    val completed=ParallelProbe.round(indices.size,session::checkActive,{ true },child::cancel) { index ->
+                        session.checkActive();child.checkActive()
+                        val row=request(target.endpoints[indices[index]],command,port,round,session,child,fast)
+                        synchronized(progressLock) {
+                            if(row.optBoolean("ok"))passed++
+                            checked++;onProgress(ProbeProgress(passed,ServiceTargets.total(id),completed=checked))
+                        }
+                        row
                     }
-                    row
+                    rows.addAll(completed.map { it.value })
+                    // Finish all core requests before deciding. Ancillary errors never cancel other checks.
+                    if(completed.size!=indices.size || (groupIndex==0 && completed.any { !it.value.optBoolean("ok") })) break@rounds
                 }
-                rows.addAll(completed.map { it.value })
-                if (completed.size != target.endpoints.size || completed.any { !it.value.optBoolean("ok") }) break
             }
             session.checkActive()
             val success = rows.count { it.optBoolean("ok") }
-            val result = JSONObject().put("success",success).put("total",target.endpoints.size*2).put("tested",rows.size)
+            val result = JSONObject().put("target",id).put("success",success).put("total",target.endpoints.size*ServiceTargets.rounds(id)).put("tested",rows.size)
                 .put("elapsed",(System.nanoTime()-start)/1000000).put("rows",JSONArray(rows))
-                .put("publicSuccess",rows.count { it.optBoolean("public") }).put("publicTotal",target.endpoints.count { it.kind in listOf("youtube","image") }*2)
+                .put("publicSuccess",rows.count { it.optBoolean("public") }).put("publicTotal",target.endpoints.count { it.kind in listOf("youtube","image") }*ServiceTargets.rounds(id))
                 .put("inconclusive",rows.any { it.optBoolean("unavailable") || it.optBoolean("timeout") })
-                .put("deferred",fast && success != target.endpoints.size*2)
-            val transportAssessment = ProbeAssessment.evaluate(id,result)
-            if(id=="youtube" && transportAssessment.eligible) {
-                onProgress(ProbeProgress(target.endpoints.size*2,target.endpoints.size*2,"video"))
-                val media=MobileVideoProbe.check(port,session);result.put("media",media)
-                if(media.optString("status")!="confirmed")result.put("inconclusive",true)
-            }
+                .put("deferred",false)
             val a = ProbeAssessment.evaluate(id,result)
+            result.put("deferred",fast && !a.eligible)
             if (id == "youtube" && a.eligible && previews) {
-                onProgress(ProbeProgress(target.endpoints.size*2,target.endpoints.size*2,"preview"))
+                onProgress(ProbeProgress(target.endpoints.size*ServiceTargets.rounds(id),target.endpoints.size*ServiceTargets.rounds(id),"preview"))
                 result.put("preview",MobilePreviewProbe.check(port,MobileStrategyPolicy.timeout(command),session).encode())
             }
             return result.put("requiredSuccess",a.requiredSuccess).put("requiredTotal",a.requiredTotal)
@@ -81,7 +80,7 @@ object ServiceProbe {
     private fun request(spec: ServiceTargets.Endpoint,command: String,port: Int,round: Int,
         parent: Session,child: Session,fast: Boolean): JSONObject {
         val start = System.nanoTime()
-        val readTimeout = MobileSearchPolicy.timeout(MobileStrategyPolicy.timeout(command),fast)
+        val readTimeout = MobileSearchPolicy.timeout(minOf(MobileStrategyPolicy.timeout(command),15000),fast)
         val deadline = ProbeDeadline(readTimeout.toLong()+3000)
         var stage = "start";var detail = "";var transport = false;var content = false;var failed = false;var unavailable = false;var timedOut = false
         fun report(value: String) { stage = value }

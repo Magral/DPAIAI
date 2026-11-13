@@ -18,7 +18,7 @@ object MobileDns {
         val prefs=context.getPreferences();val mode=mode(context)
         if(mode=="network") return@withContext listOf("")
         if(mode=="manual") return@withContext listOf(prefs.getString("mobile_dns_manual","1.1.1.1").orEmpty()).filter { it.isNotEmpty() && DnsResolver.valid(it) }.ifEmpty { listOf("") }
-        val key="mobile_dns_candidates.$id.${MobileStrategyPolicy.profile(context)}"
+        val key="mobile_dns_candidates_v2.$id.${MobileStrategyPolicy.profile(context)}"
         val saved=runCatching { JSONObject(prefs.getString(key,"{}").orEmpty()) }.getOrDefault(JSONObject())
         val now=System.currentTimeMillis();val at=saved.optLong("at")
         if(at>0 && now>=at && now-at<MobileScanPolicy.INTERVAL) {
@@ -34,7 +34,7 @@ object MobileDns {
             } }).mapNotNull { it.get() }.sortedBy { it.second } } finally { pool.shutdownNow() }
         }
         // Always retain the currently applied resolver, then two fast alternatives.
-        val candidates=(listOf(selected(context,id))+ranked.map { it.first }).distinct().take(3)
+        val candidates=(ranked.map { it.first }.filter { it==selected(context,id) }+ranked.map { it.first }).distinct().take(3).ifEmpty { listOf("") }
         prefs.edit().putString(key,JSONObject().put("at",now).put("servers",JSONArray(candidates)).toString()).apply()
         status="DNS $id: доступны ${ranked.size}/${DnsResolver.providers.size}; в подборе ${candidates.size}"
         candidates

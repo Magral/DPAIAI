@@ -40,8 +40,9 @@ class ServiceRouter(private val bindPort: Int = 1080) : AutoCloseable {
             } catch (_: IOException) { if (running.get()) Thread.yield() }
         },"socks-accept").apply { isDaemon = true; start() }
     }
+    @Volatile var allowDnsFallback: (() -> Boolean)? = null
     @Volatile var dns: ((String)->String?)? = null
-    @Volatile var resolve: ((String,String)->String)? = null
+    @Volatile var resolve: ((String,String)->String?)? = null
     fun route(service: String,value: Route) { require(service in listOf("instagram","youtube")); routes[service] = value }
     fun active(service: String): Route? = routes[service]
     fun connections(route: Route) = flows.count { it.route == route }
@@ -93,8 +94,10 @@ class ServiceRouter(private val bindPort: Int = 1080) : AutoCloseable {
                 upstreamPeer.connect(InetSocketAddress("127.0.0.1",route.port),2000); upstreamPeer.soTimeout = 65000
                 val upstream = DataInputStream(upstreamPeer.inputStream); val request = upstreamPeer.outputStream
                 request.write(byteArrayOf(5,1,0)); request.flush(); require(upstream.readUnsignedByte() == 5 && upstream.readUnsignedByte() == 0)
-                val resolved = if (service != null && prefix.host != null && resolve != null) {
-                    val ip=InetAddress.getByName(resolve!!.invoke(prefix.host,service)).address
+                // Preserve numeric destinations chosen by the application, especially signed CDN URLs.
+                val resolvedHost = if(encoded[0].toInt()==3 && prefix.host!=null) resolve?.invoke(prefix.host,service!!) else null
+                val resolved = if (resolvedHost != null) {
+                    val ip=InetAddress.getByName(resolvedHost).address
                     byteArrayOf(if(ip.size==4) 1 else 4)+ip
                 } else encoded
                 request.write(byteArrayOf(5,1,0)+resolved+byteArrayOf((targetPort ushr 8).toByte(),targetPort.toByte())); request.flush()
@@ -143,8 +146,12 @@ class ServiceRouter(private val bindPort: Int = 1080) : AutoCloseable {
                     try { datagrams.execute {
                         runCatching {
                             val resolver = if(target==53) io.github.dovecoteescapee.byedpi.utility.DnsResolver.questionName(payload)?.let { dns?.invoke(it) } else null
-                            if(!resolver.isNullOrEmpty()) {
-                                val response=io.github.dovecoteescapee.byedpi.utility.DnsResolver.exchange(payload,resolver)
+                            val resolvedReply = if(!resolver.isNullOrEmpty()) {
+                                try { io.github.dovecoteescapee.byedpi.utility.DnsResolver.exchange(payload,resolver) }
+                                catch(e: Exception) { if(allowDnsFallback?.invoke()==false)throw e;null }
+                            } else null
+                            if(resolvedReply!=null) {
+                                val response=resolvedReply
                                 val wrapped=byteArrayOf(0,0,0)+encoded+byteArrayOf((target ushr 8).toByte(),target.toByte())+response
                                 if(!relay.isClosed)relay.send(DatagramPacket(wrapped,wrapped.size,destination))
                             } else DatagramSocket().use { remote ->

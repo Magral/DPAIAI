@@ -10,22 +10,31 @@ import org.junit.Assert.*
 
 class ProbeAssessmentTest {
     private fun rows(target: String,extra: Boolean = true): JSONArray = JSONArray().apply {
-        for (round in 1..2) for (endpoint in ServiceTargets.target(target).endpoints) put(JSONObject()
+        for (round in 1..ServiceTargets.rounds(target)) for (endpoint in ServiceTargets.target(target).endpoints) put(JSONObject()
             .put("host",endpoint.host).put("kind",endpoint.kind).put("round",round).put("skipped",false)
             .put("ok",endpoint.required || extra).put("public",endpoint.kind in listOf("youtube","image","instagram")))
     }
-    @Test fun partialSiteAndJpegCannotQualifyWithoutCompleteApiAndCdnChecks() {
+    @Test fun singleYoutubePassRequiresAllCoreChecksEvenWhenAncillaryChecksPass() {
+        assertEquals(13,ServiceTargets.total("youtube"));assertEquals(1,ServiceTargets.rounds("youtube"))
+        val endpoints=ServiceTargets.target("youtube").endpoints
+        for(index in endpoints.indices.filter { endpoints[it].required }) {
+            val matrix=rows("youtube");matrix.getJSONObject(index).put("ok",false)
+            val assessment=ProbeAssessment.evaluate("youtube",JSONObject().put("rows",matrix))
+            assertEquals(3,assessment.requiredSuccess);assertEquals(4,assessment.requiredTotal);assertFalse(assessment.eligible)
+        }
+    }
+    @Test fun optionalFailuresDoNotInvalidateAllFourRequiredEndpoints() {
         val result = JSONObject().put("rows",rows("youtube",false))
         val score = ProbeAssessment.evaluate("youtube",result)
-        assertFalse(score.eligible); assertFalse(score.complete)
+        assertTrue(score.eligible); assertFalse(score.complete)
         assertEquals(4,score.requiredSuccess); assertEquals(4,score.requiredTotal)
-        assertEquals(0,score.extraSuccess); assertEquals(22,score.extraTotal)
+        assertEquals(0,score.extraSuccess); assertEquals(9,score.extraTotal)
     }
     @Test fun missingDuplicateSkippedOrInvalidContentCannotPassRequiredChecks() {
         val good = rows("youtube")
         fun score(rows: JSONArray) = ProbeAssessment.evaluate("youtube",JSONObject().put("rows",rows))
         assertTrue(score(good).complete)
-        for(status in listOf("unavailable","failed"))assertFalse(ProbeAssessment.evaluate("youtube",JSONObject().put("rows",good).put("media",JSONObject().put("status",status))).eligible)
+        for(status in listOf("unavailable","failed"))assertTrue(ProbeAssessment.evaluate("youtube",JSONObject().put("rows",good).put("media",JSONObject().put("status",status))).eligible)
         assertTrue(ProbeAssessment.evaluate("youtube",JSONObject().put("rows",good).put("media",JSONObject().put("status","confirmed"))).eligible)
         val skipped = JSONArray(good.toString()); skipped.getJSONObject(0).put("skipped",true); assertFalse(score(skipped).eligible)
         val html = JSONArray(good.toString()); html.getJSONObject(1).put("public",false); assertFalse(score(html).eligible)

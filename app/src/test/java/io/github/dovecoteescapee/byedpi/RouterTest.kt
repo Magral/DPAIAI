@@ -50,10 +50,11 @@ class RouterTest {
         } }
         override fun close() { server.close(); synchronized(peers) { peers.forEach { runCatching { it.close() } } }; workers.shutdownNow() }
     }
-    private fun connect(port: Int,command: Int = 1): Socket {
+    private fun connect(port: Int,command: Int = 1,domain: String? = null): Socket {
         val peer = Socket("127.0.0.1",port); peer.soTimeout = 3000
         val input = DataInputStream(peer.inputStream); peer.outputStream.write(byteArrayOf(5,1,0)); assertEquals(5,input.readUnsignedByte());assertEquals(0,input.readUnsignedByte())
-        peer.outputStream.write(byteArrayOf(5,command.toByte(),0,1,127,0,0,1,0,9)); assertEquals(5,input.readUnsignedByte());assertEquals(0,input.readUnsignedByte()); input.skipBytes(6)
+        val address=domain?.toByteArray()?.let { byteArrayOf(3,it.size.toByte())+it } ?: byteArrayOf(1,127,0,0,1)
+        peer.outputStream.write(byteArrayOf(5,command.toByte(),0)+address+byteArrayOf(0,9)); assertEquals(5,input.readUnsignedByte());assertEquals(0,input.readUnsignedByte()); input.skipBytes(6)
         if (command == 1) input.skipBytes(2) // UDP caller reads relay port itself.
         return peer
     }
@@ -84,12 +85,15 @@ class RouterTest {
             var address="8.8.8.8"
             router.resolve={ host,id -> assertEquals("youtube",id);assertEquals("r1.googlevideo.com",host);address }
             router.route("youtube",ServiceRouter.Route(backend.server.localPort,1));router.start()
-            connect(router.port).use { old ->
+            connect(router.port,domain="r1.googlevideo.com").use { old ->
                 request(old,"r1.googlevideo.com",66);assertEquals("8.8.8.8",backend.destinations.last())
                 address="1.1.1.1"
-                connect(router.port).use { request(it,"r1.googlevideo.com",66) }
+                connect(router.port,domain="r1.googlevideo.com").use { request(it,"r1.googlevideo.com",66) }
                 assertEquals(listOf("8.8.8.8","1.1.1.1"),backend.destinations.toList())
                 request(old,"r1.googlevideo.com",66)
+                router.resolve={ _,_ -> error("Numeric application IP must not be resolved again") }
+                connect(router.port).use { request(it,"r1.googlevideo.com",66) }
+                assertEquals("127.0.0.1",backend.destinations.last())
             }
         } }
     }

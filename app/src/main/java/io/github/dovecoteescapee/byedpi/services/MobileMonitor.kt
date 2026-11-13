@@ -161,9 +161,13 @@ class MobileMonitor(private val context: Context,private val scope: CoroutineSco
                         // Optional image quality is measured after application; never repeat the full test.
                         if (id == "youtube" && same(profile) && !superseded()) {
                             val quality = awaitResult(id,profile,token) { withTimeout(40000) {
-                                MobileCandidate.run(context,id,best.first,qualityOnly=true)
+                                MobileCandidate.run(context,id,best.first,qualityOnly=true,dns=best.second.optString("dns"))
                             } }
-                            if (validScan()) quality.optJSONArray("preview")?.let { best.second.put("preview",it);store.accept(best.first,best.second) }
+                            if (validScan()) {
+                                quality.optJSONArray("preview")?.let { best.second.put("preview",it) }
+                                quality.optJSONObject("media")?.let { best.second.put("media",it) }
+                                store.accept(best.first,best.second);MobilePresentation.finish(id,best.first,best.second)
+                            }
                         }
                         prefs.edit().remove("mobile_selected.$id").remove("mobile_imported.$id").remove("mobile_force_replace.$id").apply()
                     }
@@ -178,7 +182,7 @@ class MobileMonitor(private val context: Context,private val scope: CoroutineSco
         }
     }
     private suspend fun candidate(id: String,command: String,profile: String,token: Long,fast: Boolean,dns: String = ""): JSONObject =
-        awaitResult(id,profile,token) { withTimeout(if (fast) 30000L else 215000L) {
+        awaitResult(id,profile,token) { withTimeout(if (fast) 50000L else 215000L) {
             MobileCandidate.run(context,id,command,known=MobileHistory.store(context,id,profile).known(command),previews=false,fast=fast,dns=dns) {
                 MobilePresentation.progress(id,command,it)
             }

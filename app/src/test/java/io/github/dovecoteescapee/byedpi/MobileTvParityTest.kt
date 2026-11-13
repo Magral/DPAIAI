@@ -10,7 +10,7 @@ import org.junit.Test
 class MobileTvParityTest {
     private fun result(id: String,passed: Int,latency: Long = 100): JSONObject {
         val rows = JSONArray()
-        for (round in 1..2) for (endpoint in ServiceTargets.target(id).endpoints) rows.put(JSONObject()
+        for (round in 1..ServiceTargets.rounds(id)) for (endpoint in ServiceTargets.target(id).endpoints) rows.put(JSONObject()
             .put("host",endpoint.host).put("kind",endpoint.kind).put("round",round)
             .put("ok",rows.length() < passed).put("public",true).put("elapsedMs",latency))
         return JSONObject().put("rows",rows)
@@ -20,7 +20,7 @@ class MobileTvParityTest {
     })
     @Test fun retryOnlyPartialOrPreviouslyWorkingFailureAndNeverMergeAttempts() {
         for (id in listOf("youtube","instagram")) {
-            val total = ServiceTargets.target(id).endpoints.size*2
+            val total = ServiceTargets.total(id)
             assertFalse(MobileCheckPolicy.confirmFailure(id,result(id,0),false))
             assertTrue(MobileCheckPolicy.confirmFailure(id,result(id,0),true))
             assertTrue(MobileCheckPolicy.confirmFailure(id,result(id,1),false))
@@ -28,21 +28,21 @@ class MobileTvParityTest {
             assertFalse(MobileCheckPolicy.confirmFailure(id,result(id,1).put("inconclusive",true),true))
             assertFalse(MobileCheckPolicy.confirmFailure(id,result(id,1).put("cancelled",true),true))
             assertFalse(MobileCheckPolicy.confirmFailure(id,result(id,1).put("error","worker failed"),true))
-            assertFalse(ProbeAssessment.evaluate(id,result(id,total-1).put("retried",true)).eligible)
+            assertFalse(ProbeAssessment.evaluate(id,result(id,1).put("retried",true)).eligible)
         }
     }
     @Test fun fullMobileThresholdRemainsIndependentFromOptionalTvPreview() {
         for (quality in listOf(PreviewQuality(),preview(),preview(12000),preview().copy(samples=preview().samples.drop(1)))) {
-            assertTrue(ProbeAssessment.evaluate("youtube",result("youtube",26).put("preview",quality.encode())).eligible)
-            assertFalse(ProbeAssessment.evaluate("youtube",result("youtube",25).put("preview",quality.encode())).eligible)
+            assertTrue(ProbeAssessment.evaluate("youtube",result("youtube",13).put("preview",quality.encode())).eligible)
+            assertFalse(ProbeAssessment.evaluate("youtube",result("youtube",1).put("preview",quality.encode())).eligible)
         }
     }
     @Test fun latencyRanksFullResultsAndNeverPartialNodes() {
         val a = StrategyCatalog.commands[1];val b = StrategyCatalog.commands[2]
-        val stable = result("youtube",26,800).put("preview",preview(100).encode())
-        val slow = result("youtube",26,1).put("preview",preview(2200).encode())
+        val stable = result("youtube",13,800).put("preview",preview(100).encode())
+        val slow = result("youtube",13,1).put("preview",preview(2200).encode())
         assertEquals(b,MobileScanPolicy.fastest(listOf(b to slow,a to stable),"youtube")!!.first)
-        val partial = result("youtube",25,1).put("preview",preview(1).encode())
+        val partial = result("youtube",1,1).put("preview",preview(1).encode())
         assertEquals(a,MobileScanPolicy.fastest(listOf(b to partial,a to stable),"youtube")!!.first)
         assertEquals(a,MobileScanPolicy.fastest(listOf(a to stable,b to stable),"youtube")!!.first)
     }
@@ -54,15 +54,18 @@ class MobileTvParityTest {
             if (phase !in listOf("saved","paused")) assertTrue(text.contains("2 из 8"))
         }
         MobilePresentation.clear();MobilePresentation.start("youtube",command)
-        for (passed in 0..26) {
-            val progress = ProbeProgress(passed,26)
+        for (passed in 0..13) {
+            val progress = ProbeProgress(passed,13)
             assertEquals(progress,ProbeProgress.decode(progress.encode()))
             MobilePresentation.progress("youtube",command,progress)
-            assertTrue(MobilePresentation.summary().contains("$passed из 26"))
+            assertTrue(MobilePresentation.summary().contains("из 13"))
         }
-        MobilePresentation.finish("youtube",command,result("youtube",25))
+        val zero=ProbeProgress(0,13,completed=4)
+        MobilePresentation.progress("youtube",command,zero)
+        assertTrue(MobilePresentation.summary().contains("Проверено 4 из 13; успешно 0"))
+        MobilePresentation.finish("youtube",command,result("youtube",1))
         assertTrue(MobilePresentation.summary().contains("Не прошла"))
-        MobilePresentation.finish("youtube",command,result("youtube",26))
+        MobilePresentation.finish("youtube",command,result("youtube",13))
         assertTrue(MobilePresentation.summary().contains("Годна"))
         MobilePresentation.start("youtube",command);MobilePresentation.pause()
         assertTrue(MobilePresentation.summary().contains("Подбор остановлен"))

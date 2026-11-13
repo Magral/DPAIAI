@@ -17,8 +17,7 @@ class MobileStrategyStore(private val prefs: SharedPreferences,private val id: S
     fun excluded(command: String) = CatalogProtocol.id(command) in excludedIds()
     fun known(command: String) = entries().any { it.optString("command") == command && it.optInt("good") > 0 }
     fun choices(): List<JSONObject> {
-        val expected = ServiceTargets.target(id).endpoints.size*2
-        return entries().filter { !isExcluded(it) && it.optBoolean("verified") && it.optInt("passed") == expected && it.optInt("total") == expected && it.optInt("schema") == 2 }
+        return entries().filter { !isExcluded(it) && it.optBoolean("verified") && it.optJSONObject("result")?.let { result -> ProbeAssessment.evaluate(id,result).eligible } == true && it.optInt("schema") == 2 }
             .sortedWith(compareBy<JSONObject> { it.optLong("latencyMs",Long.MAX_VALUE).takeIf { n -> n > 0 } ?: Long.MAX_VALUE }
                 .thenBy { MobileScanPolicy.previewScore(id,it) }
                 .thenBy { CatalogProtocol.id(it.optString("command")) })

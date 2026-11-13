@@ -10,7 +10,7 @@ class MobileRuntime(private val context: Context) {
     private data class Slot(val id: String,val port: Int,val type: Class<out MobileEngineService>,var command: String? = null,var lease: MobileEngineLease? = null,var generation: Long = 0,@Volatile var alive: Boolean = false)
     private val slots = listOf(Slot("instagram",19410,InstagramAService::class.java),Slot("instagram",19411,InstagramBService::class.java),
         Slot("youtube",19420,YoutubeAService::class.java),Slot("youtube",19421,YoutubeBService::class.java))
-    val router = ServiceRouter().apply { dns = { host -> io.github.dovecoteescapee.byedpi.routing.HostInspector.service(host)?.let { MobileDns.selected(context,it) } }; resolve = { host,id -> DnsResolver.resolve(host,MobileDns.selected(context,id)) } }
+    val router = ServiceRouter().apply { allowDnsFallback={ MobileDns.mode(context)!="manual" }; dns = { host -> io.github.dovecoteescapee.byedpi.routing.HostInspector.service(host)?.let { MobileDns.selected(context,it) } }; resolve = { host,id -> MobileDns.selected(context,id).takeIf { it.isNotEmpty() }?.let { DnsResolver.resolve(host,it) } } }
     private var serial = 0L
     private val maintenance = CoroutineScope(SupervisorJob()+Dispatchers.Main)
     private val protectedRoutes = mutableSetOf<ServiceRouter.Route>()

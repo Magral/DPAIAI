@@ -86,7 +86,7 @@ class ServiceTuningActivity : AppCompatActivity() {
                 MobileFeedback.wake()
             }
         } }
-        TextView(this).apply { text="Годна только стратегия, прошедшая все проверки: YouTube — 26 из 26 и медиадиапазоны, Instagram — 6 из 6.";setPadding(0,16,0,16);box.addView(this) }
+        TextView(this).apply { text="YouTube: 13 адресов за один проход. Годность требует всех 4 основных проверок (сайт, превью, API и видеодоставка); 9 вспомогательных адресов и образец видео показаны отдельно. Instagram — 6 из 6.";setPadding(0,16,0,16);box.addView(this) }
         button("Проверить сейчас") {
             if (appStatus.first == AppStatus.Halted) Toast.makeText(this,"Включите VPN на главном экране; проверка выполняется в фоне",Toast.LENGTH_LONG).show()
             else {
@@ -121,11 +121,11 @@ class ServiceTuningActivity : AppCompatActivity() {
                     .setNegativeButton("Отмена",null).show()
             }.setNegativeButton("Закрыть",null)
         if (choices.isEmpty()) dialog.setMessage("Нет подтверждённых полных результатов. Старые записи требуют новой проверки. Включите VPN и нажмите «Проверить сейчас».")
-        else dialog.setItems(choices.map { row -> "${row.optLong("latencyMs")} мс · ${MobilePresentation.strategy(row.optString("command"))} · ${row.optInt("passed")}/${row.optInt("total")} · DNS ${row.optJSONObject("result")?.optString("dns")?.ifBlank { "сети" } ?: "сети"} · ${java.text.DateFormat.getDateTimeInstance(java.text.DateFormat.SHORT,java.text.DateFormat.SHORT).format(java.util.Date(row.optLong("checkedAt")))}" }.toTypedArray()) { _,index ->
+        else dialog.setItems(choices.map { row -> "${row.optLong("latencyMs")} мс · ${MobilePresentation.strategy(row.optString("command"))} · основные ${ProbeAssessment.evaluate(target.id,row.getJSONObject("result")).requiredSuccess}/${ProbeAssessment.evaluate(target.id,row.getJSONObject("result")).requiredTotal} · DNS ${row.optJSONObject("result")?.optString("dns")?.ifBlank { "сети" } ?: "сети"} · ${java.text.DateFormat.getDateTimeInstance(java.text.DateFormat.SHORT,java.text.DateFormat.SHORT).format(java.util.Date(row.optLong("checkedAt")))}" }.toTypedArray()) { _,index ->
             val row = choices[index];val command = row.getString("command")
             val fresh = store.freshResult(command) != null
             androidx.appcompat.app.AlertDialog.Builder(this).setTitle(target.name)
-                .setMessage("${MobilePresentation.strategy(command)}\nПройдено ${row.optInt("passed")} из ${row.optInt("total")}\n\n${if (fresh) "Применить без повторной проверки?" else "Результат устарел. Проверить и применить?"}")
+                .setMessage("${MobilePresentation.strategy(command)}\n${ProbeAssessment.evaluate(target.id,row.getJSONObject("result")).text()}\n\n${if (fresh) "Применить без повторной проверки?" else "Результат устарел. Проверить и применить?"}")
                 .setPositiveButton(if (fresh) "Применить" else "Проверить и применить") { _,_ ->
                     getPreferences().edit().putString("mobile_selected.${target.id}",JSONObject().put("command",command).put("profile",profile).toString()).apply()
                     MobileFeedback.request(target.id)
@@ -147,7 +147,7 @@ class ServiceTuningActivity : AppCompatActivity() {
         androidx.appcompat.app.AlertDialog.Builder(this).setTitle("DNS только для YouTube и Instagram").setItems(names) { _,i ->
             fun setMode(mode: String) {
                 prefs.edit().putString("mobile_dns_mode",mode).apply()
-                ServiceTargets.individual.forEach { prefs.edit().remove("mobile_dns_candidates.${it.id}.${MobileStrategyPolicy.profile(this)}").apply() }
+                ServiceTargets.individual.forEach { prefs.edit().remove("mobile_dns_candidates_v2.${it.id}.${MobileStrategyPolicy.profile(this)}").apply() }
                 Toast.makeText(this,"Настройка сохранена. Нажмите «Проверить сейчас»: рабочая связка сохраняется до успешной проверки новой.",Toast.LENGTH_LONG).show()
             }
             when(i) {

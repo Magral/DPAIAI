@@ -28,7 +28,7 @@ class MobileStoreAndParallelTest {
     }
     private fun result(id: String,delay: Long,fail: Int = -1): JSONObject {
         val rows=JSONArray()
-        for(round in 1..2) for(e in ServiceTargets.target(id).endpoints) rows.put(JSONObject()
+        for(round in 1..ServiceTargets.rounds(id)) for(e in ServiceTargets.target(id).endpoints) rows.put(JSONObject()
             .put("host",e.host).put("kind",e.kind).put("round",round).put("ok",rows.length()!=fail)
             .put("public",true).put("elapsedMs",delay))
         return JSONObject().put("rows",rows)
@@ -37,7 +37,7 @@ class MobileStoreAndParallelTest {
         val prefs=prefs();val store=MobileStrategyStore(prefs,"youtube","wifi")
         val a=StrategyCatalog.commands[1];val b=StrategyCatalog.commands[2]
         assertTrue(store.accept(a,result("youtube",200)))
-        assertFalse(store.accept(b,result("youtube",1,3)))
+        assertFalse(store.accept(b,result("youtube",1,6)))
         assertEquals(listOf(a),store.choices().map { it.getString("command") })
         assertTrue(MobileStrategyStore(prefs,"youtube","wifi").excluded(b))
         assertFalse(MobileStrategyStore(prefs,"youtube","mobile").excluded(b))

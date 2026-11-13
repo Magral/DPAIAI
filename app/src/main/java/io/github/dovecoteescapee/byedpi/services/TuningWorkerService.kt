@@ -33,7 +33,7 @@ class TuningWorkerService : Service() {
                 val result = try {
                     require(command != null && MobilePlan.valid(command))
                     ServiceTargets.target(target)
-                    progress(ProbeProgress(0,ServiceTargets.target(target).endpoints.size*2))
+                    progress(ProbeProgress(0,ServiceTargets.total(target)))
                     val ready = java.util.concurrent.CountDownLatch(1)
                     val bound = java.util.concurrent.atomic.AtomicBoolean(false)
                     Thread {
@@ -43,7 +43,7 @@ class TuningWorkerService : Service() {
                     check(ready.await(10,java.util.concurrent.TimeUnit.SECONDS) && bound.get()) { "Native listener did not start within 10s" }
                     if (qualityOnly) {
                         val session = ServiceProbe.Session()
-                        try { JSONObject().put("preview",MobilePreviewProbe.check(19080,MobileStrategyPolicy.timeout(command),session).encode()) }
+                        try { JSONObject().put("preview",MobilePreviewProbe.check(19080,MobileStrategyPolicy.timeout(command),session).encode()).put("media",MobileVideoProbe.check(19080,session)) }
                         finally { session.cancel() }
                     } else ServiceProbe.check(target,command,19080,known=known,previews=previews,fast=fast,onProgress = ::progress)
                 } catch (e: Exception) { JSONObject().put("success",0).put("total",0).put("error",e.javaClass.simpleName+": "+e.message.orEmpty().take(200)) }
