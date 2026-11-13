@@ -571,7 +571,7 @@ class TvVpnService : VpnService() {
             if (tun == null || !TvState.engineReady || networkId != network.toString() || profileChanged) {
                 trial?.takeIf { it.restorable }?.let {
                     recovered = it.previous.takeIf { n -> n !in blocked }
-                    quarantine(it.candidate); clearTrial()
+                    reputation.defer(it.candidate,reputation.quality(it.candidate));clearTrial()
                 }
                 release()
                 val preferred = TvPolicy.indexOfId(prefs.getString("manual_id.$profile",null))?.takeIf { it !in blocked }

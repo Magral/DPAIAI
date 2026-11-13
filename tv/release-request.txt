@@ -1,1 +1,2 @@
 TV 0.6.12: persisted72h full evidence, latency-first choices, manual cache reuse, per-strategy timeout handling. Permanent signing.
+Final revision: interrupted TV trial preserves candidate proof until live control confirms failure.
