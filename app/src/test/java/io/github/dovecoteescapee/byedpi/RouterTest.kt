@@ -133,6 +133,17 @@ class RouterTest {
             worker.join(2000)
         }
     }
+    @Test fun shutdownIsSafeWhileTheLastClientDisconnects() {
+        repeat(30) {
+            val router=ServiceRouter(0);router.start()
+            val peer=connect(router.port)
+            val gate=CountDownLatch(1)
+            val disconnect=Thread { gate.await();peer.close() }.apply { start() }
+            gate.countDown();router.close();disconnect.join(1000)
+            assertFalse(disconnect.isAlive)
+            router.close()
+        }
+    }
     @Test fun trafficWatchRequiresDemandAndTrialHasIndependentCounters() {
         val h = FlowHealth();h.observe(FlowHealth.Sample(1,0,0,0));h.observe(FlowHealth.Sample(45001,0,0,0));assertFalse(h.stalled)
         h.observe(FlowHealth.Sample(90001,20000,0,25));assertFalse(h.stalled)

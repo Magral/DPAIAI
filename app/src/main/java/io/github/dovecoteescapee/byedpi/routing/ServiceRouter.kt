@@ -171,6 +171,6 @@ class ServiceRouter(private val bindPort: Int = 1080) : AutoCloseable {
     }
     override fun close() {
         running.set(false); runCatching { listener?.close() }
-        sockets.toList().forEach { runCatching { it.close() } }; sockets.clear(); workers.shutdownNow();uploads.shutdownNow();datagrams.shutdownNow();deadlines.shutdownNow(); flows.clear()
+        sockets.forEach { runCatching { it.close() } }; sockets.clear(); workers.shutdownNow();uploads.shutdownNow();datagrams.shutdownNow();deadlines.shutdownNow(); flows.clear()
     }
 }

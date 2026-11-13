@@ -8,7 +8,7 @@ on:
 permissions:
   contents: write
 concurrency:
-  group: signed-apk-release
+  group: signed-apk-release-${{ github.ref }}
   cancel-in-progress: false
 jobs:
   release:
