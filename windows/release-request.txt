@@ -1,2 +1,3 @@
 Windows 0.2.0: persisted72h full evidence, manual choice menu, latency-first selection, retained route, quiet background schedule, cancel superseded probes.
 Final revision: interrupted TV trial preserves candidate proof until live control confirms failure.
+Final test revision: socket-level TV batch test verifies independent completion instead of obsolete fail-fast cancellation.
