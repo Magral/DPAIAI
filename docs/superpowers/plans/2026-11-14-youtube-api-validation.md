@@ -24,9 +24,9 @@ Legacy cached proof, duplicate/missing API observations, mutable shared sessions
 
 ### Task3: Windows parity
 - [x] HTTP API request each round and8/8 evidence/cache/UI; migration preserves previous route.
-- [ ] Regression policy/controller tests and actual Chrome isolation CI.
+- [x] Regression policy/controller tests and actual Chrome isolation CI.
 
 ### Task4: Review/release
-- [ ] Independent review, fixes RED→GREEN; full Android/native/Windows CI.
-- [ ] Publish signed phone0.12.3/TV0.6.14 and Windows0.2.2; verify assets.
+- [x] Independent review, fixes RED→GREEN; full Android/native/Windows CI.
+- [x] Publish signed phone0.12.3/TV0.6.14 and Windows0.2.2; verify assets.
 - [ ] User forced recheck and playback confirmation; external cause still open.
