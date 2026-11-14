@@ -99,6 +99,15 @@ public sealed class PilotController : IAsyncDisposable
     private void CancelScan() {try {Volatile.Read(ref scanLifetime)?.Cancel();}catch(ObjectDisposedException) {}}
     public void ResetExclusions() { evidence.ResetExclusions(Profile());Log("Исключения текущей сети сброшены; сетевой тест не запускался"); }
 
+    public async Task<string> DiagnosePlaybackAsync(bool throughEngine,CancellationToken cancellation,Action<string>? progress=null)
+    {
+        EngineProcess? selected=null;IDisposable? lease=null;
+        if(throughEngine) {
+            lock(routeGate) { selected=active;lease=selected?.Acquire(); }
+            if(selected is null || lease is null)throw new InvalidOperationException("Для проверки локального пути включите DPI Pilot; системный тест доступен и без него");
+        }
+        using(lease) return await new PlaybackDiagnostic().RunAsync(selected?.Port,cancellation,progress);
+    }
     public string NetworkProfile => Profile();
     private string Profile()
     {
@@ -219,7 +228,7 @@ public sealed class PilotController : IAsyncDisposable
                             if(!Valid()) { replacement.Dispose();continue; }
                             Swap(replacement);
                         }
-                        Remember(profile,strategy);LastProbe=best.Result.Detail;Phase=$"Включено · 6/6 · {best.Latency} мс · повторного теста нет";
+                        Remember(profile,strategy);LastProbe=best.Result.Detail;Phase=$"Включено · узлы 6/6 · {best.Latency} мс · повторного теста нет";
                     } else Phase="Полного результата нет; рабочий процесс и прежние результаты сохранены";
                     next=evidence.NextDue(profile,settings.Value.PeriodicChecks,DateTimeOffset.UtcNow);
                     if(next<=DateTimeOffset.UtcNow)next=settings.Value.PeriodicChecks ? DateTimeOffset.UtcNow.AddDays(3) : DateTimeOffset.MaxValue;

@@ -5,7 +5,7 @@ apk=pathlib.Path(sys.argv[1]);aapt=pathlib.Path(os.environ['ANDROID_HOME'])/'bui
 badging=subprocess.check_output([str(aapt),'dump','badging',str(apk)],text=True)
 assert "package: name='io.github.magral.dpipilot'" in badging
 manifest=subprocess.check_output([str(aapt),'dump','xmltree',str(apk),'AndroidManifest.xml'],text=True)
-for item in ['MobileEngineService',':mobileengine','InstagramAService','InstagramBService','YoutubeAService','YoutubeBService',':instagram_a',':youtube_a','PhoneRecoveryReceiver','TuningWorkerService',':tuner','CatalogUpdateJob','android.permission.BIND_JOB_SERVICE','com.instagram.android','com.google.android.youtube','StrategyGeneratorActivity']:
+for item in ['MobileEngineService',':mobileengine','InstagramAService','InstagramBService','YoutubeAService','YoutubeBService',':instagram_a',':youtube_a','PhoneRecoveryReceiver','TuningWorkerService',':tuner','CatalogUpdateJob','android.permission.BIND_JOB_SERVICE','com.instagram.android','com.google.android.youtube','StrategyGeneratorActivity','PlaybackDiagnosticActivity']:
     assert item in manifest,item
 with zipfile.ZipFile(apk) as package:
     for abi in ['armeabi-v7a','arm64-v8a','x86','x86_64']:
@@ -17,6 +17,6 @@ with zipfile.ZipFile(apk) as package:
     dex=b''.join(package.read(n) for n in package.namelist() if n.endswith('.dex'))
     for removed in [b'TelegramBridgeService',b'MTProxyService']:
         assert removed not in dex
-    for required in [b'DnsResolver',b'MobileDns',b'MobileVideoProbe']:
+    for required in [b'DnsResolver',b'MobileDns',b'MobileVideoProbe',b'PlaybackDiagnosticActivity',b'PlaybackDiagnostics',b'YouTubePlayback']:
         assert required in dex,required
 print('Phone identity, four ABIs, independent service slots, recovery receiver, JNI and fixed Instagram/YouTube boundaries verified')

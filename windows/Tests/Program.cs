@@ -8,7 +8,9 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.Win32;
 
+if(args.Contains("--playback-live")) { Console.WriteLine(await new PlaybackDiagnostic().RunAsync(null,CancellationToken.None));return; }
 CachePolicyTests.Run();
+await PlaybackDiagnosticTests.RunAsync();
 if(args.Contains("--policy-only")) { Console.WriteLine("CACHE / SCHEDULE POLICY TESTS PASSED");return; }
 
 static void Assert(bool condition,string message){if(!condition)throw new Exception(message);}

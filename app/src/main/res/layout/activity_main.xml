@@ -69,11 +69,13 @@
         android:layout_marginHorizontal="20dp"
         android:textAllCaps="false"
         android:text="Подбор стратегий" />
+    <Button android:id="@+id/playback_diagnostics" android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:layout_below="@id/service_tuning_button" android:layout_marginHorizontal="20dp" android:textAllCaps="false" android:text="Диагностика меню и видео YouTube" />
     <com.google.android.material.textview.MaterialTextView
         android:id="@+id/mobile_catalog_status"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_below="@id/service_tuning_button"
+        android:layout_below="@id/playback_diagnostics"
         android:layout_marginHorizontal="20dp"
         android:layout_marginTop="12dp"
         android:textSize="14sp" />

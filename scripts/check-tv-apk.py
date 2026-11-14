@@ -11,7 +11,7 @@ aapt = Path(os.environ['ANDROID_HOME']) / 'build-tools/34.0.0/aapt'
 badging = subprocess.check_output([str(aapt),'dump','badging',str(apk)],text=True)
 assert "package: name='io.github.magral.dpipilot.tv'" in badging, 'Wrong application ID'
 manifest = subprocess.check_output([str(aapt),'dump','xmltree',str(apk),'AndroidManifest.xml'],text=True)
-for value in ['android.intent.category.LEANBACK_LAUNCHER','android.intent.action.BOOT_COMPLETED','TvVpnService','TvEngineService','TvScoutService',':scout','MaintenanceJob','android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS',':engine']:
+for value in ['android.intent.category.LEANBACK_LAUNCHER','android.intent.action.BOOT_COMPLETED','TvVpnService','TvEngineService','TvScoutService',':scout','MaintenanceJob','android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS',':engine','PlaybackDiagnosticActivity']:
     assert value in manifest, 'Missing TV manifest component: '+value
 with zipfile.ZipFile(apk) as archive:
     for abi in ['armeabi-v7a','arm64-v8a','x86','x86_64']:
@@ -19,8 +19,8 @@ with zipfile.ZipFile(apk) as archive:
         assert b'__wrap_sendto' in native and b'__wrap_connect' in native, 'Missing selective QUIC guard: '+abi
         assert archive.getinfo(f'lib/{abi}/libhev-socks5-tunnel.so').file_size > 0
     dex = b''.join(archive.read(name) for name in archive.namelist() if name.endswith('.dex'))
-    for cls in [b'Lio/github/magral/dpipilot/tv/TvActivity;',b'Lio/github/dovecoteescapee/byedpi/core/TProxyService;']:
+    for cls in [b'Lio/github/magral/dpipilot/tv/TvActivity;',b'Lio/github/dovecoteescapee/byedpi/core/TProxyService;',b'Lio/github/magral/dpipilot/tv/PlaybackDiagnosticActivity;',b'Lio/github/magral/dpipilot/tv/YouTubePlayback;']:
         assert cls in dex, 'Missing TV/JNI entry point'
-    for removed in [b'Lio/github/magral/dpipilot/tv/MediaProbe;',b'Lio/github/magral/dpipilot/tv/ProbeHttp;',b'ytInitialPlayerResponse']:
+    for removed in [b'Lio/github/magral/dpipilot/tv/MediaProbe;',b'Lio/github/magral/dpipilot/tv/ProbeHttp;']:
         assert removed not in dex, 'Obsolete synthetic media path remains in APK'
 print('TV application ID, launcher, boot receiver, engine process and all four native ABIs verified')

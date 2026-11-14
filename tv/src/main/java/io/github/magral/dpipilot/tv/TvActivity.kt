@@ -95,6 +95,7 @@ class TvActivity : Activity() {
         button(settings,"Фоновая работа") { requestBackground() }
         button(settings,"Настройки VPN") { vpnSettings() }
         val diagnostics = row()
+        button(row(),"Диагностика меню и видео YouTube") { startActivity(Intent(this, PlaybackDiagnosticActivity::class.java).putExtra("proxy_port",19080)) }
         button(diagnostics,"Проверка автозапуска") { showAudit() }
         button(diagnostics,"Экспорт отчёта") { exportReport() }
         button(diagnostics,"Профиль для телефона") { exportProfile() }
@@ -163,7 +164,7 @@ class TvActivity : Activity() {
         status.text = when {
             !enabled -> "VPN выключен"
             VpnService.prepare(this) != null -> "Нужно подтвердить разрешение VPN"
-            TvState.vpnEstablished && TvState.verified -> "VPN включён · проверки YouTube пройдены"
+            TvState.vpnEstablished && TvState.verified -> "VPN включён · узлы доступны; видео проверяется отдельно"
             TvState.vpnEstablished && !prefs.getBoolean("auto_three_days",true) -> "VPN включён · проверки только по требованию"
             TvState.vpnEstablished -> "VPN включён · стратегия ещё не подтверждена"
             TvState.running -> "VPN ещё не создан · ${TvState.phase}"
@@ -192,7 +193,7 @@ class TvActivity : Activity() {
         val history = TvPolicy.savedHistory(prefs.getString("history_ids.$profile",null),prefs.getString("history.$profile",null).orEmpty())
         val ids = store.choices(history).map { RuntimeCatalog.ids[it] }
         if (ids.isEmpty()) {
-            AlertDialog.Builder(this).setTitle("Найденные стратегии")
+            AlertDialog.Builder(this).setTitle("Стратегии с доступными узлами")
                 .setMessage("Нет вариантов с подтверждённой доступностью 6/6. Оценка скорости превью влияет на порядок, но не запрещает стратегию. Включите VPN и нажмите «Проверить сейчас» в дополнительных настройках.")
                 .setNeutralButton("Сбросить исключения") { _,_ -> resetExclusions(profile) }
                 .setPositiveButton("Закрыть",null).show(); return

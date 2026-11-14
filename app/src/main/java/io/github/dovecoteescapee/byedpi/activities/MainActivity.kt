@@ -172,6 +172,7 @@ class MainActivity : AppCompatActivity() {
             } else { button.setImageResource(android.R.drawable.ic_menu_view);button.alpha=0.4f }
         }
         shortcut(binding.openYoutube,"youtube");shortcut(binding.openInstagram,"instagram")
+        binding.playbackDiagnostics.setOnClickListener { startActivity(Intent(this, io.github.dovecoteescapee.byedpi.catalog.PlaybackDiagnosticActivity::class.java).putExtra("proxy_port",1080)) }
         binding.youtubeProblem.setOnClickListener { report("youtube") }
         binding.instagramProblem.setOnClickListener { report("instagram") }
         binding.serviceTuningButton.setOnClickListener { startActivity(Intent(this, ServiceTuningActivity::class.java)) }

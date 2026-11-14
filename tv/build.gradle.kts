@@ -27,8 +27,8 @@ android {
         applicationId = "io.github.magral.dpipilot.tv"
         minSdk = 21
         targetSdk = 34
-        versionCode = 22
-        versionName = "0.6.12"
+        versionCode = 23
+        versionName = "0.6.13"
         ndk { abiFilters.addAll(listOf("armeabi-v7a","arm64-v8a","x86","x86_64")) }
     }
     buildFeatures { buildConfig = true }
