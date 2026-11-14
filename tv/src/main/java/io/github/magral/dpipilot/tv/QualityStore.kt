@@ -18,7 +18,7 @@ class QualityStore(private val prefs: SharedPreferences) {
             records[id] = QualityRecord(r.optInt("ok").coerceAtLeast(0),r.optInt("fail").coerceAtLeast(0),r.optInt("stall").coerceAtLeast(0),r.optInt("rollback").coerceAtLeast(0),
                 r.optLong("useful").coerceAtLeast(0),r.optLong("active").coerceAtLeast(0),r.optLong("latency").coerceAtLeast(0),r.optLong("seen").coerceAtLeast(0),
                 r.optBoolean("excluded",r.optInt("fail") > 0 && r.optInt("ok") == 0),
-                r.optInt("last_passed",-1),r.optBoolean("last_complete",false),PreviewQuality.decode(r.optJSONArray("previews")),r.optInt("reports"),r.optLong("checked_at",if(r.optBoolean("last_complete") && r.optInt("last_passed")==6) r.optLong("seen") else 0),r.optString("checked_engine","ba532298de7b28cfe854aea83d061369d13ca290"))
+                r.optInt("last_passed",-1),r.optBoolean("last_complete",false),PreviewQuality.decode(r.optJSONArray("previews")),r.optInt("reports"),r.optLong("checked_at",if(r.optBoolean("last_complete") && r.optInt("last_passed")==TvPolicy.CORE_TOTAL) r.optLong("seen") else 0),r.optString("checked_engine","ba532298de7b28cfe854aea83d061369d13ca290"))
         }
         // v0.6.7 mixed preview quality failures with transport exclusions. Repair these once.
         val marker = "quality_access_schema.$profile"
@@ -51,7 +51,7 @@ class QualityStore(private val prefs: SharedPreferences) {
         record(index);flush()
     }
     fun failed(index: Int,stall: Boolean = false,rollback: Boolean = false,quality: ProbeQuality? = null,user: Boolean = false) {
-        val r = record(index); r.lastComplete = false; r.lastPassed = quality?.passed?.coerceIn(0,6) ?: -1
+        val r = record(index); r.lastComplete = false; r.lastPassed = quality?.passed?.coerceIn(0,TvPolicy.CORE_TOTAL) ?: -1
         r.preview = quality?.preview ?: PreviewQuality(); if (user) r.reports++
         r.lastSeen = System.currentTimeMillis(); r.excluded = true; r.failures++; if (stall) r.stalls++; if (rollback) r.rollbacks++
         flush()
@@ -80,12 +80,12 @@ class QualityStore(private val prefs: SharedPreferences) {
         .sortedWith(compareBy<Int> { latency(it).takeIf { n -> n>0 } ?: Long.MAX_VALUE }.thenBy { preview(it).score }.thenBy { it })
     fun describe(index: Int): String {
         val r = records[RuntimeCatalog.ids[index]] ?: return "Последняя полная проверка: не подтверждена"
-        val last = if (r.lastPassed >= 0) "узлы ${r.lastPassed}/6" else "узлы не проверены"
+        val last = if (r.lastPassed >= 0) "узлы ${r.lastPassed}/8" else "узлы не проверены"
         return "Последняя проверка: $last; ${r.preview.text()}; ${if (r.fullSuccess) "проверки доступности пройдены" else "проверки доступности не пройдены"}; жалоб ${r.reports}; задержка HTTPS: ${r.latencyMs} мс; в истории успешных ${r.successes}, отказов ${r.failures}; полезный обмен ${r.usefulSeconds/60} мин"
 
     }
     fun summary(): String = records.entries.filter { it.value.fullSuccess && TvPolicy.indexOfId(it.key) != null }.sortedWith(compareBy<Map.Entry<String,QualityRecord>> { it.value.latencyMs }.thenBy { it.value.preview.score }).take(5).joinToString("\n") { (id,r) ->
-        "№${(TvPolicy.indexOfId(id) ?: -1)+1}: последний тест 6/6; ${r.preview.text()}; в истории успешных ${r.successes}, отказов ${r.failures}; полезный обмен ${r.usefulSeconds/60} мин; зависания ${r.stalls}; откаты ${r.rollbacks}; задержка ${r.latencyMs} мс"
+        "№${(TvPolicy.indexOfId(id) ?: -1)+1}: последний тест 8/8; ${r.preview.text()}; в истории успешных ${r.successes}, отказов ${r.failures}; полезный обмен ${r.usefulSeconds/60} мин; зависания ${r.stalls}; откаты ${r.rollbacks}; задержка ${r.latencyMs} мс"
     }.ifEmpty { "История качества ещё не накоплена" }
     fun flush(edit: SharedPreferences.Editor = prefs.edit()) {
         if (profile.isEmpty()) return

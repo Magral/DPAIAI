@@ -27,7 +27,7 @@ class PlaybackDiagnosticActivity : Activity() {
         super.onCreate(state);title="YouTube: меню и видео"
         val box=LinearLayout(this).apply {orientation=LinearLayout.VERTICAL;setPadding(24,16,24,16)}
         fun button(text: String,action: ()->Unit) {box.addView(Button(this).apply {this.text=text;isFocusable=true;setOnClickListener {action()}})}
-        box.addView(TextView(this).apply {text="Тест по требованию, до нескольких минут. Стратегии, VPN и DNS не меняются. Для сравнения сначала выключите DPI Pilot, проверьте обычную сеть; затем включите платный VPN и повторите системный тест. Приложение диагностики должно быть включено в маршрут этого VPN.\n6/6 — доступность узлов; реальный медиадиапазон проверяется отдельно.";textSize=18f})
+        box.addView(TextView(this).apply {text="Тест по требованию, до нескольких минут. Стратегии, VPN и DNS не меняются. Для сравнения сначала выключите DPI Pilot, проверьте обычную сеть; затем включите платный VPN и повторите системный тест. Приложение диагностики должно быть включено в маршрут этого VPN.\nПроверки узлов и API — доступность сети; реальный медиадиапазон проверяется отдельно.";textSize=18f})
         button("Проверить текущую сеть / платный VPN") {start(null)}
         button("Проверить работающий DPI Pilot") {start(intent.getIntExtra("proxy_port",19080))}
         button("Остановить тест") {running?.cancel()}
@@ -46,7 +46,8 @@ class PlaybackDiagnosticActivity : Activity() {
         val network=if(Build.VERSION.SDK_INT>=23)cm.activeNetwork else cm.allNetworks.firstOrNull {cm.getNetworkCapabilities(it)?.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)==true}
         val caps=network?.let {cm.getNetworkCapabilities(it)}
         val version=packageManager.getPackageInfo(packageName,0).versionName
-        val meta="DPI Pilot $version · $packageName · $stamp · Android ${Build.VERSION.RELEASE}\nСистемная сеть: VPN=${caps?.hasTransport(NetworkCapabilities.TRANSPORT_VPN)==true}; Wi-Fi=${caps?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)==true}; мобильная=${caps?.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)==true}\nЛокальный путь: ${if(port==null)"не используется" else "127.0.0.1:$port"}\n"
+        val snapshot="Снимок настроек при открытии экрана (не фиксация работающего движка):\nСтратегия YouTube: ${intent.getStringExtra("youtube_command") ?: "не передана"}\nDNS: ${intent.getStringExtra("youtube_dns") ?: "системный"}\n"
+        val meta=snapshot+"DPI Pilot $version · $packageName · $stamp · Android ${Build.VERSION.RELEASE}\nСистемная сеть: VPN=${caps?.hasTransport(NetworkCapabilities.TRANSPORT_VPN)==true}; Wi-Fi=${caps?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)==true}; мобильная=${caps?.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)==true}\nЛокальный путь: ${if(port==null)"не используется" else "127.0.0.1:$port"}\n"
         fun route(): String {
             val networks=if(Build.VERSION.SDK_INT>=23)listOfNotNull(cm.activeNetwork) else cm.allNetworks.toList()
             return networks.sortedBy {it.toString()}.joinToString("|") { n ->

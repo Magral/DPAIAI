@@ -17,14 +17,15 @@ object TvProbe {
     private val specs = listOf(
         Spec("youtube","www.youtube.com","/generate_204"),
         Spec("image-head","i.ytimg.com","/vi/jNQXAC9IVRw/hqdefault.jpg"),
-        Spec("cdn","redirector.googlevideo.com","/"))
+        Spec("cdn","redirector.googlevideo.com","/"),
+        Spec("youtube-api","youtubei.googleapis.com","/youtubei/v1/player?prettyPrint=false"))
     // M7lc1UVf-VE is the public sample in the official YouTube IFrame API documentation.
     private val previewSpecs = listOf(
         Spec("image","i.ytimg.com","/vi/jNQXAC9IVRw/hqdefault.jpg"),
         Spec("image-jpeg","i.ytimg.com","/vi/M7lc1UVf-VE/hqdefault.jpg"),
         Spec("image-webp","i.ytimg.com","/vi_webp/M7lc1UVf-VE/hqdefault.webp"))
     class Result(ok: Boolean,val detail: String,val score: Int = 0,val quality: ProbeQuality = ProbeQuality(ok,score,0),val inconclusive: Boolean = false,val resourceUnavailable: Boolean = false) {
-        val ok: Boolean = ok && score == 6 && quality.eligible && !inconclusive
+        val ok: Boolean = ok && score == TvPolicy.CORE_TOTAL && quality.eligible && !inconclusive
     }
     class Session : ProbeSession()
     private data class Payload(val error: String?,val bytes: Int = 0,val gap: Long = 0,val unavailable: Boolean = false,val inconclusive: Boolean = false)
@@ -59,14 +60,14 @@ object TvProbe {
                 if(rows.size != specs.size || rows.any { it.error != null }) break
             }
             val score = nodes.count { it.error == null }
-            if(score == 6 && previews) images.addAll(runBatch((1..2).flatMap { round -> previewSpecs.map { it to round } }))
+            if(score == TvPolicy.CORE_TOTAL && previews) images.addAll(runBatch((1..2).flatMap { round -> previewSpecs.map { it to round } }))
             session.checkActive()
             val all = nodes+images
             val preview = PreviewQuality(all.mapNotNull { it.preview })
             val latency = (nodes.filter { it.error==null }.map { it.elapsedMs }.takeIf { it.isNotEmpty() }?.average() ?: 0.0).toLong().coerceAtLeast(1)
-            val quality = ProbeQuality(score == 6,score,latency,preview)
+            val quality = ProbeQuality(score == TvPolicy.CORE_TOTAL,score,latency,preview)
             val unavailable = nodes.any { it.unavailable || it.inconclusive }
-            return Result(quality.eligible,"Узлы $score/6; ${preview.text()}; "+all.joinToString(" | ") { it.row },score,quality,unavailable,nodes.any { it.unavailable })
+            return Result(quality.eligible,"Узлы $score/8; ${preview.text()}; "+all.joinToString(" | ") { it.row },score,quality,unavailable,nodes.any { it.unavailable })
         } finally { session.cancel() }
     }
     internal fun <T> deadlineGuard(deadline: ProbeDeadline,block: () -> T): T {
@@ -75,6 +76,11 @@ object TvProbe {
         finally { deadline.close() }
     }
     private fun request(spec: Spec,port: Int,timeout: Int,session: Session,child: Session): Payload {
+        if(spec.kind=="youtube-api") {
+            val api=YouTubeApi.check(port,session,timeout,1)
+            child.checkActive()
+            return Payload(if(api.ok)null else api.detail,unavailable=api.unavailable,inconclusive=api.timedOut)
+        }
         val image = spec.kind.startsWith("image")
         val basic = spec.kind == "image-head"
         val detailed = image && !basic

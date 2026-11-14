@@ -93,7 +93,7 @@ public sealed class PilotController : IAsyncDisposable
     }
     public void SelectStrategy(string id) {
         var profile=Profile();
-        if(!evidence.Choices(profile).Any(r=>r.Id==id) || !catalog.Snapshot.Entries.Any(s=>s.Id==id))throw new InvalidOperationException("Нет полного результата 6/6 для этой стратегии в текущей сети");
+        if(!evidence.Choices(profile).Any(r=>r.Id==id) || !catalog.Snapshot.Entries.Any(s=>s.Id==id))throw new InvalidOperationException("Нет полного результата 8/8 для этой стратегии в текущей сети");
         settings.Change(s=>s.ManualChoices[profile]=id);Interlocked.Increment(ref revision);CancelScan();manualRequest=true;requested=true;
     }
     private void CancelScan() {try {Volatile.Read(ref scanLifetime)?.Cancel();}catch(ObjectDisposedException) {}}
@@ -106,7 +106,10 @@ public sealed class PilotController : IAsyncDisposable
             lock(routeGate) { selected=active;lease=selected?.Acquire(); }
             if(selected is null || lease is null)throw new InvalidOperationException("Для проверки локального пути включите DPI Pilot; системный тест доступен и без него");
         }
-        using(lease) return await new PlaybackDiagnostic().RunAsync(selected?.Port,cancellation,progress);
+        using(lease) {
+            string metadata=selected is null ? "Локальный движок не используется\n" : $"Зафиксированный движок: {selected.Strategy.Id}\nКоманда: {selected.Strategy.Args}\nDNS: системный, не меняется DPI Pilot\n";
+            return metadata+await new PlaybackDiagnostic().RunAsync(selected?.Port,cancellation,progress);
+        }
     }
     public string NetworkProfile => Profile();
     private string Profile()
@@ -159,7 +162,7 @@ public sealed class PilotController : IAsyncDisposable
                     var now=DateTimeOffset.UtcNow;
                     if(!manual && (pinned is null || pinned.Id==previous.Strategy.Id) && !evidence.Due(profile,now)) {
                         var proof=evidence.Fresh(profile,previous.Strategy.Id,now);
-                        Phase=proof is not null ? "Включено · свежий кэш 6/6, повторных проверок нет" : "Маршрут сохранён · следующий подбор по расписанию или кнопке";
+                        Phase=proof is not null ? "Включено · свежий кэш 8/8, повторных проверок нет" : "Маршрут сохранён · следующий подбор по расписанию или кнопке";
                         if(proof is not null)LastProbe=proof.Result.Detail;
                         next=evidence.NextDue(profile,settings.Value.PeriodicChecks,now);continue;
                     }
@@ -174,7 +177,7 @@ public sealed class PilotController : IAsyncDisposable
                             LastProbe=result.Detail;
                             if(result.Complete) {
                                 if(candidate is not null) { Swap(candidate);candidate=null; }
-                                Remember(profile,pinned);Phase=proof is not null ? "Ручная стратегия применена из кэша без повторного теста" : "Ручная стратегия проверена: 6/6";
+                                Remember(profile,pinned);Phase=proof is not null ? "Ручная стратегия применена из кэша без повторного теста" : "Ручная стратегия проверена: 8/8";
                             } else Phase="Выбранная стратегия не подтверждена; прежний маршрут сохранён";
                         } finally { candidate?.Dispose(); }
                         next=evidence.NextDue(profile,settings.Value.PeriodicChecks,DateTimeOffset.UtcNow);continue;
@@ -201,7 +204,7 @@ public sealed class PilotController : IAsyncDisposable
                         if(!Valid())break;var strategy=order[i];
                         Phase=$"Подбор {i+1}/{order.Length} · база {bank.Count} · текущий маршрут сохранён";
                         var proof=evidence.Fresh(profile,strategy.Id,DateTimeOffset.UtcNow);
-                        if(proof is not null) { Log(strategy.Id+": свежий кэш 6/6");continue; }
+                        if(proof is not null) { Log(strategy.Id+": свежий кэш 8/8");continue; }
                         EngineProcess? candidate=null;
                         try {
                             candidate=await EngineProcess.StartAsync(executable,strategy,job,token);
@@ -228,7 +231,7 @@ public sealed class PilotController : IAsyncDisposable
                             if(!Valid()) { replacement.Dispose();continue; }
                             Swap(replacement);
                         }
-                        Remember(profile,strategy);LastProbe=best.Result.Detail;Phase=$"Включено · узлы 6/6 · {best.Latency} мс · повторного теста нет";
+                        Remember(profile,strategy);LastProbe=best.Result.Detail;Phase=$"Включено · узлы 8/8 · {best.Latency} мс · повторного теста нет";
                     } else Phase="Полного результата нет; рабочий процесс и прежние результаты сохранены";
                     next=evidence.NextDue(profile,settings.Value.PeriodicChecks,DateTimeOffset.UtcNow);
                     if(next<=DateTimeOffset.UtcNow)next=settings.Value.PeriodicChecks ? DateTimeOffset.UtcNow.AddDays(3) : DateTimeOffset.MaxValue;

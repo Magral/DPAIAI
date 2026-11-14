@@ -10,13 +10,13 @@ import java.util.concurrent.*
 class TvParallelProbeTest {
     @Test(timeout=10000) fun firstSocksFailureStillCollectsOtherHostsAndNeverQualifies() {
         ServerSocket(0,3,InetAddress.getLoopbackAddress()).use { server ->
-            val pool = Executors.newFixedThreadPool(4)
-            val entered = CountDownLatch(3)
+            val pool = Executors.newFixedThreadPool(5)
+            val entered = CountDownLatch(4)
             val failed = CountDownLatch(1)
             val replies = CopyOnWriteArrayList<Future<*>>()
             val peers = CopyOnWriteArrayList<Socket>()
             val accept = pool.submit {
-                repeat(3) { position ->
+                repeat(4) { position ->
                     val peer = server.accept();peers.add(peer)
                     replies.add(pool.submit {
                         peer.use {
@@ -40,7 +40,7 @@ class TvParallelProbeTest {
             try {
                 val result = TvProbe.check(server.localPort,0,TvProbe.Session())
                 assertFalse(result.ok);assertFalse(result.quality.eligible)
-                assertTrue(result.detail.contains("/6"))
+                assertTrue(result.detail.contains("/8"))
                 accept.get(2,TimeUnit.SECONDS)
                 replies.forEach { it.get(2,TimeUnit.SECONDS) }
                 assertEquals(3,Regex("SOCKS method rejected").findAll(result.detail).count())

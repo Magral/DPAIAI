@@ -20,10 +20,10 @@ object ServiceTargets {
             Endpoint("yt3.ggpht.com","tls",required=false),Endpoint("yt4.ggpht.com","tls",required=false),
             Endpoint("redirector.googlevideo.com","tls"),Endpoint("jnn-pa.googleapis.com","tls",required=false),
             Endpoint("googleusercontent.com","tls",required=false),Endpoint("signaler-pa.youtube.com","tls",required=false),
-            Endpoint("youtubei.googleapis.com","tls"),Endpoint("manifest.googlevideo.com","tls",required=false),
+            Endpoint("youtubei.googleapis.com","youtube-api"),Endpoint("manifest.googlevideo.com","tls",required=false),
             Endpoint("yt3.googleusercontent.com","tls",required=false)),
             (youtubeTvPreferred+listOf("--disorder 1","--split 1","--disorder 1 --tlsrec 1+s","--tlsrec 1+s")),setOf("com.google.android.youtube","com.google.android.youtube.tv"),
-            "13 адресов за один проход: обязательны сайт, JPEG-превью, API и узел видеодоставки (4/4). Остальные 9 адресов — дополнительная диагностика. Медиатест отдельно сообщает о загрузке образца и не отменяет сетевой результат при недоступном тестовом ресурсе. В приоритете варианты из отчёта работающего ТВ.")
+            "13 адресов за один проход: обязательны сайт, JPEG-превью, API и узел видеодоставки (4/4). API подтверждается содержательным JSON в двух новых соединениях внутри одного пункта. Это не тест воспроизведения. Остальные 9 адресов — дополнительная диагностика. Медиатест отдельно сообщает о загрузке образца и не отменяет сетевой результат при недоступном тестовом ресурсе. В приоритете варианты из отчёта работающего ТВ.")
     )
     val combined = Target(MobilePlan.BOTH,"Instagram + YouTube",individual.flatMap { it.endpoints },emptyList(),individual.flatMap { it.packages }.toSet(),
         "Оба приложения работают через один VPN одновременно. Для каждого сервиса сохраняется собственная стратегия; подбор и фоновая проверка выполняются отдельно. Выбор сервиса не требует переключения VPN. Лента, Reels и воспроизведение проверяются в самих приложениях.")

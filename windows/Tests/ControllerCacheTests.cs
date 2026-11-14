@@ -21,10 +21,10 @@ internal static class ControllerCacheTests
             await using var pilot=new PilotController(settings,catalog,Path.Combine(resources,"ciadpi.exe"),0,0,async(engine,token)=> {
                 Interlocked.Increment(ref probes);
                 if(engine.Strategy.Id==blockedId) {entered.TrySetResult(true);await never.Task.WaitAsync(token);}
-                return engine.Strategy.Id==c.Id ? new ProbeResult(true,6,20,"full") : new ProbeResult(true,3,1,"partial");
+                return engine.Strategy.Id==c.Id ? new ProbeResult(true,8,20,"full") : new ProbeResult(true,3,1,"partial");
             },networkProfile:()=>"host-fixture",networkAvailable:()=>true);
             var profile=pilot.NetworkProfile;var evidence=new StrategyEvidenceStore(settings);
-            var now=DateTimeOffset.UtcNow;evidence.Record(profile,a,new ProbeResult(true,6,150,"full"),now);evidence.Record(profile,b,new ProbeResult(true,6,40,"full"),now);
+            var now=DateTimeOffset.UtcNow;evidence.Record(profile,a,new ProbeResult(true,8,150,"full"),now);evidence.Record(profile,b,new ProbeResult(true,8,40,"full"),now);
             evidence.StampAttempt(profile,now);settings.Change(s=>s.History[profile]=[a.Id]);
             await pilot.StartAsync();
             await Until(()=>pilot.Phase.Contains("кэш"),"Cached startup did not settle");
@@ -33,9 +33,9 @@ internal static class ControllerCacheTests
             await Until(()=>pilot.ActiveDescription.StartsWith(b.Id),"Fresh manual choice did not apply");
             if(probes!=0)throw new Exception("Fresh manual choice performed a network probe");
             evidence.Expire(profile);pilot.SelectStrategy(a.Id);
-            await Until(()=>pilot.Phase.Contains("проверена: 6/6") || pilot.Phase.Contains("не подтверждена"),"Stale selected candidate did not finish");
-            if(!pilot.ActiveDescription.StartsWith(b.Id))throw new Exception("A mislabeled 3/6 result replaced the working route");
-            evidence.Record(profile,b,new ProbeResult(true,6,40,"full"),DateTimeOffset.UtcNow);pilot.SelectStrategy(b.Id);
+            await Until(()=>pilot.Phase.Contains("проверена: 8/8") || pilot.Phase.Contains("не подтверждена"),"Stale selected candidate did not finish");
+            if(!pilot.ActiveDescription.StartsWith(b.Id))throw new Exception("A mislabeled 3/8 result replaced the working route");
+            evidence.Record(profile,b,new ProbeResult(true,8,40,"full"),DateTimeOffset.UtcNow);pilot.SelectStrategy(b.Id);
             await Until(()=>pilot.Phase.Contains("из кэша"),"Cached route not restored after partial manual result");
             int beforeRestart=probes;await pilot.StopAsync();await pilot.StartAsync();
             await Until(()=>pilot.ActiveDescription.StartsWith(b.Id) && pilot.Phase.Contains("кэш"),"Restart lost selected strategy/cache");
@@ -45,7 +45,7 @@ internal static class ControllerCacheTests
             if(!evidence.Choices(profile).Any(r=>r.Id==c.Id) || evidence.Choices(profile).Any(r=>r.Id!=a.Id && r.Id!=b.Id && r.Id!=c.Id))throw new Exception("Partial candidate entered full choices");
             blockedId=bank[Math.Max(0,settings.Value.ScanCursor)%bank.Count].Id;pilot.RequestCheck(true);
             await Until(()=>entered.Task.IsCompleted,"Blocking candidate was not reached");
-            evidence.Record(profile,b,new ProbeResult(true,6,40,"full"),DateTimeOffset.UtcNow);
+            evidence.Record(profile,b,new ProbeResult(true,8,40,"full"),DateTimeOffset.UtcNow);
             pilot.SelectStrategy(b.Id);
             await Until(()=>pilot.ActiveDescription.StartsWith(b.Id),"Manual cached choice waited for an obsolete long-running probe",3);
             if(evidence.Choices(profile).Any(r=>r.Id==blockedId))throw new Exception("Superseded probe committed stale evidence");

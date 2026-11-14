@@ -14,7 +14,7 @@ class PlaybackDiagnostics(
     fun run(proxyPort: Int?,session: ProbeSession,progress: (String)->Unit = {}): String {
         val lines=mutableListOf("YouTube: диагностика меню и медиадоставки v1",
             "Маршрут: "+if(proxyPort==null)"системный маршрут этого приложения (может отличаться от YouTube)" else "локальный SOCKS5 127.0.0.1:$proxyPort",
-            "Узлы 6/6 и TLS сами по себе не подтверждают видео. Отчёт не изменяет стратегии.")
+            "Проверки узлов и API сами по себе не подтверждают видео. Отчёт не изменяет стратегии.")
         fun check() {session.checkActive();ensureRoute();session.checkActive()}
         fun add(text: String) {check();lines.add(text);progress(text)}
         fun request(label: String,req: PlaybackHttp.Request): HttpCodec.Response? {
@@ -55,9 +55,11 @@ class PlaybackDiagnostics(
             val body=JSONObject().put("videoId",video).put("context",JSONObject().put("client",JSONObject().put("clientName","WEB").put("clientVersion",version).put("hl","en"))).toString()
             val api=request("API player $video",PlaybackHttp.Request("youtubei.googleapis.com","/youtubei/v1/player?prettyPrint=false",proxyPort,body,1024*1024))
             val json=api?.let {runCatching {JSONObject(String(it.body,Charsets.UTF_8))}.getOrNull()}
-            val status=json?.optJSONObject("playabilityStatus")?.optString("status").orEmpty().takeIf {Regex("[A-Z_]{1,40}").matches(it)}.orEmpty()
-            if(api?.status==200 && status.isNotEmpty()) {apiResponses++;add("API JSON получен; playabilityStatus=$status (это не подтверждение видео)")}
-            else add("API: содержательный ответ player не подтверждён; один HTTP/TLS не считается успехом")
+            if(api!=null) {
+                val answer=YouTubeApi.assess(api.status,api.headers["content-type"].orEmpty(),api.body)
+                if(answer.ok)apiResponses++
+                add(answer.detail)
+            } else add("API: содержательный ответ player не подтверждён; один HTTP/TLS не считается успехом")
             urls.addAll((YouTubePlayback.samples(embedded)+YouTubePlayback.samples(json)).distinctBy {it.kind})
             if(YouTubePlayback.urls(json).isEmpty() && YouTubePlayback.urls(embedded).isEmpty())add("$video: публичный адрес медиа не выдан (вход/consent/подпись/SABR); медиатест НЕ ЗАВЕРШЁН")
         }

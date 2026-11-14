@@ -1,1 +1,1 @@
-0.2.1: manual YouTube menu/media differential diagnostics, byte/speed evidence, privacy and cancellation; endpoint tests no longer described as playback proof.
+0.2.2: substantive player API in two fresh connections; source-safe deferral, legacy evidence migration, public rejection reasons.

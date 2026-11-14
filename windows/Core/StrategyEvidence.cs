@@ -10,8 +10,8 @@ public sealed record StrategyEvidence
     public bool Excluded { get; init; }
     public bool ForceCheck { get; init; }
     public string LastFailure { get; init; } = "";
-    public bool Complete => Passed == 6 && Latency > 0 && Engine == CatalogProtocol.Engine && CheckedAt > DateTimeOffset.MinValue;
-    public ProbeResult Result => new(Complete,Passed,Latency,"Кэш 6/6 · "+CheckedAt.ToLocalTime().ToString("dd.MM HH:mm"));
+    public bool Complete => Passed == Probe.Total && Latency > 0 && Engine == CatalogProtocol.Engine && CheckedAt > DateTimeOffset.MinValue;
+    public ProbeResult Result => new(Complete,Passed,Latency,"Кэш 8/8 · "+CheckedAt.ToLocalTime().ToString("dd.MM HH:mm"));
 }
 
 /// All mutations use the settings lock; readers receive immutable record snapshots.
@@ -31,7 +31,7 @@ public sealed class StrategyEvidenceStore(SettingsStore settings)
             var rows=Rows(s,profile).Where(r=>r is not null).ToList();var prior=rows.FirstOrDefault(r=>r.Id==strategy.Id);
             if(prior?.Excluded==true)return;
             rows.RemoveAll(r=>r.Id==strategy.Id);
-            rows.Add(new(){Id=strategy.Id,Passed=6,Latency=result.Latency,CheckedAt=now});s.Evidence[profile]=rows;accepted=true;
+            rows.Add(new(){Id=strategy.Id,Passed=Probe.Total,Latency=result.Latency,CheckedAt=now});s.Evidence[profile]=rows;accepted=true;
         });return accepted;
     }
     private void Edit(string profile,string id,Func<StrategyEvidence,StrategyEvidence> update) => settings.Change(s=> {

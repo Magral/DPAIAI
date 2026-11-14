@@ -5,6 +5,11 @@ internal static class PlaybackDiagnosticTests
     public static async Task RunAsync()
     {
         void Check(bool value,string reason) {if(!value)throw new Exception(reason);}
+        var api=YouTubeApi.Assess(200,"application/json","{\"playabilityStatus\":{\"status\":\"UNPLAYABLE\",\"reason\":\"Valid client required https://example.test/?token=PRIVATE\"}}"u8.ToArray());
+        Check(api.Ok && !api.Unavailable && api.Detail.Contains("UNPLAYABLE") && api.Detail.Contains("Valid client") && !api.Detail.Contains("PRIVATE"),"Player transport/reason handling incorrect");
+        Check(!YouTubeApi.Assess(200,"text/html","{}"u8.ToArray()).Ok,"HTML became API proof");
+        Check(!YouTubeApi.Assess(200,"application/json","{}"u8.ToArray()).Ok,"Unrelated JSON became API proof");
+        foreach(int status in new[]{400,401,403,404,410,429,503})Check(YouTubeApi.Assess(status,"text/html",[]).Unavailable,"Unavailable API source condemned route");
         Check(PlaybackDiagnostic.Overall([])==PlaybackState.Unavailable,"TLS-only proof became media success");
         var bytes=new byte[65536];"ftyp"u8.CopyTo(bytes.AsSpan(4));
         Check(PlaybackDiagnostic.Assess(206,"video/mp4",bytes,250).State==PlaybackState.Confirmed,"Real media range rejected");

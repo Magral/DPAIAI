@@ -77,7 +77,7 @@ public sealed class PlaybackDiagnostic(
     {
         using var route=ensureRoute is null ? new PlaybackRouteGuard() : null;
         void Check() {cancellation.ThrowIfCancellationRequested();if(ensureRoute is not null)ensureRoute();else route!.Check();}
-        var lines=new List<string>{"YouTube: диагностика меню и медиадоставки v1",proxyPort is {} p ? $"Маршрут: локальный SOCKS5 127.0.0.1:{p}" : "Маршрут: Windows без локального обхода (внешний VPN должен включать это приложение)","Узлы6/6 и TLS не доказывают видео; настройки и стратегии не меняются"};
+        var lines=new List<string>{"YouTube: диагностика меню и медиадоставки v1",proxyPort is {} p ? $"Маршрут: локальный SOCKS5 127.0.0.1:{p}" : "Маршрут: Windows без локального обхода (внешний VPN должен включать это приложение)","Узлы8/8 и TLS не доказывают видео; настройки и стратегии не меняются"};
         void Add(string value) {Check();lines.Add(value);progress?.Invoke(value);}
         async Task<PlaybackResponse?> Request(string label,PlaybackRequest req) {
             Check();Add(label+": начало");var timer=Stopwatch.StartNew();
@@ -107,9 +107,8 @@ public sealed class PlaybackDiagnostic(
             var version=Regex.Match(html,"\"INNERTUBE_CLIENT_VERSION\"\\s*:\\s*\"([A-Za-z0-9_.-]{1,64})\"");
             string body=JsonSerializer.Serialize(new{videoId=video,context=new{client=new{clientName="WEB",clientVersion=version.Success ? version.Groups[1].Value : "2.20240709.01.00",hl="en"}}});
             var api=await Request("API player "+video,new("youtubei.googleapis.com","/youtubei/v1/player?prettyPrint=false",proxyPort,body,1024*1024));
-            var player=api is null ? null : Json(Encoding.UTF8.GetString(api.Body));string state="";
-            if(player is {} j && j.ValueKind==JsonValueKind.Object && j.TryGetProperty("playabilityStatus",out var ps) && ps.ValueKind==JsonValueKind.Object && ps.TryGetProperty("status",out var status) && status.ValueKind==JsonValueKind.String)state=status.GetString()!;
-            if(api?.Status==200 && Regex.IsMatch(state,"^[A-Z_]{1,40}$")){apiResponses++;Add("API JSON получен; playabilityStatus="+state+" (это не подтверждение видео)");}
+            var player=api is null ? null : Json(Encoding.UTF8.GetString(api.Body));
+            if(api is not null) {var answer=YouTubeApi.Assess(api.Status,api.ContentType,api.Body);if(answer.Ok)apiResponses++;Add(answer.Detail);}
             else Add("API: содержательный ответ player не подтверждён");
             urls.AddRange(Samples(embedded).Concat(Samples(player)).DistinctBy(t=>t.Kind));
         }

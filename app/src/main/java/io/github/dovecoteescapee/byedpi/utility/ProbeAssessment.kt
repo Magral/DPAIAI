@@ -27,7 +27,8 @@ object ProbeAssessment {
             val matches = rows.filter { it.optString("host") == spec.host && it.optString("kind") == spec.kind && it.optInt("round") == round }
             val row = matches.singleOrNull()
             val passed = result.optString("error").isEmpty() && row != null && row.optBoolean("ok") && !row.optBoolean("skipped") &&
-                (spec.kind !in listOf("youtube","image") || row.optBoolean("public"))
+                (spec.kind !in listOf("youtube","image","youtube-api") || row.optBoolean("public")) &&
+                (spec.kind != "youtube-api" || (row.optInt("apiAttempts")==2 && row.optInt("apiSuccess")==2))
             if (passed) { if (spec.required) requiredSuccess++ else extraSuccess++ }
         }
         val mediaReady=true // Anonymous sample availability is not strategy evidence.

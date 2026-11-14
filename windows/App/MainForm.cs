@@ -23,7 +23,7 @@ internal sealed class MainForm : Form
     {
         this.settings=settings;this.catalog=catalog;
         pilot=new(settings,catalog,executable);
-        Text="DPI Pilot · YouTube для Chrome · 0.2.1";MinimumSize=new(760,620);Size=new(1020,790);StartPosition=FormStartPosition.CenterScreen;
+        Text="DPI Pilot · YouTube для Chrome · 0.2.2";MinimumSize=new(760,620);Size=new(1020,790);StartPosition=FormStartPosition.CenterScreen;
         AutoScaleMode=AutoScaleMode.Dpi;Font=new("Segoe UI",11);
         var layout=new TableLayoutPanel{Dock=DockStyle.Fill,ColumnCount=1,RowCount=7,Padding=new(20)};
         layout.RowStyles.Add(new(SizeType.AutoSize));layout.RowStyles.Add(new(SizeType.AutoSize));layout.RowStyles.Add(new(SizeType.AutoSize));layout.RowStyles.Add(new(SizeType.AutoSize));layout.RowStyles.Add(new(SizeType.AutoSize));layout.RowStyles.Add(new(SizeType.AutoSize));layout.RowStyles.Add(new(SizeType.Percent,100));
@@ -83,7 +83,7 @@ internal sealed class MainForm : Form
         information.Text=Report();
     }
     private string Report()=>
-        "DPI Pilot Windows 0.2.1 · Chrome extension\r\n"+
+        "DPI Pilot Windows 0.2.2 · Chrome extension\r\n"+
         "Расширение: "+(Interlocked.Read(ref extensionSeen)>0 && Environment.TickCount64-Interlocked.Read(ref extensionSeen)<20000 ? "связь есть (статус маршрута — на значке Chrome)" : "нет связи; проверьте одноразовую установку")+"\r\n"+
         "Маршрутизация: "+safety.Reason+"\r\n"+
         "Стратегия: "+pilot.ActiveDescription.Replace("\n","\r\n")+"\r\n\r\n"+
@@ -97,12 +97,12 @@ internal sealed class MainForm : Form
     private void ShowStrategies()
     {
         var rows=pilot.KnownStrategies();
-        using var dialog=new Form { Text="YouTube: доступность узлов 6/6, по задержке",Size=new(760,480),StartPosition=FormStartPosition.CenterParent,MinimizeBox=false,MaximizeBox=false };
+        using var dialog=new Form { Text="YouTube: доступность узлов 8/8, по задержке",Size=new(760,480),StartPosition=FormStartPosition.CenterParent,MinimizeBox=false,MaximizeBox=false };
         var layout=new TableLayoutPanel {Dock=DockStyle.Fill,RowCount=3,ColumnCount=1,Padding=new(12)};
         layout.RowStyles.Add(new(SizeType.AutoSize));layout.RowStyles.Add(new(SizeType.Percent,100));layout.RowStyles.Add(new(SizeType.AutoSize));
         layout.Controls.Add(new Label {AutoSize=true,MaximumSize=new(700,0),Text="Кэш — 72 часа для текущей сети. Свежая стратегия применяется без повторного теста. Устаревшая проверяется перед применением."});
         var list=new ListBox {Dock=DockStyle.Fill,HorizontalScrollbar=true};
-        foreach(var row in rows)list.Items.Add($"{row.Latency} мс · {row.Id} · 6/6 · {row.CheckedAt.ToLocalTime():dd.MM HH:mm} · {(pilot.IsFresh(row.Id) ? "свежая" : "требует проверки")}");
+        foreach(var row in rows)list.Items.Add($"{row.Latency} мс · {row.Id} · 8/8 · {row.CheckedAt.ToLocalTime():dd.MM HH:mm} · {(pilot.IsFresh(row.Id) ? "свежая" : "требует проверки")}");
         if(rows.Count==0)list.Items.Add("Нет полных результатов для этой сети. Запустите подбор.");
         layout.Controls.Add(list);var buttons=new FlowLayoutPanel {AutoSize=true,Dock=DockStyle.Fill};
         var apply=new Button {Text="Применить",AutoSize=true,Enabled=rows.Count>0};

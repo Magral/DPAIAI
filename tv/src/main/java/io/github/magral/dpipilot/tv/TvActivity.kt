@@ -67,7 +67,7 @@ class TvActivity : Activity() {
             if (prefs.getBoolean("enabled",false)) disable() else configure()
         }
         open = button(primary,"Открыть YouTube") { openYouTube() }
-        button(row(),"Рабочие стратегии · 6/6 и задержка") { chooseStrategy() }
+        button(row(),"Рабочие стратегии · 8/8 и задержка") { chooseStrategy() }
         button(row(),"YouTube тормозит — сменить стратегию") { reportPlaybackProblem() }
         val actions = row()
         check = button(actions,"Проверить сейчас") { requestCheck(false) }
@@ -95,7 +95,9 @@ class TvActivity : Activity() {
         button(settings,"Фоновая работа") { requestBackground() }
         button(settings,"Настройки VPN") { vpnSettings() }
         val diagnostics = row()
-        button(row(),"Диагностика меню и видео YouTube") { startActivity(Intent(this, PlaybackDiagnosticActivity::class.java).putExtra("proxy_port",19080)) }
+        button(row(),"Диагностика меню и видео YouTube") { startActivity(Intent(this, PlaybackDiagnosticActivity::class.java).putExtra("proxy_port",19080)
+            .putExtra("youtube_command",RuntimeCatalog.commands.getOrNull(TvState.strategyIndex) ?: "ещё не выбрана")
+            .putExtra("youtube_dns",TvState.network)) }
         button(diagnostics,"Проверка автозапуска") { showAudit() }
         button(diagnostics,"Экспорт отчёта") { exportReport() }
         button(diagnostics,"Профиль для телефона") { exportProfile() }
@@ -194,7 +196,7 @@ class TvActivity : Activity() {
         val ids = store.choices(history).map { RuntimeCatalog.ids[it] }
         if (ids.isEmpty()) {
             AlertDialog.Builder(this).setTitle("Стратегии с доступными узлами")
-                .setMessage("Нет вариантов с подтверждённой доступностью 6/6. Оценка скорости превью влияет на порядок, но не запрещает стратегию. Включите VPN и нажмите «Проверить сейчас» в дополнительных настройках.")
+                .setMessage("Нет вариантов с подтверждённой доступностью 8/8. Оценка скорости превью влияет на порядок, но не запрещает стратегию. Включите VPN и нажмите «Проверить сейчас» в дополнительных настройках.")
                 .setNeutralButton("Сбросить исключения") { _,_ -> resetExclusions(profile) }
                 .setPositiveButton("Закрыть",null).show(); return
         }
@@ -202,11 +204,11 @@ class TvActivity : Activity() {
             val index = TvPolicy.indexOfId(id)!!
             "№${index+1} · ${store.latency(index).takeIf { it > 0 }?.let { "$it мс" } ?: "задержка не измерена"}${if (index == TvState.strategyIndex) " · включена" else ""}\n${store.describe(index)}"
         }.toTypedArray()
-        AlertDialog.Builder(this).setTitle("Доступность 6/6 · оценка превью отдельно · исключено ${store.excluded().size}")
+        AlertDialog.Builder(this).setTitle("Доступность 8/8 · оценка превью отдельно · исключено ${store.excluded().size}")
             .setItems(labels) { _,which ->
                 val id = ids[which]
                 val index = TvPolicy.indexOfId(id) ?: return@setItems
-                val text = "${store.describe(index)}\n\n${RuntimeCatalog.commands[index].ifEmpty { "Без модификаций" }}\n\nИсточник: ${RuntimeCatalog.origins[index]}\n\nСвежий результат 6/6 применяется без повторного теста; после 72 часов выполняется проверка. При переключении видео может переподключиться. После успешного испытания выбор сохранится для этой сети. При включённом авторежиме следующий плановый подбор сравнит задержку полных результатов. Чтобы оставить ручной выбор, выключите автоподбор."
+                val text = "${store.describe(index)}\n\n${RuntimeCatalog.commands[index].ifEmpty { "Без модификаций" }}\n\nИсточник: ${RuntimeCatalog.origins[index]}\n\nСвежий результат 8/8 применяется без повторного теста; после 72 часов выполняется проверка. При переключении видео может переподключиться. После успешного испытания выбор сохранится для этой сети. При включённом авторежиме следующий плановый подбор сравнит задержку полных результатов. Чтобы оставить ручной выбор, выключите автоподбор."
                 AlertDialog.Builder(this).setTitle("Стратегия №${index+1}").setMessage(text)
                     .setPositiveButton("Применить") { _,_ ->
                         if (!prefs.getBoolean("enabled",false) || VpnService.prepare(this) != null) {

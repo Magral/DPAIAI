@@ -2,6 +2,7 @@ package io.github.dovecoteescapee.byedpi.utility
 
 import android.os.Build
 import io.github.dovecoteescapee.byedpi.catalog.HttpCodec
+import io.github.dovecoteescapee.byedpi.catalog.YouTubeApi
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.BufferedInputStream
@@ -64,7 +65,7 @@ object ServiceProbe {
             val success = rows.count { it.optBoolean("ok") }
             val result = JSONObject().put("target",id).put("success",success).put("total",target.endpoints.size*ServiceTargets.rounds(id)).put("tested",rows.size)
                 .put("elapsed",(System.nanoTime()-start)/1000000).put("rows",JSONArray(rows))
-                .put("publicSuccess",rows.count { it.optBoolean("public") }).put("publicTotal",target.endpoints.count { it.kind in listOf("youtube","image") }*ServiceTargets.rounds(id))
+                .put("publicSuccess",rows.count { it.optBoolean("public") }).put("publicTotal",target.endpoints.count { it.kind in listOf("youtube","image","youtube-api") }*ServiceTargets.rounds(id))
                 .put("inconclusive",rows.any { it.optBoolean("unavailable") || it.optBoolean("timeout") })
                 .put("deferred",false)
             val a = ProbeAssessment.evaluate(id,result)
@@ -81,6 +82,14 @@ object ServiceProbe {
         parent: Session,child: Session,fast: Boolean): JSONObject {
         val start = System.nanoTime()
         val readTimeout = MobileSearchPolicy.timeout(if(spec.required) MobileStrategyPolicy.timeout(command) else minOf(MobileStrategyPolicy.timeout(command),5000),fast)
+        if(spec.kind=="youtube-api") {
+            val api=YouTubeApi.check(port,parent,readTimeout,2)
+            parent.checkActive();child.checkActive()
+            return JSONObject().put("host",spec.host).put("kind",spec.kind).put("round",round).put("ok",api.ok).put("public",api.ok)
+                .put("apiAttempts",api.answers.size).put("apiSuccess",api.answers.count {it.ok})
+                .put("timeout",api.timedOut).put("skipped",false).put("unavailable",api.unavailable).put("detail",api.detail)
+                .put("stage","API JSON · 2 новых соединения").put("elapsedMs",((System.nanoTime()-start)/1000000).coerceAtLeast(1))
+        }
         val deadline = ProbeDeadline(readTimeout.toLong()+3000)
         var stage = "start";var detail = "";var transport = false;var content = false;var failed = false;var unavailable = false;var timedOut = false
         fun report(value: String) { stage = value }

@@ -15,7 +15,7 @@ internal sealed class PlaybackDialog : Form
         this.pilot=pilot;Text="YouTube: диагностика меню и видео";Size=new(1000,720);StartPosition=FormStartPosition.CenterParent;
         var layout=new TableLayoutPanel{Dock=DockStyle.Fill,RowCount=3,ColumnCount=1,Padding=new(14)};
         layout.RowStyles.Add(new(SizeType.AutoSize));layout.RowStyles.Add(new(SizeType.AutoSize));layout.RowStyles.Add(new(SizeType.Percent,100));
-        layout.Controls.Add(new Label{AutoSize=true,MaximumSize=new(900,0),Text="Тест по требованию, до нескольких минут. Настройки, VPN и стратегии не меняются. Сравните обычную сеть и платный VPN через «Текущая сеть». Внешний VPN должен включать DPI Pilot, одного VPN-расширения Chrome для этого теста недостаточно. 6/6 — доступность узлов; медиадиапазон проверяется отдельно."});
+        layout.Controls.Add(new Label{AutoSize=true,MaximumSize=new(900,0),Text="Тест по требованию, до нескольких минут. Настройки, VPN и стратегии не меняются. Сравните обычную сеть и платный VPN через «Текущая сеть». Внешний VPN должен включать DPI Pilot, одного VPN-расширения Chrome для этого теста недостаточно. 8/8 — доступность узлов; медиадиапазон проверяется отдельно."});
         var actions=new FlowLayoutPanel{AutoSize=true,Dock=DockStyle.Fill};
         system.Click+=async(_,_)=>await Start(false);engine.Click+=async(_,_)=>await Start(true);
         actions.Controls.Add(system);actions.Controls.Add(engine);

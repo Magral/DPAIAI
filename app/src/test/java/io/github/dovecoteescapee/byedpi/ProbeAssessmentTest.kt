@@ -12,7 +12,7 @@ class ProbeAssessmentTest {
     private fun rows(target: String,extra: Boolean = true): JSONArray = JSONArray().apply {
         for (round in 1..ServiceTargets.rounds(target)) for (endpoint in ServiceTargets.target(target).endpoints) put(JSONObject()
             .put("host",endpoint.host).put("kind",endpoint.kind).put("round",round).put("skipped",false)
-            .put("ok",endpoint.required || extra).put("public",endpoint.kind in listOf("youtube","image","instagram")))
+            .put("apiAttempts",2).put("apiSuccess",2).put("ok",endpoint.required || extra).put("public",endpoint.kind in listOf("youtube","image","instagram","youtube-api")))
     }
     @Test fun singleYoutubePassRequiresAllCoreChecksEvenWhenAncillaryChecksPass() {
         assertEquals(13,ServiceTargets.total("youtube"));assertEquals(1,ServiceTargets.rounds("youtube"))
@@ -55,6 +55,18 @@ class ProbeAssessmentTest {
         assertTrue(ProbeAssessment.evaluate("youtube",result).eligible)
         assertFalse(ProbeAssessment.evaluate("instagram",result).eligible)
         assertFalse(ProbeAssessment.evaluate(MobilePlan.BOTH,result).eligible)
+    }
+    @Test fun oldTlsAndPartialApiProofCannotQualify() {
+        val endpoints=ServiceTargets.target("youtube").endpoints
+        val index=endpoints.indexOfFirst {it.host=="youtubei.googleapis.com"}
+        for(success in listOf(0,1)) {
+            val matrix=rows("youtube");matrix.getJSONObject(index).put("apiSuccess",success)
+            assertFalse(ProbeAssessment.evaluate("youtube",JSONObject().put("rows",matrix)).eligible)
+        }
+        val old=rows("youtube");old.getJSONObject(index).put("kind","tls")
+        assertFalse(ProbeAssessment.evaluate("youtube",JSONObject().put("rows",old)).eligible)
+        val missing=rows("youtube");missing.getJSONObject(index).remove("apiAttempts")
+        assertFalse(ProbeAssessment.evaluate("youtube",JSONObject().put("rows",missing)).eligible)
     }
     @Test fun tvCommandsAreStableAndTriedBeforePlainControl() {
         assertEquals(listOf("665dfb8a8725932b","b55013dea302bbb1","af0c588ecde5769d"),ServiceTargets.youtubeTvPreferred.map { CatalogProtocol.id(it) })

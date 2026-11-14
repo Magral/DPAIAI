@@ -2,6 +2,7 @@ package io.github.magral.dpipilot.tv
 
 /** Bounded fallback order; the saved strategy is committed only after all probes pass. */
 object TvPolicy {
+    const val CORE_TOTAL = 8
     val strategies get() = RuntimeCatalog.commands
     fun order(saved: Int?,forceDifferent: Boolean): List<Int> {
         val good = saved?.takeIf { it in strategies.indices }

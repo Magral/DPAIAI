@@ -30,7 +30,7 @@ class MobileStoreAndParallelTest {
         val rows=JSONArray()
         for(round in 1..ServiceTargets.rounds(id)) for(e in ServiceTargets.target(id).endpoints) rows.put(JSONObject()
             .put("host",e.host).put("kind",e.kind).put("round",round).put("ok",rows.length()!=fail)
-            .put("public",true).put("elapsedMs",delay))
+            .put("apiAttempts",2).put("apiSuccess",2).put("public",true).put("elapsedMs",delay))
         return JSONObject().put("rows",rows)
     }
     @Test fun partialFastResultsCannotQualifyAndResetRequiresNewCompleteEvidence() {

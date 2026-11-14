@@ -12,7 +12,7 @@ class MobileTvParityTest {
         val rows = JSONArray()
         for (round in 1..ServiceTargets.rounds(id)) for (endpoint in ServiceTargets.target(id).endpoints) rows.put(JSONObject()
             .put("host",endpoint.host).put("kind",endpoint.kind).put("round",round)
-            .put("ok",rows.length() < passed).put("public",true).put("elapsedMs",latency))
+            .put("ok",rows.length() < passed).put("apiAttempts",2).put("apiSuccess",2).put("public",true).put("elapsedMs",latency))
         return JSONObject().put("rows",rows)
     }
     private fun preview(ms: Long = 100) = PreviewQuality(PreviewQuality.sources.flatMap { source ->

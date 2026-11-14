@@ -32,9 +32,25 @@ class KnownStrategiesTest {
             }
         } as SharedPreferences
     }
+    @Test fun legacySixChecksRemainHistoryButAreNotApiAwareProof() {
+        val prefs=preferences();val id=RuntimeCatalog.ids[1]
+        val record=org.json.JSONObject().put("ok",7).put("last_complete",true).put("last_passed",6).put("latency",50).put("seen",1000).put("checked_at",1000)
+        prefs.edit().putString("quality.wifi-a",org.json.JSONObject().put(id,record).toString()).putString("good_id",id).apply()
+        val store=QualityStore(prefs).apply {network("wifi-a")}
+        assertNull(store.fresh(1,1001));assertTrue(store.choices(emptyList()).isEmpty())
+        assertEquals(id,prefs.getString("good_id",null));assertTrue(store.excluded().isEmpty())
+        assertEquals(7,org.json.JSONObject(prefs.getString("quality.wifi-a","{}")).getJSONObject(id).getInt("ok"))
+    }
+    @Test fun accessCheckCountDoesNotChangeUsefulTrafficMinutes() {
+        val store=QualityStore(preferences()).apply {network("wifi-a")}
+        store.approved(1,ProbeQuality(true,8,100),1000)
+        repeat(8) {store.observe(1,15,true)}
+        assertTrue(store.describe(1).contains("полезный обмен 2 мин"))
+        assertTrue(store.summary().contains("полезный обмен 2 мин"))
+    }
     @Test fun deferredFailurePreservesTheLastCompleteSuccess() {
         val prefs=preferences();val store=QualityStore(prefs).apply { network("wifi-a") }
-        store.approved(1,PreviewFixtures.quality(true,6,120),1000)
+        store.approved(1,PreviewFixtures.quality(true,8,120),1000)
         store.defer(1,ProbeQuality(false,0,0))
         val restored=QualityStore(prefs).apply { network("wifi-a") }
         assertEquals(listOf(1),restored.choices(emptyList()))
@@ -43,14 +59,14 @@ class KnownStrategiesTest {
     }
     @Test fun choicesPrioritizeLatencyAfterFullAccessNotOptionalPreviewSpeed() {
         val store=QualityStore(preferences()).apply { network("wifi-a") }
-        store.approved(1,ProbeQuality(true,6,40,PreviewFixtures.transfers(2000)),1000)
-        store.approved(2,ProbeQuality(true,6,200,PreviewFixtures.transfers(50)),1000)
+        store.approved(1,ProbeQuality(true,8,40,PreviewFixtures.transfers(2000)),1000)
+        store.approved(2,ProbeQuality(true,8,200,PreviewFixtures.transfers(50)),1000)
         assertEquals(listOf(1,2),store.choices(emptyList()))
         assertEquals(1,TvCheckPolicy.fastest(2 to store.quality(2),listOf(1 to store.quality(1))))
     }
     @Test fun freshProofExpiresWithoutDeletingChoiceAndReadsNeverRefreshIt() {
         val prefs=preferences();val store=QualityStore(prefs).apply { network("wifi-a") }
-        store.approved(1,ProbeQuality(true,6,90),1000)
+        store.approved(1,ProbeQuality(true,8,90),1000)
         assertNotNull(store.fresh(1,1000));assertNull(store.fresh(1,999))
         assertNotNull(QualityStore(prefs).apply { network("wifi-a") }.fresh(1,1000+TvCheckPolicy.INTERVAL-1))
         assertNull(store.fresh(1,1000+TvCheckPolicy.INTERVAL))
@@ -60,7 +76,7 @@ class KnownStrategiesTest {
     }
     @Test fun anotherEngineCannotReuseTheOldFullEvidence() {
         val prefs=preferences();val id=RuntimeCatalog.ids[1]
-        val record=org.json.JSONObject().put("ok",1).put("last_complete",true).put("last_passed",6).put("latency",50).put("seen",1000).put("checked_at",1000).put("checked_engine","other-engine")
+        val record=org.json.JSONObject().put("ok",1).put("last_complete",true).put("last_passed",8).put("latency",50).put("seen",1000).put("checked_at",1000).put("checked_engine","other-engine")
         prefs.edit().putString("quality.wifi-a",org.json.JSONObject().put(id,record).toString()).apply()
         val store=QualityStore(prefs).apply { network("wifi-a") }
         assertNull(store.fresh(1,1001));assertTrue(store.choices(emptyList()).isEmpty())
@@ -68,7 +84,7 @@ class KnownStrategiesTest {
     @Test fun successfulScoutsSurviveRestartWithoutApplyingThemAndStayScopedToNetwork() {
         val prefs = preferences()
         val store = QualityStore(prefs).apply { network("wifi-a") }
-        for (index in 1..6) store.approved(index,PreviewFixtures.quality(true,6,100+index.toLong()),1000)
+        for (index in 1..6) store.approved(index,PreviewFixtures.quality(true,8,100+index.toLong()),1000)
         store.failed(7)
         val restored = QualityStore(prefs).apply { network("wifi-a") }
         assertEquals((1..6).toSet(),restored.choices(emptyList()).toSet())
@@ -82,12 +98,12 @@ class KnownStrategiesTest {
     @Test fun failuresStayExcludedAcrossRestartAndSuccessCannotSilentlyReviveThem() {
         val prefs = preferences()
         val store = QualityStore(prefs).apply { network("wifi-a") }
-        store.approved(1,PreviewFixtures.quality(true,6,100),1000)
-        store.approved(2,PreviewFixtures.quality(true,6,40),1000)
-        store.approved(3,PreviewFixtures.quality(true,6,200),1000)
+        store.approved(1,PreviewFixtures.quality(true,8,100),1000)
+        store.approved(2,PreviewFixtures.quality(true,8,40),1000)
+        store.approved(3,PreviewFixtures.quality(true,8,200),1000)
         assertEquals(listOf(2,1,3),store.choices(emptyList()))
         store.failed(2)
-        store.approved(2,PreviewFixtures.quality(true,6,1),2000)
+        store.approved(2,PreviewFixtures.quality(true,8,1),2000)
         val restored = QualityStore(prefs).apply { network("wifi-a") }
         assertEquals(setOf(2),restored.excluded())
         assertEquals(listOf(1,3),restored.choices(listOf(2)))
@@ -97,7 +113,7 @@ class KnownStrategiesTest {
         assertEquals(setOf(2),restored.excluded())
         restored.resetExclusions()
         assertEquals(listOf(1,3),restored.choices(emptyList()))
-        restored.approved(2,PreviewFixtures.quality(true,6,40),3000)
+        restored.approved(2,PreviewFixtures.quality(true,8,40),3000)
         assertEquals(listOf(2,1,3),restored.choices(emptyList()))
         assertTrue(QualityStore(prefs).apply { network("wifi-a") }.excluded().isEmpty())
     }
@@ -105,7 +121,7 @@ class KnownStrategiesTest {
         val prefs = preferences()
         prefs.edit().putString("quality.wifi-a", "{\"removed-command\":{\"excluded\":true,\"fail\":1}}").apply()
         val store = QualityStore(prefs).apply { network("wifi-a") }
-        store.approved(1,PreviewFixtures.quality(true,6,100),1000)
+        store.approved(1,PreviewFixtures.quality(true,8,100),1000)
         val saved = org.json.JSONObject(prefs.getString("quality.wifi-a","{}").orEmpty())
         assertTrue(saved.getJSONObject("removed-command").getBoolean("excluded"))
         assertFalse(store.summary().contains("№0"))
@@ -117,31 +133,31 @@ class KnownStrategiesTest {
             org.json.JSONObject().put("ok",3).put("fail",3).put("latency",1).put("excluded",false)).toString()).apply()
         val store = QualityStore(prefs).apply { network("wifi-a") }
         assertTrue(store.choices(listOf(1,2)).isEmpty())
-        store.approved(1,PreviewFixtures.quality(true,6,100),1000)
+        store.approved(1,PreviewFixtures.quality(true,8,100),1000)
         assertEquals(listOf(1),store.choices(listOf(2)))
-        assertTrue(store.describe(1).contains("Последняя проверка: узлы 6/6"))
+        assertTrue(store.describe(1).contains("Последняя проверка: узлы 8/8"))
         assertTrue(store.describe(1).contains("успешных 4, отказов 3"))
     }
     @Test fun partialFastCandidateCannotEnterMenuOrReturnAfterResetAndRestart() {
         val prefs = preferences()
         val store = QualityStore(prefs).apply { network("wifi-a") }
-        store.approved(1,PreviewFixtures.quality(true,6,200),1000)
+        store.approved(1,PreviewFixtures.quality(true,8,200),1000)
         store.approved(2,PreviewFixtures.quality(true,3,1),1000)
         assertEquals(listOf(1),store.choices(listOf(2)))
-        assertTrue(store.describe(2).contains("узлы 3/6"))
+        assertTrue(store.describe(2).contains("узлы 3/8"))
         store.failed(1,quality=PreviewFixtures.quality(false,3,1))
         store.resetExclusions()
         assertTrue(store.choices(listOf(1,2)).isEmpty())
         assertTrue(QualityStore(prefs).apply { network("wifi-a") }.choices(listOf(1,2)).isEmpty())
-        store.approved(2,PreviewFixtures.quality(true,6,50),2000)
+        store.approved(2,PreviewFixtures.quality(true,8,50),2000)
         assertEquals(listOf(2),store.choices(emptyList()))
     }
-    @Test fun explicitSixOfSixRemainsSelectableButAUserComplaintOverridesSyntheticSuccess() {
+    @Test fun explicitEightOfEightRemainsSelectableButAUserComplaintOverridesSyntheticSuccess() {
         val prefs = preferences();val id = RuntimeCatalog.ids[1]
-        prefs.edit().putString("quality.wifi-a",org.json.JSONObject().put(id,org.json.JSONObject().put("ok",2).put("last_complete",true).put("last_passed",6)).toString()).apply()
+        prefs.edit().putString("quality.wifi-a",org.json.JSONObject().put(id,org.json.JSONObject().put("ok",2).put("last_complete",true).put("last_passed",8)).toString()).apply()
         val store = QualityStore(prefs).apply { network("wifi-a") }
         assertEquals(listOf(1),store.choices(listOf(1)))
-        store.approved(1,PreviewFixtures.quality(true,6,100),1000)
+        store.approved(1,PreviewFixtures.quality(true,8,100),1000)
         assertEquals(listOf(1),store.choices(emptyList()))
         store.failed(1,user=true)
         assertTrue(store.choices(listOf(1)).isEmpty())
@@ -152,7 +168,7 @@ class KnownStrategiesTest {
     @Test fun legacyAutomaticExclusionsAreRepairedOnceButManualReportsAndFreshFailuresPersist() {
         val prefs = preferences()
         val root = org.json.JSONObject()
-        root.put(RuntimeCatalog.ids[1],org.json.JSONObject().put("ok",2).put("last_complete",true).put("last_passed",6).put("excluded",true))
+        root.put(RuntimeCatalog.ids[1],org.json.JSONObject().put("ok",2).put("last_complete",true).put("last_passed",8).put("excluded",true))
         root.put(RuntimeCatalog.ids[2],org.json.JSONObject().put("excluded",true).put("reports",1))
         prefs.edit().putString("quality.wifi-a",root.toString()).apply()
         val first = QualityStore(prefs).apply { network("wifi-a") }
@@ -162,7 +178,7 @@ class KnownStrategiesTest {
         val restarted = QualityStore(prefs).apply { network("wifi-a") }
         assertTrue(restarted.consumeRepair())
         assertFalse(restarted.consumeRepair())
-        restarted.approved(1,ProbeQuality(true,6,100),1000)
+        restarted.approved(1,ProbeQuality(true,8,100),1000)
         assertEquals(listOf(1),restarted.choices(emptyList()))
         restarted.failed(1,quality=ProbeQuality(false,3,1))
         val again = QualityStore(prefs).apply { network("wifi-a") }

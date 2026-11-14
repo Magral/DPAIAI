@@ -13,7 +13,7 @@ import javax.net.ssl.SSLSocketFactory
 
 /** Explicit, bounded requests. No cookies, redirects, DNS/settings changes or TLS bypass. */
 object PlaybackHttp {
-    data class Request(val host: String,val path: String="/",val proxyPort: Int?=null,val body: String?=null,val limit: Int=4096,val range: Boolean=false)
+    data class Request(val host: String,val path: String="/",val proxyPort: Int?=null,val body: String?=null,val limit: Int=4096,val range: Boolean=false,val timeoutMs: Int=12000)
     private val dnsPool=Executors.newFixedThreadPool(2) { r -> Thread(r,"playback-dns").apply { isDaemon=true } }
     fun resolve(host: String,session: ProbeSession): List<String> = addresses(host,session).mapNotNull {it.hostAddress}
     private fun addresses(host: String,session: ProbeSession): List<InetAddress> {
@@ -33,13 +33,14 @@ object PlaybackHttp {
     fun request(req: Request,session: ProbeSession,progress: (String)->Unit): HttpCodec.Response {
         require(allowed(req.host) && req.path.startsWith('/') && req.path.none {it.isISOControl()} && req.path.length<=8192)
         require(req.limit in 1..2*1024*1024 && (req.proxyPort==null || req.proxyPort in 1024..65535))
-        val deadline=ProbeDeadline(18000)
+        require(req.timeoutMs in 1000..60000)
+        val deadline=ProbeDeadline(req.timeoutMs.toLong()+6000)
         var raw: Socket?=null
         try {
             session.checkActive()
             if(req.proxyPort!=null) {
                 progress("${req.host}: SOCKS / TCP")
-                raw=TargetProbe.socket(req.host,443,req.proxyPort,12000,{session.register(it);deadline.register(it)})
+                raw=TargetProbe.socket(req.host,443,req.proxyPort,req.timeoutMs,{session.register(it);deadline.register(it)})
             } else {
                 progress("${req.host}: DNS / TCP")
                 val addresses=addresses(req.host,session)
@@ -54,7 +55,7 @@ object PlaybackHttp {
             }
             val socket=raw
             ((SSLSocketFactory.getDefault() as SSLSocketFactory).createSocket(socket,req.host,443,true) as SSLSocket).use { tls ->
-                tls.soTimeout=12000;session.register(tls);deadline.register(tls)
+                tls.soTimeout=req.timeoutMs;session.register(tls);deadline.register(tls)
                 if(Build.VERSION.SDK_INT>=24)tls.sslParameters=tls.sslParameters.apply {endpointIdentificationAlgorithm="HTTPS"}
                 progress("${req.host}: TLS");tls.startHandshake()
                 if(Build.VERSION.SDK_INT<24 && !HttpsURLConnection.getDefaultHostnameVerifier().verify(req.host,tls.session))throw java.io.IOException("TLS hostname mismatch")
