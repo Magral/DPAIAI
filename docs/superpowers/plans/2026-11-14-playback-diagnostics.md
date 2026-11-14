@@ -21,13 +21,13 @@ Cancellation during DNS/TLS/body; redirects to untrusted hosts; HTTP403/429/logi
 ### Task2: Android integration
 - [x] Add manual shared activity and buttons phone/TV, cancellation and copy report.
 - [x] Label endpoint proof accurately, retain existing strategy cache and rare scan policy.
-- [ ] Run full Android build/tests in CI.
+- [x] Run full Android build/tests in CI.
 
 ### Task3: Windows parity
 - [x] Add equivalent current-route/engine diagnostic with lease, explicit UI; no PAC/system networking mutation.
-- [ ] Test same media/API assessment cases and existing Chrome isolation suite.
+- [x] Test same media/API assessment cases and existing Chrome isolation suite.
 
 ### Task4: Review and delivery
-- [ ] Independent review; resolve Important findings, verify all platform builds.
-- [ ] Release phone/TV/Windows and verify actual asset URLs.
-- [ ] Ask user for paired reports (current network and paid VPN); provider root remains open until compared.
+- [x] Independent review; resolve Important findings, verify all platform builds.
+- [x] Release phone/TV/Windows and verify actual asset URLs.
+- [x] Ask user for paired reports (current network and paid VPN); provider root remains open until compared.
