@@ -26,7 +26,7 @@ class WarpEnrollment {
             val profile=WarpRegistration {path,body,token,method->
                 check();require(System.nanoTime()<end)
                 val request=Request.Builder().url("https://api.cloudflareclient.com$path")
-                    .header("User-Agent","DPI-Pilot-WARP/0.13.0").header("CF-Client-Version","a-6.30-4471").header("Accept","application/json")
+                    .header("User-Agent","WARP for Android").header("CF-Client-Version","a-6.35-4471").header("Accept-Encoding","identity").header("Accept","application/json")
                     .method(method,body.toString().toRequestBody("application/json; charset=UTF-8".toMediaType()))
                 token?.let {request.header("Authorization","Bearer $it")}
                 val pending=client.newCall(request.build());pending.timeout().timeout((end-System.nanoTime()).coerceAtLeast(1),TimeUnit.NANOSECONDS);call.set(pending)

@@ -14,7 +14,7 @@ class WarpRegistrationTest {
         var activated=false
         val flow=WarpRegistration {path,body,token,method->
             assertFalse(body.toString().contains(secret))
-            if(method=="POST") {assertEquals("/v0a4471/reg",path);assertEquals(publicKey,body.getString("key"));assertNull(token);enrolled()}
+            if(method=="POST") {assertEquals("/v0a4471/reg",path);assertEquals(publicKey,body.getString("key"));assertTrue(Regex("[0-9a-f]{16}").matches(body.getString("serial_number")));assertNull(token);enrolled()}
             else {assertEquals("PATCH",method);assertEquals("/v0a4471/reg/device-123",path);assertEquals("PRIVATE_TOKEN",token);activated=body.getBoolean("warp_enabled");JSONObject().put("warp_enabled",true)}
         }
         val profile=flow.enroll(secret,publicKey,"2026-11-15T00:00:00.000Z")

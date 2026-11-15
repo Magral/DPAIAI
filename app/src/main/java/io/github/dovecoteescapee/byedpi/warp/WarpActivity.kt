@@ -45,7 +45,7 @@ class WarpActivity : AppCompatActivity() {
         val box=LinearLayout(this).apply {orientation=LinearLayout.VERTICAL;setPadding(24,16,24,24)}
         fun text(value: String){box.addView(TextView(this).apply {text=value;textSize=17f;setPadding(0,8,0,12)})}
         fun button(value: String,action: ()->Unit): Button=Button(this).apply {text=value;isAllCaps=false;setOnClickListener {action()};box.addView(this)}
-        text("Локальный обход сохраняет прежние стратегии. Бесплатный WARP передаёт трафик YouTube и Instagram через Cloudflare. Остальные приложения не включаются в туннель. Доступность зависит от сети и Cloudflare; воспроизведение проверяется в YouTube.")
+        text("Локальный обход сохраняет прежние стратегии. Неофициальный клиент бесплатного WARP передаёт трафик YouTube и Instagram через Cloudflare. Остальные приложения не включаются в туннель. Доступность зависит от сети и Cloudflare; воспроизведение проверяется в YouTube.")
         local=button("Выбрать локальный обход") {choose(false)}
         warp=button("Выбрать бесплатный WARP") {choose(true)}
         text("Первичная настройка WARP: создайте собственный ключ Cloudflare или импортируйте свой профиль WARP (.conf). Платная подписка и ключ WARP+ не нужны. Данные подключения остаются зашифрованными на устройстве.")
