@@ -14,17 +14,17 @@ Manual phone first. API24+ WARP, local minSdk21.4ABIs. Fixed installed YouTube/I
 Cancelled setup/start must not save/activate late work. No installed client must not create global TUN. Never log private key or full UAPI stats. Outer sockets protected before use. External VPN replacement/revoke must stop recovery loop.
 
 ### Task1: Native backend and bounded config
-- [ ] RED Go tests reserved packet transformation, protect failure, close/reopen and stats redaction; Kotlin tests profile parsing/provider checks and IPC allowlist.
-- [ ] Implement warp/native source and source-build script, JNI callback,4ABIs; generate/validate private/public keys.
-- [ ] GREEN host tests, cross-build and native symbols audit.
+- [x] RED Go tests reserved packet transformation, protect failure, close/reopen and stats redaction; Kotlin tests profile parsing/provider checks and IPC allowlist.
+- [x] Implement warp/native source and source-build script, JNI callback,4ABIs; generate/validate private/public keys.
+- [x] GREEN host tests, cross-build and native symbols audit.
 
 ### Task2: Android manual flow
-- [ ] RED fixed app allowlist/zero-app guard and start/cancel generation policy.
-- [ ] Implement encrypted store, bounded own registration/import, setup screen, manual service lifecycle/foreground notification/revoke/network change/handshake status.
-- [ ] Wire ServiceManager and main screen. Local mode unchanged, WARP selected only stopped. Disable incompatible tuning/local probes while WARP active.
-- [ ] GREEN module tests and signed Gradle/APK audit.
+- [x] RED fixed app allowlist/zero-app guard and start/cancel generation policy.
+- [x] Implement encrypted store, bounded own registration/import, setup screen, manual service lifecycle/foreground notification/revoke/network change/handshake status.
+- [x] Wire ServiceManager and main screen. Local mode unchanged, WARP selected only stopped. Disable incompatible tuning/local probes while WARP active.
+- [x] GREEN module tests and signed Gradle/APK audit.
 
 ### Task3: Review and release
-- [ ] Fresh whole-branch review; important fixes RED→GREEN.
-- [ ] Release experimental manual phone0.13.0 under permanent signing key; verify asset/cert. No TV/Windows release until actual phone acceptance.
+- [x] Fresh whole-branch review; important fixes RED→GREEN.
+- [x] Release experimental manual phone0.13.0 under permanent signing key; verify asset/cert. No TV/Windows release until actual phone acceptance.
 - [ ] User confirms standalone connection and real menu/video/Shorts; only then automatic fallback/parity.
