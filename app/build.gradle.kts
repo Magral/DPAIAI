@@ -25,8 +25,8 @@ android {
         applicationId = "io.github.magral.dpipilot"
         minSdk = 21
         targetSdk = 34
-        versionCode = 26
-        versionName = "0.12.3"
+        versionCode = 27
+        versionName = "0.13.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -40,6 +40,7 @@ android {
 
     sourceSets.getByName("main").java.srcDir(sharedCatalog)
     sourceSets.getByName("main").assets.srcDir(layout.buildDirectory.dir("generated/warpAssets"))
+    sourceSets.getByName("main").jniLibs.srcDir(layout.buildDirectory.dir("generated/warpJni"))
     packaging { jniLibs.useLegacyPackaging = true }
     buildFeatures {
         buildConfig = true
@@ -153,7 +154,7 @@ tasks.named("preBuild") { dependsOn(copyCatalog) }
 
 val buildWarp by tasks.registering(Exec::class) {
     inputs.files(fileTree("../warp/native") { exclude("*.so", "*.h") },file("../warp/build-android.sh"),file("../warp/licenses.py"))
-    outputs.files(listOf("armeabi-v7a","arm64-v8a","x86","x86_64").map {file("src/main/jniLibs/$it/libpilotwarp.so")})
+    outputs.files(listOf("armeabi-v7a","arm64-v8a","x86","x86_64").map {layout.buildDirectory.file("generated/warpJni/$it/libpilotwarp.so").get().asFile})
     outputs.file(layout.buildDirectory.file("generated/warpAssets/warp-licenses.txt"))
     workingDir(rootProject.projectDir)
     commandLine("bash","warp/build-android.sh")

@@ -21,7 +21,8 @@ import org.json.JSONArray
 /** Explicit manual transport. Native operation lock spans start through final close across instances. */
 class WarpVpnService : LifecycleVpnService() {
     private val cm by lazy {getSystemService(CONNECTIVITY_SERVICE) as ConnectivityManager}
-    private var desired=false
+    private val control=WarpControl()
+    private val desired get()=control.desired
     private var tunnelJob: Job?=null
     private var changeJob: Job?=null
     private var registered=false
@@ -40,7 +41,7 @@ class WarpVpnService : LifecycleVpnService() {
         if(intent?.action!=START_ACTION && !(intent==null && PhoneRecovery.desired(this) && WarpState.selected(this))){stopSelf();return START_NOT_STICKY}
         notifyStatus("WARP: подготовка подключения")
         if(desired)return START_STICKY
-        desired=true;WarpState.active=true;getPreferences().edit().putBoolean("mobile_enabled",true).apply();PhoneRecovery.schedule(this)
+        control.start();WarpState.active=true;getPreferences().edit().putBoolean("mobile_enabled",true).apply();PhoneRecovery.schedule(this)
         setStatus(AppStatus.Running,Mode.VPN);broadcast(STARTED_BROADCAST)
         signature=networkSignature();physical=pickNetwork()
         try {cm.registerNetworkCallback(NetworkRequest.Builder().addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET).addCapability(NetworkCapabilities.NET_CAPABILITY_NOT_VPN).build(),callback);registered=true}
@@ -137,13 +138,18 @@ class WarpVpnService : LifecycleVpnService() {
     }
     private fun broadcast(action: String){sendBroadcast(Intent(action).putExtra(SENDER,Sender.VPN.ordinal).setPackage(packageName))}
     private fun end(){
-        desired=false;getPreferences().edit().putBoolean("mobile_enabled",false).apply();changeJob?.cancel();tunnelJob?.cancel()
-        lifecycleScope.launch {tunnelJob?.join();WarpState.active=false;WarpState.status="WARP выключен";setStatus(AppStatus.Halted,Mode.VPN);broadcast(STOPPED_BROADCAST);stopForeground(true);stopSelf()}
+        val ticket=control.stop();val stopping=tunnelJob
+        getPreferences().edit().putBoolean("mobile_enabled",false).apply();changeJob?.cancel();stopping?.cancel()
+        lifecycleScope.launch {
+            stopping?.join()
+            if(!control.canFinishStop(ticket))return@launch
+            WarpState.active=false;WarpState.status="WARP выключен";setStatus(AppStatus.Halted,Mode.VPN);broadcast(STOPPED_BROADCAST);stopForeground(true);stopSelf()
+        }
     }
     override fun onRevoke(){end()}
     override fun onDestroy(){
         if(desired)WarpState.status="WARP остановлен Android"
-        desired=false;changeJob?.cancel();tunnelJob?.cancel();if(registered)runCatching {cm.unregisterNetworkCallback(callback)}
+        control.stop();changeJob?.cancel();tunnelJob?.cancel();if(registered)runCatching {cm.unregisterNetworkCallback(callback)}
         runCatching {WarpNative.stop()};WarpState.active=false;setStatus(AppStatus.Halted,Mode.VPN);super.onDestroy()
     }
     companion object {private val nativeLock=Mutex();private const val CHANNEL="DpiPilotWarp";private const val ID=72}

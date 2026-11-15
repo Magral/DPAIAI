@@ -16,7 +16,6 @@ import (
  "syscall"
 
  "github.com/amnezia-vpn/amneziawg-go/v3/device"
- "github.com/amnezia-vpn/amneziawg-go/v3/tun"
 )
 var nativeMu sync.Mutex
 var active *device.Device
@@ -34,7 +33,7 @@ func PilotWarpStart(fd C.int,configuration *C.char,reserved *C.char,handshakeOnl
  if active!=nil{syscall.Close(int(fd));return C.CString("already running")}
  var r [3]byte
  if e:=json.Unmarshal([]byte(C.GoString(reserved)),&r);e!=nil{syscall.Close(int(fd));return C.CString("reserved config invalid")}
- t,_,e:=tun.CreateUnmonitoredTUNFromFD(int(fd));if e!=nil{syscall.Close(int(fd));return C.CString("TUN initialization failed")}
+ t,e:=newAndroidTUN(int(fd));if e!=nil{return C.CString("TUN initialization failed")}
  logger:=&device.Logger{Verbosef:func(string,...any){},Errorf:func(string,...any){}}
  b:=newWarpBind(r,handshakeOnly!=0,func(socket int)bool{return callback!=0&&C.invokeProtect(callback,C.int(socket))!=0})
  d:=device.NewDevice(t,b,logger)

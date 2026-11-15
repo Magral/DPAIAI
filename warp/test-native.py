@@ -22,6 +22,14 @@ with tempfile.TemporaryDirectory() as temporary:
         try:os.fstat(owned);raise AssertionError('failed start leaked TUN duplicate')
         except OSError:pass
         os.fstat(original)
+        reused=os.open('/dev/null',os.O_RDONLY)
+        assert reused==owned,'Expected closed native fd number to be reused'
+        try:
+            for _ in range(3500):result(backend.PilotWarpKeys())
+            os.fstat(reused)  # A stale Go os.File finalizer must not close a new owner's fd.
+        finally:
+            try:os.close(reused)
+            except OSError:pass
         backend.PilotWarpStop();backend.PilotWarpStop()
         assert json.loads(result(backend.PilotWarpStats()))=={}
     finally:os.close(original)

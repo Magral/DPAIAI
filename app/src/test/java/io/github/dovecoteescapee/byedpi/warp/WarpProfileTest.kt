@@ -36,6 +36,12 @@ PersistentKeepalive = 25
         assertEquals("162.159.193.1:2408",p.endpoint);assertFalse(p.encode().contains("DO_NOT_KEEP"))
         try {WarpProfile.enrolled(key.replace("=","\nendpoint=1.2.3.4:5"),json);fail("IPC injection")}catch(_: IllegalArgumentException) { }
     }
+    @Test fun staleStopCannotTearDownAConnectionStartedAfterIt() {
+        val control=WarpControl();control.start();val previousStop=control.stop()
+        control.start();assertTrue(control.desired);assertFalse(control.canFinishStop(previousStop))
+        val currentStop=control.stop();assertFalse(control.desired);assertTrue(control.canFinishStop(currentStop))
+        assertFalse(control.canFinishStop(previousStop))
+    }
     @Test fun fixedAppsNeverBecomeGlobalAndCancelledGenerationCannotActivate() {
         assertEquals(setOf("com.google.android.youtube"),WarpPolicy.apps(setOf("com.google.android.youtube","com.android.chrome","com.game")))
         try {WarpPolicy.apps(setOf("com.game"));fail("Empty allowlist became global")}catch(_: IllegalArgumentException) { }

@@ -110,3 +110,12 @@ object WarpEncoding {
         return out.toByteArray()
     }
 }
+
+/** Commands supersede pending teardown; a stale STOP completion cannot destroy a newer START. */
+class WarpControl {
+    private var generation=0L
+    @Volatile var desired=false;private set
+    @Synchronized fun start(){generation++;desired=true}
+    @Synchronized fun stop(): Long {desired=false;return ++generation}
+    @Synchronized fun canFinishStop(ticket: Long)=!desired && ticket==generation
+}
