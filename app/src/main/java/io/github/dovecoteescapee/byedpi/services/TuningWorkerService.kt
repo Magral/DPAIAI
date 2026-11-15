@@ -31,6 +31,7 @@ class TuningWorkerService : Service() {
                     what = PROGRESS; data = Bundle().apply { putString("progress",value.encode()) }
                 }) } }
                 val result = try {
+                    require(!io.github.dovecoteescapee.byedpi.warp.WarpState.selected(this)) {"WARP transport active"}
                     require(command != null && MobilePlan.valid(command))
                     ServiceTargets.target(target)
                     progress(ProbeProgress(0,ServiceTargets.total(target)))

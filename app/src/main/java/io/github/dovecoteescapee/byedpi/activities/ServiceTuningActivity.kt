@@ -60,6 +60,9 @@ class ServiceTuningActivity : AppCompatActivity() {
     }
     override fun onCreate(state: Bundle?) {
         super.onCreate(state)
+        if(io.github.dovecoteescapee.byedpi.warp.WarpState.selected(this) || io.github.dovecoteescapee.byedpi.warp.WarpState.active) {
+            Toast.makeText(this,"Подбор стратегий доступен в режиме локального обхода",Toast.LENGTH_LONG).show();finish();return
+        }
         MobileCatalogUpdater.load(this);CatalogUpdateJob.schedule(this)
         val box = LinearLayout(this).apply { orientation=LinearLayout.VERTICAL;setPadding(24,24,24,24) }
         setContentView(ScrollView(this).apply { addView(box) })

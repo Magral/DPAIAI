@@ -22,3 +22,9 @@ target_compile_options(mobilepilot PRIVATE -std=c99 -O2)
 target_compile_definitions(mobilepilot PRIVATE _DEFAULT_SOURCE ANDROID_APP)
 target_link_libraries(mobilepilot PRIVATE android log)
 target_link_options(mobilepilot PRIVATE "-Wl,--wrap=sendto" "-Wl,--wrap=connect")
+
+# A small JNI adapter dynamically loads the separately source-built Go WARP core.
+add_library(warpjni SHARED warp_jni.cpp)
+target_compile_features(warpjni PRIVATE cxx_std_17)
+target_link_libraries(warpjni PRIVATE dl)
+target_link_options(warpjni PRIVATE "-Wl,-z,max-page-size=16384")

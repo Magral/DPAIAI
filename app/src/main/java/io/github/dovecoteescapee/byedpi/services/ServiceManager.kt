@@ -2,6 +2,7 @@ package io.github.dovecoteescapee.byedpi.services
 
 import android.content.Context
 import android.content.Intent
+import io.github.dovecoteescapee.byedpi.warp.*
 import android.util.Log
 import androidx.core.content.ContextCompat
 import io.github.dovecoteescapee.byedpi.data.Mode
@@ -12,10 +13,12 @@ object ServiceManager {
     private val TAG: String = ServiceManager::class.java.simpleName
 
     fun start(context: Context, mode: Mode) {
-        when (mode) {
+        when (if(WarpState.selected(context))Mode.VPN else mode) {
             Mode.VPN -> {
                 Log.i(TAG, "Starting VPN")
-                val intent = Intent(context, ByeDpiVpnService::class.java)
+                val warp=WarpState.selected(context) || WarpState.active
+                if(warp)check(android.os.Build.VERSION.SDK_INT>=24) {"WARP требует Android 7"}
+                val intent = Intent(context,if(warp)WarpVpnService::class.java else ByeDpiVpnService::class.java)
                 intent.action = START_ACTION
                 ContextCompat.startForegroundService(context, intent)
             }
@@ -34,7 +37,7 @@ object ServiceManager {
         when (mode) {
             Mode.VPN -> {
                 Log.i(TAG, "Stopping VPN")
-                val intent = Intent(context, ByeDpiVpnService::class.java)
+                val intent = Intent(context,if(WarpState.active)WarpVpnService::class.java else ByeDpiVpnService::class.java)
                 intent.action = STOP_ACTION
                 ContextCompat.startForegroundService(context, intent)
             }
