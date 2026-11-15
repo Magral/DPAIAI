@@ -1,1 +1,1 @@
-0.12.3: substantive player API in two fresh connections; source-safe deferral, legacy evidence migration, public rejection reasons.
+0.13.0: explicit manual free WARP for installed YouTube/Instagram; own encrypted device identity, source-built pinned AmneziaWG, protected outer sockets, local mode preserved; device acceptance required.

@@ -26,6 +26,7 @@ import io.github.dovecoteescapee.byedpi.databinding.ActivityMainBinding
 import io.github.dovecoteescapee.byedpi.services.ServiceManager
 import io.github.dovecoteescapee.byedpi.services.appStatus
 import io.github.dovecoteescapee.byedpi.utility.*
+import io.github.dovecoteescapee.byedpi.warp.*
 import io.github.dovecoteescapee.byedpi.catalog.*
 import io.github.dovecoteescapee.byedpi.services.CatalogUpdateJob
 import kotlinx.coroutines.Dispatchers
@@ -38,7 +39,8 @@ class MainActivity : AppCompatActivity() {
     private val catalogHandler = android.os.Handler(android.os.Looper.getMainLooper())
     private val catalogUi = object : Runnable {
         override fun run() {
-            binding.mobileCatalogStatus.text = if (appStatus.first == AppStatus.Running) MobilePresentation.summary()
+            updateStatus()
+            binding.mobileCatalogStatus.text = if(WarpState.selected(this@MainActivity) || WarpState.active) WarpState.report() else if (appStatus.first == AppStatus.Running) MobilePresentation.summary()
                 else "Включите защиту для YouTube и Instagram"
             catalogHandler.postDelayed(this,2000)
         }
@@ -175,8 +177,9 @@ class MainActivity : AppCompatActivity() {
         binding.playbackDiagnostics.setOnClickListener { startActivity(Intent(this, io.github.dovecoteescapee.byedpi.catalog.PlaybackDiagnosticActivity::class.java).putExtra("proxy_port",1080)
             .putExtra("youtube_command",MobilePlan.command(MobilePlan.saved(getPreferences()),"youtube"))
             .putExtra("youtube_dns",MobileDns.selected(this,"youtube").ifEmpty { "системный" })) }
-        binding.youtubeProblem.setOnClickListener { report("youtube") }
-        binding.instagramProblem.setOnClickListener { report("instagram") }
+        binding.connectionTransport.setOnClickListener {startActivity(Intent(this,WarpActivity::class.java))}
+        binding.youtubeProblem.setOnClickListener { if(!WarpState.selected(this))report("youtube") }
+        binding.instagramProblem.setOnClickListener { if(!WarpState.selected(this))report("instagram") }
         binding.serviceTuningButton.setOnClickListener { startActivity(Intent(this, ServiceTuningActivity::class.java)) }
         binding.statusButton.setOnClickListener {
             val (status, _) = appStatus
@@ -252,7 +255,10 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun start() {
-        try { MobileSetup.prepare(this) }
+        if(WarpState.selected(this)) {
+            if(Build.VERSION.SDK_INT<24 || !WarpStore(this).exists()) {startActivity(Intent(this,WarpActivity::class.java));return}
+        }
+        try { if(!WarpState.selected(this))MobileSetup.prepare(this) }
         catch (e: Exception) { Toast.makeText(this,e.message ?: "Установите YouTube или Instagram",Toast.LENGTH_LONG).show(); return }
         when (getPreferences().mode()) {
             Mode.VPN -> {
@@ -275,12 +281,15 @@ class MainActivity : AppCompatActivity() {
     private fun updateStatus() {
         val (status, mode) = appStatus
 
-        Log.i(TAG, "Updating status: $status, $mode")
+        val warp=WarpState.selected(this) || WarpState.active
 
-        binding.youtubeProblem.isEnabled = status == AppStatus.Running
-        binding.instagramProblem.isEnabled = status == AppStatus.Running
+        binding.youtubeProblem.isEnabled = status == AppStatus.Running && !warp
+        binding.instagramProblem.isEnabled = status == AppStatus.Running && !warp
+        binding.serviceTuningButton.isEnabled=!warp
+        binding.playbackDiagnostics.isEnabled=!warp
+        binding.connectionTransport.text=if(warp)"Режим подключения: бесплатный WARP" else "Режим подключения: локальный обход"
         val preferences = getPreferences()
-        val targets = TargetApps.selected(this)
+        val targets = if(warp)TargetApps.installed(this).map {it.packageName}.toSet() else TargetApps.selected(this)
         @Suppress("DEPRECATION")
         val labels = targets.map { pkg ->
             try { packageManager.getApplicationLabel(packageManager.getApplicationInfo(pkg, 0)).toString() }
@@ -288,6 +297,12 @@ class MainActivity : AppCompatActivity() {
         }.sorted()
         binding.targetsSummary.text = "Instagram + YouTube\n"+if (labels.isEmpty()) "Подключаются установленные клиенты" else labels.joinToString(", ")
         binding.proxyAddress.visibility = android.view.View.GONE
+        if(warp) {
+            binding.statusText.text=if(WarpState.active)WarpState.status else "Выбран бесплатный WARP"
+            binding.statusButton.text=if(WarpState.active)"Выключить WARP" else "Включить WARP"
+            binding.statusButton.isEnabled=true
+            return
+        }
 
         when (status) {
             AppStatus.Halted -> {

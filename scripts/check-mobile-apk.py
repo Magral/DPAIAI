@@ -5,18 +5,22 @@ apk=pathlib.Path(sys.argv[1]);aapt=pathlib.Path(os.environ['ANDROID_HOME'])/'bui
 badging=subprocess.check_output([str(aapt),'dump','badging',str(apk)],text=True)
 assert "package: name='io.github.magral.dpipilot'" in badging
 manifest=subprocess.check_output([str(aapt),'dump','xmltree',str(apk),'AndroidManifest.xml'],text=True)
-for item in ['MobileEngineService',':mobileengine','InstagramAService','InstagramBService','YoutubeAService','YoutubeBService',':instagram_a',':youtube_a','PhoneRecoveryReceiver','TuningWorkerService',':tuner','CatalogUpdateJob','android.permission.BIND_JOB_SERVICE','com.instagram.android','com.google.android.youtube','StrategyGeneratorActivity','PlaybackDiagnosticActivity']:
+for item in ['MobileEngineService',':mobileengine','InstagramAService','InstagramBService','YoutubeAService','YoutubeBService',':instagram_a',':youtube_a','PhoneRecoveryReceiver','TuningWorkerService',':tuner','CatalogUpdateJob','android.permission.BIND_JOB_SERVICE','com.instagram.android','com.google.android.youtube','StrategyGeneratorActivity','PlaybackDiagnosticActivity','WarpActivity','WarpVpnService']:
     assert item in manifest,item
 with zipfile.ZipFile(apk) as package:
     for abi in ['armeabi-v7a','arm64-v8a','x86','x86_64']:
         modern=package.read(f'lib/{abi}/libmobilepilot.so');legacy=package.read(f'lib/{abi}/libbyedpi.so')
+        warp=package.read(f'lib/{abi}/libpilotwarp.so');shim=package.read(f'lib/{abi}/libwarpjni.so')
+        for symbol in [b'PilotWarpStart',b'PilotWarpStop',b'PilotWarpStats',b'PilotWarpKeys']: assert symbol in warp,symbol
+        assert b'Java_io_github_dovecoteescapee_byedpi_warp_WarpNative_start' in shim
         assert b'Java_io_github_dovecoteescapee_byedpi_core_MobileProxy_jniCreateSocketWithCommandLine' in modern
         assert b'Java_io_github_dovecoteescapee_byedpi_core_ByeDpiProxy_jniCreateSocket' in legacy
         assert b'__wrap_connect' in modern and b'__wrap_sendto' in modern
         assert package.getinfo(f'lib/{abi}/libhev-socks5-tunnel.so').file_size>0
+    assert package.getinfo('assets/warp-licenses.txt').file_size>1000
     dex=b''.join(package.read(n) for n in package.namelist() if n.endswith('.dex'))
     for removed in [b'TelegramBridgeService',b'MTProxyService']:
         assert removed not in dex
-    for required in [b'DnsResolver',b'MobileDns',b'MobileVideoProbe',b'PlaybackDiagnosticActivity',b'PlaybackDiagnostics',b'YouTubePlayback']:
+    for required in [b'DnsResolver',b'MobileDns',b'MobileVideoProbe',b'PlaybackDiagnosticActivity',b'PlaybackDiagnostics',b'YouTubePlayback',b'WarpVpnService',b'WarpStore',b'WarpProfile',b'WarpActivity']:
         assert required in dex,required
 print('Phone identity, four ABIs, independent service slots, recovery receiver, JNI and fixed Instagram/YouTube boundaries verified')

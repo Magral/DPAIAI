@@ -2,7 +2,7 @@ name: Android APK
 on:
   pull_request:
     branches: [main]
-    paths: ['app/**', 'tv/src/main/java/**', '.github/workflows/android.yml']
+    paths: ['app/**', 'tv/src/main/java/**', 'warp/**', 'scripts/**', '.github/workflows/android.yml']
   push:
     branches: [main]
     paths-ignore: [.github/workflows/publish-apk.yml, 'windows/**', .github/workflows/windows.yml]
@@ -21,6 +21,15 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25.3'
+          cache-dependency-path: warp/native/go.sum
+      - name: Test real WARP packet transport and JNI ABI
+        run: |
+          go -C warp/native test -race ./...
+          python3 warp/test-native.py
+          python3 warp/test-build-output.py
       - uses: android-actions/setup-android@v3
         with:
           packages: platform-tools
@@ -31,6 +40,8 @@ jobs:
         run: python3 app/src/test/python/mobile_jni_test.py
       - name: Build and unit tests
         run: bash gradlew assembleDebug testDebugUnitTest --stacktrace
+      - name: Audit debug APK transport libraries and boundaries
+        run: python3 scripts/check-mobile-apk.py app/build/outputs/apk/debug/app-debug.apk
       - name: Check every generated strategy with pinned native engine
         run: python3 app/src/test/python/mobile_generator_test.py
       - name: Verify simultaneous Instagram and YouTube routing

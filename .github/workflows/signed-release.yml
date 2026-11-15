@@ -30,6 +30,15 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25.3'
+          cache-dependency-path: warp/native/go.sum
+      - name: Test real WARP packet transport and JNI ABI
+        run: |
+          go -C warp/native test -race ./...
+          python3 warp/test-native.py
+          python3 warp/test-build-output.py
       - uses: android-actions/setup-android@v3
         with:
           packages: platform-tools
@@ -100,7 +109,7 @@ jobs:
               release = (await github.rest.repos.createRelease({
                 owner,repo,tag_name:tag,target_commitish:context.sha,name:'DPI Pilot '+version,
                 draft:true,prerelease:false,
-                body:fs.readFileSync("docs/MOBILE_0123.md","utf8")+"\n\nSource: "+context.sha+"\nSHA-256 APK: "+digest.slice(7)
+                body:fs.readFileSync("docs/MOBILE_0130.md","utf8")+"\n\nSource: "+context.sha+"\nSHA-256 APK: "+digest.slice(7)
               })).data;
             }
             const assets = (await github.rest.repos.listReleaseAssets({owner,repo,release_id:release.id})).data;
