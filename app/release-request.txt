@@ -1,1 +1,1 @@
-0.13.0: explicit manual free WARP for installed YouTube/Instagram; own encrypted device identity, source-built pinned AmneziaWG, protected outer sockets, local mode preserved; device acceptance required.
+0.13.1: free WARP recovery backoff and VPN-bound on-demand media diagnostics; no automatic local fallback; standalone device acceptance required.

@@ -1,0 +1,11 @@
+# WARP reliability and honest diagnostics
+
+Pavel resumed development after pause; free Nova WARP works on phone/TV while local DPI tests give false confidence. Continue existing source-built manual phone WARP, with a practical diagnostic and recovery release before introducing another protocol or automatic local fallback. Existing execution/release authorization stands; implementation decisions are delegated.
+
+Approaches: DNS/TCP-only changes cannot demonstrate a usable alternate route. Copying the whole Nova engine imports unrelated relays and account flows. Chosen approach: improve own WARP lifecycle and inspect its actual data path, then separately evaluate MASQUE with its own identity/enrollment requirements. No shared credentials, TLS bypass, paid VPN, or permanent media polling.
+
+This release: bounded 12-second handshake attempts with finite startup sweep; retries after 30s, 2min, then 10min while enabled. Wait for physical network changes as before. Preserve encrypted profile on every network failure. Passive idle counters never trigger disruptive switches. Session generation prevents old diagnostic results surviving reconnect. Safe failure categories instead of swallowed errors; no arbitrary exception text/keys.
+
+Manual media diagnostic runs only on request through the current WARP VPN Network, bound sockets and DNS, never falls back to physical/system network. Include DPI Pilot's own UID for its diagnostic/control requests in addition to fixed YouTube/Instagram; other apps remain excluded, empty target-app set still rejects before TUN. Explicitly explain this small routing expansion in UI/notes. Check public player API and video/audio samples with existing bounded TLS-verified diagnostics. Inaccessible signed sample = not verified; handshake is never playback success. Diagnostics do not alter strategies, exclusions, saved keys, or switch transports. Stop/reconnect cancels diagnostics and invalidates report.
+
+Keep manual local/WARP selection. Do not ship automatic local→WARP fallback before standalone phone playback acceptance; otherwise another false positive could select a broken route. TV and Windows keep existing binaries in this iteration. Shared HTTP helper enhancement is compatible on all Android targets.

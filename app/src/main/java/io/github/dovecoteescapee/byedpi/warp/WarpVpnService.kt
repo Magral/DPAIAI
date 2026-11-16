@@ -67,6 +67,7 @@ class WarpVpnService : LifecycleVpnService() {
         }
     }.getOrDefault(false)
     private fun connect(){
+        WarpState.session.invalidate()
         tunnelJob?.cancel()
         tunnelJob=lifecycleScope.launch {
             nativeLock.withLock {
@@ -74,17 +75,22 @@ class WarpVpnService : LifecycleVpnService() {
                     currentCoroutineContext().ensureActive();if(!desired)return@withLock
                     val network=physical
                     if(network==null){notifyStatus("WARP: ждём Wi-Fi или мобильную сеть");return@withLock}
-                    val apps=WarpPolicy.apps(TargetApps.installed(this@WarpVpnService).map {it.packageName}.toSet())
+                    val apps=WarpRecoveryPolicy.routedApps(TargetApps.installed(this@WarpVpnService).map {it.packageName}.toSet(),packageName)
                     val profile=withContext(Dispatchers.IO){WarpStore(this@WarpVpnService).load()} ?: throw IllegalStateException("profile missing")
                     val host=profile.endpoint.substringBefore(':')
                     val endpoints=(listOf(profile.endpoint)+listOf(2408,500,4500,1701,443,988).map {"$host:$it"}).distinct()
                     val modes=if(profile.options.isEmpty())listOf("plain","junk","reserved") else listOf("plain","reserved")
                     val saved=getPreferences().getString("warp_last_attempt","").orEmpty()
-                    val attempts=modes.flatMap {mode->endpoints.map {it to mode}}.sortedBy {if("${it.first}|${it.second}"==saved)0 else 1}
+                    val attempts=endpoints.flatMap {endpoint->modes.map {endpoint to it}}.sortedBy {if("${it.first}|${it.second}"==saved)0 else 1}
+                    val queue=WarpAttempts(attempts)
+                    var failures=0
+                    while(desired) {
                     var success=false
-                    for((position,attempt) in attempts.withIndex()) {
-                        currentCoroutineContext().ensureActive();if(!desired)break
-                        val (endpoint,mode)=attempt
+                    val sweepStart=SystemClock.elapsedRealtime()
+                    for(position in attempts.indices) {
+                        currentCoroutineContext().ensureActive();if(!desired || !WarpRecoveryPolicy.canAttempt(SystemClock.elapsedRealtime()-sweepStart))break
+                        val (endpoint,mode)=queue.next()
+                        val ticket=WarpState.session.restart()
                         notifyStatus("WARP: подключение ${position+1}/${attempts.size}")
                         WarpState.detail="Сервер: $endpoint · режим $mode\nПриложения: ${apps.joinToString()}\nОжидаем подтверждённое рукопожатие"
                         var tun: ParcelFileDescriptor?=null
@@ -100,33 +106,44 @@ class WarpVpnService : LifecycleVpnService() {
                             val ipc=profile.ipc(endpoint).let {if(mode=="junk")it.replace("replace_peers=true\n","replace_peers=true\njc=3\njmin=40\njmax=70\n") else it}
                             val error=duplicate.use {copy->withContext(Dispatchers.IO){WarpNative.start(copy.detachFd(),ipc,JSONArray(profile.reserved).toString(),mode!="reserved",this@WarpVpnService)}}
                             require(error.isEmpty()) {"native start failed"}
-                            val until=SystemClock.elapsedRealtime()+6500
+                            val until=minOf(SystemClock.elapsedRealtime()+WarpRecoveryPolicy.HANDSHAKE_MS,sweepStart+WarpRecoveryPolicy.SWEEP_MS)
                             while(SystemClock.elapsedRealtime()<until) {
                                 delay(350);val stats=withContext(Dispatchers.IO){JSONObject(WarpNative.stats())}
                                 if(stats.optLong("handshake")>0) {
-                                    currentCoroutineContext().ensureActive();success=true
+                                    currentCoroutineContext().ensureActive();success=true;WarpState.session.connected(ticket)
                                     getPreferences().edit().putString("warp_last_attempt","$endpoint|$mode").apply()
                                     notifyStatus("WARP: рукопожатие подтверждено")
                                     while(desired) {
                                         val counters=withContext(Dispatchers.IO){JSONObject(WarpNative.stats())}
-                                        WarpState.detail="Сервер: $endpoint · режим $mode\nТолько YouTube и Instagram · MTU 1280\nОтправлено: ${counters.optLong("tx")} Б; получено: ${counters.optLong("rx")} Б\nПоследнее рукопожатие: ${counters.optLong("handshake")} (Unix)\nЭто счётчики туннеля; проверьте видео в приложении."
+                                        WarpState.detail="Сервер: $endpoint · режим $mode\nYouTube, Instagram и диагностика DPI Pilot · MTU 1280\nОтправлено: ${counters.optLong("tx")} Б; получено: ${counters.optLong("rx")} Б\nПоследнее рукопожатие: ${counters.optLong("handshake")} (Unix)\nЭто счётчики туннеля; проверьте видео в приложении."
                                         delay(10000)
                                     }
                                     break
                                 }
                             }
+                            if(!success)WarpState.detail="Сервер: $endpoint · режим $mode\nРукопожатие не получено за отведённое время. Ключ сохранён."
                         } catch(e: CancellationException){throw e}
-                        catch(_: Exception){/* Saved identity is preserved. Try the next bounded endpoint/mode. */}
-                        finally {withContext(NonCancellable+Dispatchers.IO){runCatching {WarpNative.stop()};tun?.close()}}
+                        catch(e: Exception){WarpState.detail="Сервер: $endpoint · режим $mode\nСбой: ${failureCategory(e)}. Ключ сохранён."}
+                        finally {WarpState.session.invalidate();withContext(NonCancellable+Dispatchers.IO){runCatching {WarpNative.stop()};tun?.close()}}
                         if(success)break
                     }
-                    if(!success && desired)notifyStatus("WARP не подключился. Ключ сохранён; повторите запуск или смените сеть")
+                    if(success || !desired)break
+                    val pause=WarpRecoveryPolicy.retryDelay(failures++)
+                    notifyStatus("WARP: нет рукопожатия; повтор через ${pause/1000} с. Ключ сохранён")
+                    delay(pause)
+                    }
                 } catch(e: CancellationException){throw e}
                 catch(_: LinkageError){notifyStatus("Ядро WARP недоступно на устройстве")}
                 catch(_: Exception){notifyStatus("WARP: проверьте сохранённый профиль и наличие YouTube или Instagram")}
                 finally {withContext(NonCancellable+Dispatchers.IO){runCatching {WarpNative.stop()}}}
             }
         }
+    }
+    private fun failureCategory(e: Exception): String = when(e) {
+        is java.net.SocketTimeoutException -> "таймаут сети"
+        is java.net.SocketException -> "сокет или физическая сеть"
+        is SecurityException -> "разрешение Android VPN"
+        else -> "подготовка туннеля (${e.javaClass.simpleName})"
     }
     private fun notifyStatus(text: String){
         WarpState.status=text
@@ -138,6 +155,7 @@ class WarpVpnService : LifecycleVpnService() {
     }
     private fun broadcast(action: String){sendBroadcast(Intent(action).putExtra(SENDER,Sender.VPN.ordinal).setPackage(packageName))}
     private fun end(){
+        WarpState.session.invalidate()
         val ticket=control.stop();val stopping=tunnelJob
         getPreferences().edit().putBoolean("mobile_enabled",false).apply();changeJob?.cancel();stopping?.cancel()
         lifecycleScope.launch {
@@ -149,6 +167,7 @@ class WarpVpnService : LifecycleVpnService() {
     override fun onRevoke(){end()}
     override fun onDestroy(){
         if(desired)WarpState.status="WARP остановлен Android"
+        WarpState.session.invalidate()
         control.stop();changeJob?.cancel();tunnelJob?.cancel();if(registered)runCatching {cm.unregisterNetworkCallback(callback)}
         runCatching {WarpNative.stop()};WarpState.active=false;setStatus(AppStatus.Halted,Mode.VPN);super.onDestroy()
     }

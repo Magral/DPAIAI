@@ -19,6 +19,10 @@ class WarpActivity : AppCompatActivity() {
     private var future: Future<*>?=null
     private val enrollment=AtomicReference<WarpEnrollment?>()
     private val stream=AtomicReference<java.io.InputStream?>()
+    private var diagnostic: io.github.dovecoteescapee.byedpi.utility.ProbeSession?=null
+    private var diagnosticReport=""
+    private var diagnosticTicket: Long?=null
+    private fun visibleDiagnostic()=diagnosticTicket?.let {WarpDiagnosticReport(it,diagnosticReport).display(WarpState.session)} ?: diagnosticReport
     private var busy=false
     private lateinit var info: TextView
     private lateinit var local: Button
@@ -45,7 +49,7 @@ class WarpActivity : AppCompatActivity() {
         val box=LinearLayout(this).apply {orientation=LinearLayout.VERTICAL;setPadding(24,16,24,24)}
         fun text(value: String){box.addView(TextView(this).apply {text=value;textSize=17f;setPadding(0,8,0,12)})}
         fun button(value: String,action: ()->Unit): Button=Button(this).apply {text=value;isAllCaps=false;setOnClickListener {action()};box.addView(this)}
-        text("Локальный обход сохраняет прежние стратегии. Неофициальный клиент бесплатного WARP передаёт трафик YouTube и Instagram через Cloudflare. Остальные приложения не включаются в туннель. Доступность зависит от сети и Cloudflare; воспроизведение проверяется в YouTube.")
+        text("Локальный обход сохраняет прежние стратегии. Неофициальный клиент бесплатного WARP передаёт трафик YouTube и Instagram через Cloudflare. Собственные запросы диагностики и обновлений DPI Pilot также идут через туннель; другие приложения не включаются. Доступность зависит от сети и Cloudflare; воспроизведение проверяется в YouTube.")
         local=button("Выбрать локальный обход") {choose(false)}
         warp=button("Выбрать бесплатный WARP") {choose(true)}
         text("Первичная настройка WARP: создайте собственный ключ Cloudflare или импортируйте свой профиль WARP (.conf). Платная подписка и ключ WARP+ не нужны. Данные подключения остаются зашифрованными на устройстве.")
@@ -60,10 +64,39 @@ class WarpActivity : AppCompatActivity() {
         button("Отменить подготовку") {cancel();message="Подготовка отменена. Сохранённый профиль не менялся.";render()}
         text("Если регистрация Cloudflare недоступна: временно включите рабочий WARP в Nova и добавьте DPI Pilot в приложения его туннеля, затем повторите создание подключения. После сохранения отключите Nova. Для обычного запуска DPI Pilot она больше не нужна.")
         text("После настройки вернитесь на главный экран и нажмите «Включить». Режим переключается только при выключенном DPI Pilot. WARP доступен начиная с Android 7.")
-        button("Скопировать безопасный статус") {(getSystemService(CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("DPI Pilot WARP",WarpState.report()));Toast.makeText(this,"Статус скопирован без ключей",Toast.LENGTH_SHORT).show()}
+        button("Проверить видео через работающий WARP") {checkPlayback()}
+        button("Остановить проверку видео") {diagnostic?.cancel()}
+        button("Скопировать безопасный статус") {(getSystemService(CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("DPI Pilot WARP",WarpState.report()+"\n\n"+visibleDiagnostic()));Toast.makeText(this,"Статус скопирован без ключей",Toast.LENGTH_SHORT).show()}
         info=TextView(this).apply {textSize=16f;setTextIsSelectable(true)};box.addView(info)
         setContentView(ScrollView(this).apply {addView(box)})
         render()
+    }
+    private fun checkPlayback(){
+        if(busy || diagnostic!=null)return
+        val ticket=WarpState.session.snapshot()
+        val cm=getSystemService(CONNECTIVITY_SERVICE) as android.net.ConnectivityManager
+        val network=if(Build.VERSION.SDK_INT>=23)cm.activeNetwork else null
+        if(ticket==null || network==null || cm.getNetworkCapabilities(network)?.hasTransport(android.net.NetworkCapabilities.TRANSPORT_VPN)!=true){message="Сначала включите WARP и дождитесь рукопожатия";render();return}
+        val session=io.github.dovecoteescapee.byedpi.utility.ProbeSession();diagnostic=session;diagnosticTicket=ticket
+        diagnosticReport="Проверка по требованию: DNS и сокеты привязаны к WARP VPN. До нескольких минут."
+        fun check(){session.checkActive();if(!WarpState.session.valid(ticket)){session.cancel();session.checkActive()}}
+        render()
+        worker.submit {
+            val callback=object: android.net.ConnectivityManager.NetworkCallback(){override fun onLost(lost: android.net.Network){if(lost==network)session.cancel()}}
+            var registered=false
+            try {
+                cm.registerNetworkCallback(android.net.NetworkRequest.Builder().removeCapability(android.net.NetworkCapabilities.NET_CAPABILITY_NOT_VPN).addTransportType(android.net.NetworkCapabilities.TRANSPORT_VPN).build(),callback);registered=true
+                check()
+                val test=io.github.dovecoteescapee.byedpi.catalog.PlaybackDiagnostics(
+                    transport={req,parent,progress->check();io.github.dovecoteescapee.byedpi.catalog.PlaybackHttp.requestOn(network,req,parent,progress).also {check()}},
+                    resolve={host,parent->check();io.github.dovecoteescapee.byedpi.catalog.PlaybackHttp.resolveOn(network,host,parent).also {check()}},
+                    ensureRoute=::check,routeDescription="собственный WARP VPN (DNS и сокеты привязаны к сети $network)")
+                val result=test.run(null,session) {line->check();runOnUiThread {if(diagnostic===session && WarpState.session.valid(ticket)){diagnosticReport+="\n$line";render()}}}
+                check();runOnUiThread {if(diagnostic===session && WarpState.session.valid(ticket)){diagnosticReport="Маршрут: собственный WARP VPN, сеть $network\n$result";render()}}
+            } catch(_: java.util.concurrent.CancellationException){runOnUiThread {if(diagnostic===session){diagnosticReport+="\nПроверка остановлена или WARP переподключён. Итог недействителен.";render()}}}
+            catch(_: Exception){runOnUiThread {if(diagnostic===session){diagnosticReport+="\nПроверка не завершена. Это не подтверждение видео.";render()}}}
+            finally {if(registered)runCatching {cm.unregisterNetworkCallback(callback)};session.cancel();runOnUiThread {if(diagnostic===session)diagnostic=null}}
+        }
     }
     private fun idle()=Build.VERSION.SDK_INT>=24 && !busy && !WarpState.active && appStatus.first!=AppStatus.Running
     private fun choose(useWarp: Boolean){
@@ -91,13 +124,13 @@ class WarpActivity : AppCompatActivity() {
             }} catch(_: LinkageError){runOnUiThread {if(generation.current(ticket)&&!isFinishing&&!isDestroyed){busy=false;message="Ядро WARP недоступно на устройстве";render()}}}
         }
     }
-    private fun cancel(){generation.next();enrollment.getAndSet(null)?.cancel();runCatching {stream.getAndSet(null)?.close()};future?.cancel(true);future=null;busy=false}
+    private fun cancel(){diagnostic?.cancel();diagnostic=null;generation.next();enrollment.getAndSet(null)?.cancel();runCatching {stream.getAndSet(null)?.close()};future?.cancel(true);future=null;busy=false}
     private fun render(){
         if(!::info.isInitialized)return
         val off=appStatus.first!=AppStatus.Running && !WarpState.active
         local.isEnabled=off&&!busy;warp.isEnabled=off&&!busy&&Build.VERSION.SDK_INT>=24;create.isEnabled=idle();importButton.isEnabled=idle()
         val saved=if(WarpStore(this).exists())"Профиль WARP сохранён" else "Профиль WARP ещё не создан"
-        info.text="Режим: ${if(WarpState.selected(this))"бесплатный WARP" else "локальный обход"}\n$saved\n$message\n\n${WarpState.report()}"
+        info.text="Режим: ${if(WarpState.selected(this))"бесплатный WARP" else "локальный обход"}\n$saved\n$message\n\n${WarpState.report()}\n\n${visibleDiagnostic()}"
     }
     override fun onResume(){super.onResume();handler.post(refresh)}
     override fun onPause(){handler.removeCallbacks(refresh);super.onPause()}

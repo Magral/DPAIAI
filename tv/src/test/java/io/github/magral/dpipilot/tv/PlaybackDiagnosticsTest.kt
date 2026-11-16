@@ -6,6 +6,13 @@ import org.junit.Test
 import java.util.concurrent.CancellationException
 
 class PlaybackDiagnosticsTest {
+    @Test fun boundWarpReportNamesItsRouteWithoutRecommendingPaidVpn() {
+        val diagnostic=PlaybackDiagnostics({ _,_,_ -> response("consent/login") },{ _,_ -> emptyList() },routeDescription="собственный WARP VPN")
+        val report=diagnostic.run(null,ProbeSession())
+        assertTrue(report.contains("Маршрут: собственный WARP VPN"))
+        assertFalse(report.contains("может отличаться от YouTube"))
+        assertFalse(report.contains("платный VPN"))
+    }
     @Test fun routeChangeInvalidatesDiscoveryBeforeAnyMediaRequest() {
         var changed=false;var media=0
         val diagnostic=PlaybackDiagnostics({ req,_,_ ->
