@@ -18,3 +18,16 @@ class WarpSession {
     @Synchronized fun snapshot(): Long?=generation.takeIf {ready}
     @Synchronized fun invalidate(){generation++;ready=false}
 }
+
+/** Cursor survives timed-out sweeps so later ports are eventually attempted. */
+class WarpAttempts<T>(private val candidates: List<T>) {
+    private var cursor=0
+    init {require(candidates.isNotEmpty())}
+    fun next(): T=candidates[cursor].also {cursor=(cursor+1)%candidates.size}
+}
+
+/** A completed report stays attached to its tunnel, not merely to the activity. */
+data class WarpDiagnosticReport(val ticket: Long,val text: String) {
+    fun display(session: WarpSession): String = if(session.valid(ticket))text else
+        "РЕЗУЛЬТАТ УСТАРЕЛ: WARP выключен или переподключён. Запустите новую проверку.\nИсторический отчёт:\n$text"
+}

@@ -9,11 +9,12 @@ import org.json.JSONObject
 class PlaybackDiagnostics(
     private val transport: (PlaybackHttp.Request,ProbeSession,(String)->Unit)->HttpCodec.Response=PlaybackHttp::request,
     private val resolve: (String,ProbeSession)->List<String> = PlaybackHttp::resolve,
-    private val ensureRoute: ()->Unit = {}
+    private val ensureRoute: ()->Unit = {},
+    private val routeDescription: String?=null
 ) {
     fun run(proxyPort: Int?,session: ProbeSession,progress: (String)->Unit = {}): String {
         val lines=mutableListOf("YouTube: диагностика меню и медиадоставки v1",
-            "Маршрут: "+if(proxyPort==null)"системный маршрут этого приложения (может отличаться от YouTube)" else "локальный SOCKS5 127.0.0.1:$proxyPort",
+            "Маршрут: "+(routeDescription ?: if(proxyPort==null)"системный маршрут этого приложения (может отличаться от YouTube)" else "локальный SOCKS5 127.0.0.1:$proxyPort"),
             "Проверки узлов и API сами по себе не подтверждают видео. Отчёт не изменяет стратегии.")
         fun check() {session.checkActive();ensureRoute();session.checkActive()}
         fun add(text: String) {check();lines.add(text);progress(text)}
@@ -30,7 +31,7 @@ class PlaybackDiagnostics(
             try {add("DNS устройства $host: "+resolve(host,session).joinToString().ifEmpty {"нет адресов"})}
             catch(e: CancellationException) {throw e}
             catch(e: Exception) {session.checkActive();add("DNS устройства $host: ${e.javaClass.simpleName}")}
-            val dns=request("Публичный DNS (через системный маршрут)",PlaybackHttp.Request("dns.google","/resolve?name=$host&type=A",limit=16384))
+            val dns=request("Публичный DNS (${routeDescription ?: "системный маршрут"})",PlaybackHttp.Request("dns.google","/resolve?name=$host&type=A",limit=16384))
             if(dns!=null) {
                 val json=runCatching {JSONObject(String(dns.body,Charsets.UTF_8))}.getOrNull()
                 val answers=json?.optJSONArray("Answer")
@@ -38,7 +39,7 @@ class PlaybackDiagnostics(
                 add("DNS Google $host: "+ips.filter {Regex("[0-9.]{7,15}").matches(it)}.joinToString().ifEmpty {"ответ не получен"})
             }
         }
-        request("Контроль интернета (системный маршрут)",PlaybackHttp.Request("www.gstatic.com","/generate_204",limit=1))
+        request("Контроль интернета (${routeDescription ?: "системный маршрут"})",PlaybackHttp.Request("www.gstatic.com","/generate_204",limit=1))
         val mapping=request("Карта CDN",PlaybackHttp.Request("redirector.googlevideo.com","/report_mapping?di=no",proxyPort,limit=4096))
         if(mapping!=null) {
             // report_mapping may include the viewer's public IP. Keep only the server-side cache label.
@@ -83,7 +84,7 @@ class PlaybackDiagnostics(
             YouTubePlayback.State.FAILED -> "МЕДИА: ЕСТЬ СБОЙ ИЛИ НИЗКАЯ СКОРОСТЬ. Доступность сайта/TLS не доказывает медиадоставку."
             YouTubePlayback.State.UNAVAILABLE -> "МЕДИА: НЕ ПРОВЕРЕНО. Тестовый адрес недоступен/не выдан; стратегии не исключались."
         })
-        add("Сравните два отчёта на этом устройстве: обычная сеть и платный VPN. Совпадение/различие DNS само по себе не доказывает подмену; CDN выдаёт разные адреса штатно.")
+        add("Для сравнения используйте отчёты обычной сети и заведомо рабочего туннеля на этом устройстве. Совпадение/различие DNS само по себе не доказывает подмену; CDN выдаёт разные адреса штатно.")
         return lines.joinToString("\n")
     }
 }

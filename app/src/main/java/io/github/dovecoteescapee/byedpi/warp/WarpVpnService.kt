@@ -82,13 +82,14 @@ class WarpVpnService : LifecycleVpnService() {
                     val modes=if(profile.options.isEmpty())listOf("plain","junk","reserved") else listOf("plain","reserved")
                     val saved=getPreferences().getString("warp_last_attempt","").orEmpty()
                     val attempts=endpoints.flatMap {endpoint->modes.map {endpoint to it}}.sortedBy {if("${it.first}|${it.second}"==saved)0 else 1}
+                    val queue=WarpAttempts(attempts)
                     var failures=0
                     while(desired) {
                     var success=false
                     val sweepStart=SystemClock.elapsedRealtime()
-                    for((position,attempt) in attempts.withIndex()) {
+                    for(position in attempts.indices) {
                         currentCoroutineContext().ensureActive();if(!desired || !WarpRecoveryPolicy.canAttempt(SystemClock.elapsedRealtime()-sweepStart))break
-                        val (endpoint,mode)=attempt
+                        val (endpoint,mode)=queue.next()
                         val ticket=WarpState.session.restart()
                         notifyStatus("WARP: подключение ${position+1}/${attempts.size}")
                         WarpState.detail="Сервер: $endpoint · режим $mode\nПриложения: ${apps.joinToString()}\nОжидаем подтверждённое рукопожатие"

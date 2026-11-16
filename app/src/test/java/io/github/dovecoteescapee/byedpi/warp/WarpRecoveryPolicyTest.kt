@@ -4,6 +4,22 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class WarpRecoveryPolicyTest {
+    @Test fun retriesEventuallyReachPortsAfterSilentEarlyTimeouts() {
+        val candidates=(listOf(2408,500,4500,1701,443,988)).flatMap {port->listOf("plain","junk","reserved").map {"$port|$it"}}
+        val queue=WarpAttempts(candidates)
+        val visited=mutableListOf<String>()
+        repeat(3) {repeat(10){visited.add(queue.next())}}
+        assertTrue(visited.containsAll(candidates))
+        assertEquals(candidates,visited.take(candidates.size))
+    }
+    @Test fun completedReportBecomesStaleWhenTunnelStopsOrChanges() {
+        val gate=WarpSession();val ticket=gate.restart();gate.connected(ticket)
+        val report=WarpDiagnosticReport(ticket,"МЕДИА: ОБРАЗЕЦ ЗАГРУЖЕН")
+        assertEquals("МЕДИА: ОБРАЗЕЦ ЗАГРУЖЕН",report.display(gate))
+        gate.invalidate();assertTrue(report.display(gate).startsWith("РЕЗУЛЬТАТ УСТАРЕЛ"))
+        val other=gate.restart();gate.connected(other)
+        assertTrue(report.display(gate).startsWith("РЕЗУЛЬТАТ УСТАРЕЛ"))
+    }
     @Test fun retryBudgetDoesNotSpinOrResetSavedIdentity() {
         assertEquals(listOf(30000L,120000L,600000L,600000L), (0..3).map(WarpRecoveryPolicy::retryDelay))
         assertEquals(12000L,WarpRecoveryPolicy.HANDSHAKE_MS)

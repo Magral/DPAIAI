@@ -21,6 +21,8 @@ class WarpActivity : AppCompatActivity() {
     private val stream=AtomicReference<java.io.InputStream?>()
     private var diagnostic: io.github.dovecoteescapee.byedpi.utility.ProbeSession?=null
     private var diagnosticReport=""
+    private var diagnosticTicket: Long?=null
+    private fun visibleDiagnostic()=diagnosticTicket?.let {WarpDiagnosticReport(it,diagnosticReport).display(WarpState.session)} ?: diagnosticReport
     private var busy=false
     private lateinit var info: TextView
     private lateinit var local: Button
@@ -64,7 +66,7 @@ class WarpActivity : AppCompatActivity() {
         text("После настройки вернитесь на главный экран и нажмите «Включить». Режим переключается только при выключенном DPI Pilot. WARP доступен начиная с Android 7.")
         button("Проверить видео через работающий WARP") {checkPlayback()}
         button("Остановить проверку видео") {diagnostic?.cancel()}
-        button("Скопировать безопасный статус") {(getSystemService(CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("DPI Pilot WARP",WarpState.report()+"\n\n"+diagnosticReport));Toast.makeText(this,"Статус скопирован без ключей",Toast.LENGTH_SHORT).show()}
+        button("Скопировать безопасный статус") {(getSystemService(CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("DPI Pilot WARP",WarpState.report()+"\n\n"+visibleDiagnostic()));Toast.makeText(this,"Статус скопирован без ключей",Toast.LENGTH_SHORT).show()}
         info=TextView(this).apply {textSize=16f;setTextIsSelectable(true)};box.addView(info)
         setContentView(ScrollView(this).apply {addView(box)})
         render()
@@ -75,7 +77,7 @@ class WarpActivity : AppCompatActivity() {
         val cm=getSystemService(CONNECTIVITY_SERVICE) as android.net.ConnectivityManager
         val network=if(Build.VERSION.SDK_INT>=23)cm.activeNetwork else null
         if(ticket==null || network==null || cm.getNetworkCapabilities(network)?.hasTransport(android.net.NetworkCapabilities.TRANSPORT_VPN)!=true){message="Сначала включите WARP и дождитесь рукопожатия";render();return}
-        val session=io.github.dovecoteescapee.byedpi.utility.ProbeSession();diagnostic=session
+        val session=io.github.dovecoteescapee.byedpi.utility.ProbeSession();diagnostic=session;diagnosticTicket=ticket
         diagnosticReport="Проверка по требованию: DNS и сокеты привязаны к WARP VPN. До нескольких минут."
         fun check(){session.checkActive();if(!WarpState.session.valid(ticket)){session.cancel();session.checkActive()}}
         render()
@@ -88,7 +90,7 @@ class WarpActivity : AppCompatActivity() {
                 val test=io.github.dovecoteescapee.byedpi.catalog.PlaybackDiagnostics(
                     transport={req,parent,progress->check();io.github.dovecoteescapee.byedpi.catalog.PlaybackHttp.requestOn(network,req,parent,progress).also {check()}},
                     resolve={host,parent->check();io.github.dovecoteescapee.byedpi.catalog.PlaybackHttp.resolveOn(network,host,parent).also {check()}},
-                    ensureRoute=::check)
+                    ensureRoute=::check,routeDescription="собственный WARP VPN (DNS и сокеты привязаны к сети $network)")
                 val result=test.run(null,session) {line->check();runOnUiThread {if(diagnostic===session && WarpState.session.valid(ticket)){diagnosticReport+="\n$line";render()}}}
                 check();runOnUiThread {if(diagnostic===session && WarpState.session.valid(ticket)){diagnosticReport="Маршрут: собственный WARP VPN, сеть $network\n$result";render()}}
             } catch(_: java.util.concurrent.CancellationException){runOnUiThread {if(diagnostic===session){diagnosticReport+="\nПроверка остановлена или WARP переподключён. Итог недействителен.";render()}}}
@@ -128,7 +130,7 @@ class WarpActivity : AppCompatActivity() {
         val off=appStatus.first!=AppStatus.Running && !WarpState.active
         local.isEnabled=off&&!busy;warp.isEnabled=off&&!busy&&Build.VERSION.SDK_INT>=24;create.isEnabled=idle();importButton.isEnabled=idle()
         val saved=if(WarpStore(this).exists())"Профиль WARP сохранён" else "Профиль WARP ещё не создан"
-        info.text="Режим: ${if(WarpState.selected(this))"бесплатный WARP" else "локальный обход"}\n$saved\n$message\n\n${WarpState.report()}\n\n$diagnosticReport"
+        info.text="Режим: ${if(WarpState.selected(this))"бесплатный WARP" else "локальный обход"}\n$saved\n$message\n\n${WarpState.report()}\n\n${visibleDiagnostic()}"
     }
     override fun onResume(){super.onResume();handler.post(refresh)}
     override fun onPause(){handler.removeCallbacks(refresh);super.onPause()}
