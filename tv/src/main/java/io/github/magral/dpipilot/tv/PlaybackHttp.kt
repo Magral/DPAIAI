@@ -16,9 +16,9 @@ object PlaybackHttp {
     data class Request(val host: String,val path: String="/",val proxyPort: Int?=null,val body: String?=null,val limit: Int=4096,val range: Boolean=false,val timeoutMs: Int=12000)
     private val dnsPool=Executors.newFixedThreadPool(2) { r -> Thread(r,"playback-dns").apply { isDaemon=true } }
     fun resolve(host: String,session: ProbeSession): List<String> = addresses(host,session).mapNotNull {it.hostAddress}
-    private fun addresses(host: String,session: ProbeSession): List<InetAddress> {
+    private fun addresses(host: String,session: ProbeSession,network: android.net.Network?=null): List<InetAddress> {
         session.checkActive()
-        val future=dnsPool.submit(Callable { InetAddress.getAllByName(host).toList() })
+        val future=dnsPool.submit(Callable { (network?.getAllByName(host) ?: InetAddress.getAllByName(host)).toList() })
         val end=System.nanoTime()+TimeUnit.SECONDS.toNanos(6)
         try {
             while(System.nanoTime()<end) {
@@ -30,7 +30,14 @@ object PlaybackHttp {
     }
     fun allowed(host: String): Boolean = host in listOf("www.youtube.com","youtubei.googleapis.com","redirector.googlevideo.com","www.gstatic.com","dns.google") ||
         Regex("[a-zA-Z0-9.-]+\\.googlevideo\\.com").matches(host)
-    fun request(req: Request,session: ProbeSession,progress: (String)->Unit): HttpCodec.Response {
+    fun request(req: Request,session: ProbeSession,progress: (String)->Unit): HttpCodec.Response = perform(null,req,session,progress)
+    /** Explicit VPN network: DNS and sockets cannot fall back to a physical network. */
+    fun requestOn(network: android.net.Network,req: Request,session: ProbeSession,progress: (String)->Unit): HttpCodec.Response {
+        require(req.proxyPort==null)
+        return perform(network,req,session,progress)
+    }
+    fun resolveOn(network: android.net.Network,host: String,session: ProbeSession): List<String> = addresses(host,session,network).mapNotNull {it.hostAddress}
+    private fun perform(network: android.net.Network?,req: Request,session: ProbeSession,progress: (String)->Unit): HttpCodec.Response {
         require(allowed(req.host) && req.path.startsWith('/') && req.path.none {it.isISOControl()} && req.path.length<=8192)
         require(req.limit in 1..2*1024*1024 && (req.proxyPort==null || req.proxyPort in 1024..65535))
         require(req.timeoutMs in 1000..60000)
@@ -43,11 +50,12 @@ object PlaybackHttp {
                 raw=TargetProbe.socket(req.host,443,req.proxyPort,req.timeoutMs,{session.register(it);deadline.register(it)})
             } else {
                 progress("${req.host}: DNS / TCP")
-                val addresses=addresses(req.host,session)
+                val addresses=addresses(req.host,session,network)
                 var last: Exception?=null
                 for(address in addresses.take(3)) {
                     session.checkActive();deadline.check()
-                    val socket=Socket(Proxy.NO_PROXY);session.register(socket);deadline.register(socket)
+                    val socket=if(network==null) Socket(Proxy.NO_PROXY) else network.socketFactory.createSocket()
+                    session.register(socket);deadline.register(socket)
                     try {socket.connect(InetSocketAddress(address,443),4000);raw=socket;break}
                     catch(e: Exception) {last=e;socket.close()}
                 }

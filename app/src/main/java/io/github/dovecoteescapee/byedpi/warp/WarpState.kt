@@ -4,6 +4,7 @@ import android.content.Context
 import io.github.dovecoteescapee.byedpi.utility.getPreferences
 
 object WarpState {
+    val session=WarpSession()
     @Volatile var active=false
     @Volatile var status="WARP ещё не запускался"
     @Volatile var detail=""
